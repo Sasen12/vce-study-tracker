@@ -70,12 +70,27 @@ const mergeBadges = (current: unknown, incoming: string[]) =>
 const mergeCosmetics = (current: unknown, incoming: string[]) =>
   Array.from(new Set([DEFAULT_THEME_ID, ...cosmeticsAsArray(current), ...incoming]));
 
-export const ensureGamification = async (userId: string) =>
-  prisma.userGamification.upsert({
+export const ensureGamification = async (userId: string) => {
+  const gamification = await prisma.userGamification.upsert({
     where: { userId },
     update: {},
     create: { userId, unlockedCosmetics: [DEFAULT_THEME_ID], activeTheme: DEFAULT_THEME_ID }
   });
+
+  const unlocked = cosmeticsAsArray(gamification.unlockedCosmetics);
+  const hasOnlyStarterTheme = unlocked.length <= 1 && (!unlocked.length || unlocked.includes(DEFAULT_THEME_ID));
+  if (gamification.totalXp > 0 && gamification.xpBalance === 0 && hasOnlyStarterTheme) {
+    return prisma.userGamification.update({
+      where: { userId },
+      data: {
+        xpBalance: gamification.totalXp,
+        unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [])
+      }
+    });
+  }
+
+  return gamification;
+};
 
 export const addXp = async (userId: string, xp: number) => {
   const current = await ensureGamification(userId);
