@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+.netlify/
+dist/
+build/
+.env.local
+.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+logs/
+backend/node_modules/
+backend/dist/
+backend/.env.local
+backend/.env

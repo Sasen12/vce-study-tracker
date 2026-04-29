@@ -1,0 +1,176 @@
+export type VceSubjectCategory =
+  | "English"
+  | "Mathematics"
+  | "Sciences"
+  | "Technology"
+  | "Humanities"
+  | "Health and PE"
+  | "The Arts"
+  | "Languages"
+  | "VCE VM"
+  | "VCE VET";
+
+export type VceSubject = {
+  name: string;
+  units: string[];
+  category: VceSubjectCategory;
+};
+
+export const VCE_SUBJECTS: VceSubject[] = [
+  { name: "English", units: ["1/2", "3/4"], category: "English" },
+  { name: "English as an Additional Language", units: ["3/4"], category: "English" },
+  { name: "English Language", units: ["1/2", "3/4"], category: "English" },
+  { name: "Literature", units: ["1/2", "3/4"], category: "English" },
+
+  { name: "Foundation Mathematics", units: ["1/2", "3/4"], category: "Mathematics" },
+  { name: "General Mathematics", units: ["1/2", "3/4"], category: "Mathematics" },
+  { name: "Mathematical Methods", units: ["1/2", "3/4"], category: "Mathematics" },
+  { name: "Specialist Mathematics", units: ["1/2", "3/4"], category: "Mathematics" },
+  { name: "Algorithmics", units: ["3/4"], category: "Mathematics" },
+
+  { name: "Agricultural and Horticultural Studies", units: ["1/2", "3/4"], category: "Sciences" },
+  { name: "Biology", units: ["1/2", "3/4"], category: "Sciences" },
+  { name: "Chemistry", units: ["1/2", "3/4"], category: "Sciences" },
+  { name: "Environmental Science", units: ["1/2", "3/4"], category: "Sciences" },
+  { name: "Physics", units: ["1/2", "3/4"], category: "Sciences" },
+  { name: "Psychology", units: ["1/2", "3/4"], category: "Sciences" },
+
+  { name: "Applied Computing", units: ["1/2"], category: "Technology" },
+  { name: "Data Analytics", units: ["3/4"], category: "Technology" },
+  { name: "Software Development", units: ["3/4"], category: "Technology" },
+  { name: "Product Design and Technologies", units: ["1/2", "3/4"], category: "Technology" },
+  { name: "Food Studies", units: ["1/2", "3/4"], category: "Technology" },
+  { name: "Systems Engineering", units: ["1/2", "3/4"], category: "Technology" },
+
+  { name: "Accounting", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Ancient History", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Australian and Global Politics", units: ["1/2"], category: "Humanities" },
+  { name: "Australian History", units: ["3/4"], category: "Humanities" },
+  { name: "Business Management", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Classical Studies", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Economics", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Extended Investigation", units: ["3/4"], category: "Humanities" },
+  { name: "Geography", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Global Politics", units: ["3/4"], category: "Humanities" },
+  { name: "History", units: ["1/2"], category: "Humanities" },
+  { name: "History: Revolutions", units: ["3/4"], category: "Humanities" },
+  { name: "Industry and Enterprise", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Legal Studies", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Philosophy", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Religion and Society", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Sociology", units: ["1/2", "3/4"], category: "Humanities" },
+  { name: "Texts and Traditions", units: ["1/2", "3/4"], category: "Humanities" },
+
+  { name: "Health and Human Development", units: ["1/2", "3/4"], category: "Health and PE" },
+  { name: "Outdoor and Environmental Studies", units: ["1/2", "3/4"], category: "Health and PE" },
+  { name: "Physical Education", units: ["1/2", "3/4"], category: "Health and PE" },
+
+  { name: "Art Creative Practice", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Art Making and Exhibiting", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Dance", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Drama", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Media", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Music", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Music Composition", units: ["3/4"], category: "The Arts" },
+  { name: "Music Contemporary Performance", units: ["3/4"], category: "The Arts" },
+  { name: "Music Inquiry", units: ["3/4"], category: "The Arts" },
+  { name: "Music Repertoire Performance", units: ["3/4"], category: "The Arts" },
+  { name: "Theatre Studies", units: ["1/2", "3/4"], category: "The Arts" },
+  { name: "Visual Communication Design", units: ["1/2", "3/4"], category: "The Arts" },
+
+  { name: "Aboriginal Languages of Victoria", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Arabic", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Armenian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Auslan", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Bengali", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Bosnian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Chinese First Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Chinese Language, Culture and Society", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Chinese Second Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Chinese Second Language Advanced", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Chin Hakha", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Classical Greek", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Classical Hebrew", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Croatian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Dutch", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Filipino", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "French", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "German", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Greek", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Hebrew", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Hindi", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Hungarian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Indonesian First Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Indonesian Second Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Italian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Japanese First Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Japanese Second Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Karen", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Khmer", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Korean First Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Korean Second Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Latin", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Macedonian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Persian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Polish", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Portuguese", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Punjabi", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Romanian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Russian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Serbian", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Sinhala", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Spanish", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Swedish", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Tamil", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Turkish", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Vietnamese First Language", units: ["1/2", "3/4"], category: "Languages" },
+  { name: "Vietnamese Second Language", units: ["1/2", "3/4"], category: "Languages" },
+
+  { name: "VCE VM Literacy", units: ["1/2", "3/4"], category: "VCE VM" },
+  { name: "VCE VM Numeracy", units: ["1/2", "3/4"], category: "VCE VM" },
+  { name: "VCE VM Personal Development Skills", units: ["1/2", "3/4"], category: "VCE VM" },
+  { name: "VCE VM Work Related Skills", units: ["1/2", "3/4"], category: "VCE VM" },
+
+  { name: "VCE VET Agriculture, Horticulture, Conservation and Ecosystem Management", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Animal Care", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Apparel, Fashion and Textiles", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Applied Language", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Automotive", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Building and Construction", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Business", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Cisco", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Civil Infrastructure", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Community Services", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Creative and Digital Media", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Dance", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Electrical Industry", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Engineering", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Equine Studies", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Events and Tourism", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Furnishing", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Hair and Beauty", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Health", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Hospitality", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Information and Communications Technology", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Integrated Technologies", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Laboratory Skills", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Music Industry", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Plumbing", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Renewable Energy", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Small Business", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Sport and Recreation", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Visual Arts", units: ["3/4"], category: "VCE VET" }
+];
+
+export const VCE_SUBJECT_CATEGORIES: VceSubjectCategory[] = [
+  "English",
+  "Mathematics",
+  "Sciences",
+  "Technology",
+  "Humanities",
+  "Health and PE",
+  "The Arts",
+  "Languages",
+  "VCE VM",
+  "VCE VET"
+];

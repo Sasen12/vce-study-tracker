@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "VCE Study Tracker",
+    "slug": "vce-study-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "vcestudy",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F0F14"
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store"]
+  }
+}
+

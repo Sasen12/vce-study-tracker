@@ -1,0 +1,208 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String              @unique
+  passwordHash   String              @map("password_hash")
+  displayName    String              @map("display_name")
+  avatarUrl      String?             @map("avatar_url")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  subjects       UserSubject[]
+  sessions       StudySession[]
+  events         Event[]
+  goals          Goal[]
+  gamification   UserGamification?
+  savedQuestions SavedQuestion[]
+  reflections    StudyReflection[]
+  notes          StudyNote[]
+  resources      StudyResource[]
+  plans          AdaptiveStudyPlan[]
+
+  @@map("users")
+}
+
+model UserSubject {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  subjectName String            @map("subject_name")
+  unit        String
+  targetScore Int?              @map("target_score")
+  color       String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    StudySession[]
+  events      Event[]
+  goals       Goal[]
+  questions   SavedQuestion[]
+  reflections StudyReflection[]
+  notes       StudyNote[]
+  resources   StudyResource[]
+
+  @@index([userId])
+  @@map("user_subjects")
+}
+
+model StudySession {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  subjectId       String?      @map("subject_id") @db.Uuid
+  durationSeconds Int          @map("duration_seconds")
+  notes           String?
+  xpEarned        Int          @default(0) @map("xp_earned")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([subjectId])
+  @@map("study_sessions")
+}
+
+model Event {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  subjectId   String?      @map("subject_id") @db.Uuid
+  title       String
+  eventType   String       @map("event_type")
+  eventDate   DateTime     @map("event_date") @db.Date
+  startTime   String?      @map("start_time")
+  endTime     String?      @map("end_time")
+  recurrence  String       @default("NONE")
+  recurrenceUntil DateTime? @map("recurrence_until") @db.Date
+  notificationMinutes Int   @default(60) @map("notification_minutes")
+  source      String       @default("manual")
+  googleCalendarId String? @map("google_calendar_id")
+  googleEventId String?    @map("google_event_id")
+  description String?
+  completed   Boolean      @default(false)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, eventDate])
+  @@map("events")
+}
+
+model Goal {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  subjectId         String?      @map("subject_id") @db.Uuid
+  targetStudyScore  Int?         @map("target_study_score")
+  weeklyHoursTarget Decimal?     @map("weekly_hours_target") @db.Decimal(4, 1)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject           UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, subjectId])
+  @@map("goals")
+}
+
+model UserGamification {
+  userId        String    @id @map("user_id") @db.Uuid
+  totalXp       Int       @default(0) @map("total_xp")
+  level         Int       @default(1)
+  currentStreak Int       @default(0) @map("current_streak")
+  longestStreak Int       @default(0) @map("longest_streak")
+  lastStudyDate DateTime? @map("last_study_date") @db.Date
+  badges        Json      @default("[]")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_gamification")
+}
+
+model SavedQuestion {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  subjectId       String?      @map("subject_id") @db.Uuid
+  question        String
+  modelAnswer     String       @map("model_answer")
+  topic           String?
+  difficulty      String?
+  marks           Int?
+  markingCriteria Json         @default("[]") @map("marking_criteria")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([subjectId])
+  @@map("saved_questions")
+}
+
+model StudyReflection {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  subjectId    String?      @map("subject_id") @db.Uuid
+  classDate    DateTime     @map("class_date") @db.Date
+  classSummary String       @map("class_summary")
+  understood   String
+  confused     String
+  nextAction   String?      @map("next_action")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject      UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, classDate])
+  @@index([subjectId])
+  @@map("study_reflections")
+}
+
+model StudyNote {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  subjectId String?      @map("subject_id") @db.Uuid
+  title     String
+  body      String
+  noteType  String       @default("general") @map("note_type")
+  tags      Json         @default("[]")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([subjectId])
+  @@map("study_notes")
+}
+
+model StudyResource {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  subjectId     String?      @map("subject_id") @db.Uuid
+  fileName      String       @map("file_name")
+  fileType      String       @map("file_type")
+  sourceType    String       @default("textbook") @map("source_type")
+  extractedText String       @map("extracted_text")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       UserSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([subjectId])
+  @@map("study_resources")
+}
+
+model AdaptiveStudyPlan {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  planDate        DateTime @map("plan_date") @db.Date
+  summary         String
+  focusAreas      Json     @default("[]") @map("focus_areas")
+  tasks           Json     @default("[]")
+  dailyPlan       Json     @default("[]") @map("daily_plan")
+  subjectRoadmaps Json     @default("[]") @map("subject_roadmaps")
+  sourceEvents    Json     @default("[]") @map("source_events")
+  checkpoints     Json     @default("[]")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("adaptive_study_plans")
+}
