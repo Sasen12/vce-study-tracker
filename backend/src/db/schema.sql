@@ -61,11 +61,14 @@ CREATE TABLE goals (
 CREATE TABLE user_gamification (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   total_xp INTEGER DEFAULT 0,
+  xp_balance INTEGER DEFAULT 0,
   level INTEGER DEFAULT 1,
   current_streak INTEGER DEFAULT 0,
   longest_streak INTEGER DEFAULT 0,
   last_study_date DATE,
-  badges JSONB DEFAULT '[]'
+  badges JSONB DEFAULT '[]',
+  unlocked_cosmetics JSONB DEFAULT '["midnight"]',
+  active_theme TEXT DEFAULT 'midnight'
 );
 
 CREATE TABLE saved_questions (

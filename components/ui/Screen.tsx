@@ -5,7 +5,7 @@ import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { motion } from "@/constants/motion";
-import { palette } from "@/constants/theme";
+import { useActivePalette } from "@/hooks/useActiveTheme";
 
 type ScreenProps = {
   children: ReactNode;
@@ -13,6 +13,7 @@ type ScreenProps = {
 };
 
 export function Screen({ children, scroll = true }: ScreenProps) {
+  const activePalette = useActivePalette();
   const focusProgress = useSharedValue(1);
   const focusStyle = useAnimatedStyle(() => ({
     opacity: focusProgress.value,
@@ -42,13 +43,12 @@ export function Screen({ children, scroll = true }: ScreenProps) {
     <View style={styles.content}>{stack}</View>
   );
 
-  return <SafeAreaView style={styles.root}>{content}</SafeAreaView>;
+  return <SafeAreaView style={[styles.root, { backgroundColor: activePalette.background }]}>{content}</SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    backgroundColor: palette.background
+    flex: 1
   },
   content: {
     padding: 20,

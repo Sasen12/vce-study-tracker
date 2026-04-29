@@ -64,11 +64,26 @@ export type Goal = {
 export type Gamification = {
   userId: string;
   totalXp: number;
+  xpBalance: number;
   level: number;
   currentStreak: number;
   longestStreak: number;
   lastStudyDate?: string | null;
   badges: string[];
+  unlockedCosmetics: string[];
+  activeTheme: string;
+};
+
+export type ThemeShopItem = {
+  id: string;
+  name: string;
+  price: number;
+  colors: {
+    primary: string;
+    secondary: string;
+    background: string;
+    surface: string;
+  };
 };
 
 export type GeneratedQuestion = {

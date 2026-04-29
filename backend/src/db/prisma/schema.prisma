@@ -105,14 +105,17 @@ model Goal {
 }
 
 model UserGamification {
-  userId        String    @id @map("user_id") @db.Uuid
-  totalXp       Int       @default(0) @map("total_xp")
-  level         Int       @default(1)
-  currentStreak Int       @default(0) @map("current_streak")
-  longestStreak Int       @default(0) @map("longest_streak")
-  lastStudyDate DateTime? @map("last_study_date") @db.Date
-  badges        Json      @default("[]")
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String    @id @map("user_id") @db.Uuid
+  totalXp           Int       @default(0) @map("total_xp")
+  xpBalance         Int       @default(0) @map("xp_balance")
+  level             Int       @default(1)
+  currentStreak     Int       @default(0) @map("current_streak")
+  longestStreak     Int       @default(0) @map("longest_streak")
+  lastStudyDate     DateTime? @map("last_study_date") @db.Date
+  badges            Json      @default("[]")
+  unlockedCosmetics Json      @default("[\"midnight\"]") @map("unlocked_cosmetics")
+  activeTheme       String    @default("midnight") @map("active_theme")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_gamification")
 }

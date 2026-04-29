@@ -12,6 +12,43 @@ export const LEVELS = [
   { level: 8, xp: 8000, title: "50 Study Score" }
 ];
 
+export const DEFAULT_THEME_ID = "midnight";
+
+export const THEME_SHOP_ITEMS = [
+  {
+    id: "midnight",
+    name: "Midnight Focus",
+    price: 0,
+    colors: { primary: "#7C6EFF", secondary: "#FF6B6B", background: "#0F0F14", surface: "#1A1A24" }
+  },
+  {
+    id: "mint",
+    name: "Mint Sprint",
+    price: 120,
+    colors: { primary: "#34D399", secondary: "#60A5FA", background: "#071412", surface: "#10211D" }
+  },
+  {
+    id: "sunset",
+    name: "Sunset Revision",
+    price: 180,
+    colors: { primary: "#FB7185", secondary: "#F59E0B", background: "#180D12", surface: "#261820" }
+  },
+  {
+    id: "ocean",
+    name: "Ocean Mode",
+    price: 240,
+    colors: { primary: "#38BDF8", secondary: "#2DD4BF", background: "#06111F", surface: "#0F1D2D" }
+  },
+  {
+    id: "royal",
+    name: "Royal Grind",
+    price: 320,
+    colors: { primary: "#A78BFA", secondary: "#F472B6", background: "#120B22", surface: "#1F1633" }
+  }
+] as const;
+
+export type ThemeShopItem = (typeof THEME_SHOP_ITEMS)[number];
+
 export const calculateSessionXp = (durationSeconds: number) => {
   const base = Math.floor(durationSeconds / 600) * 10;
   const bonus = durationSeconds > 3600 ? 25 : 0;
@@ -24,14 +61,20 @@ export const levelFromXp = (xp: number) =>
 const badgesAsArray = (badges: unknown): string[] =>
   Array.isArray(badges) ? badges.filter((badge): badge is string => typeof badge === "string") : [];
 
+const cosmeticsAsArray = (cosmetics: unknown): string[] =>
+  Array.isArray(cosmetics) ? cosmetics.filter((cosmetic): cosmetic is string => typeof cosmetic === "string") : [];
+
 const mergeBadges = (current: unknown, incoming: string[]) =>
   Array.from(new Set([...badgesAsArray(current), ...incoming]));
+
+const mergeCosmetics = (current: unknown, incoming: string[]) =>
+  Array.from(new Set([DEFAULT_THEME_ID, ...cosmeticsAsArray(current), ...incoming]));
 
 export const ensureGamification = async (userId: string) =>
   prisma.userGamification.upsert({
     where: { userId },
     update: {},
-    create: { userId }
+    create: { userId, unlockedCosmetics: [DEFAULT_THEME_ID], activeTheme: DEFAULT_THEME_ID }
   });
 
 export const addXp = async (userId: string, xp: number) => {
@@ -41,6 +84,7 @@ export const addXp = async (userId: string, xp: number) => {
     where: { userId },
     data: {
       totalXp,
+      xpBalance: { increment: xp },
       level: levelFromXp(totalXp)
     }
   });
@@ -94,11 +138,60 @@ export const recordStudySessionEffects = async (input: {
     where: { userId: input.userId },
     data: {
       totalXp,
+      xpBalance: { increment: input.xpEarned },
       level: levelFromXp(totalXp),
       currentStreak: nextStreak,
       longestStreak: Math.max(gamification.longestStreak, nextStreak),
       lastStudyDate: toDateOnly(today),
       badges: mergeBadges(gamification.badges, earnedBadges)
+    }
+  });
+};
+
+const themeById = (themeId: string) => THEME_SHOP_ITEMS.find((item) => item.id === themeId);
+
+export const unlockTheme = async (userId: string, themeId: string) => {
+  const theme = themeById(themeId);
+  if (!theme) throw new Error("Theme not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
+  if (unlocked.includes(theme.id)) {
+    return prisma.userGamification.update({
+      where: { userId },
+      data: { activeTheme: theme.id, unlockedCosmetics: unlocked }
+    });
+  }
+
+  if (gamification.xpBalance < theme.price) {
+    throw new Error("Not enough XP coins");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      xpBalance: { decrement: theme.price },
+      unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [theme.id]),
+      activeTheme: theme.id
+    }
+  });
+};
+
+export const applyTheme = async (userId: string, themeId: string) => {
+  const theme = themeById(themeId);
+  if (!theme) throw new Error("Theme not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
+  if (!unlocked.includes(theme.id)) {
+    throw new Error("Unlock this theme first");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      unlockedCosmetics: unlocked,
+      activeTheme: theme.id
     }
   });
 };

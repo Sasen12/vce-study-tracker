@@ -3,10 +3,11 @@ import { StyleSheet, View } from "react-native";
 import { Text } from "react-native-paper";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { LEVELS } from "@/constants/gamification";
-import { palette } from "@/constants/theme";
+import { useActivePalette } from "@/hooks/useActiveTheme";
 import type { Gamification } from "@/types";
 
 export function XPBar({ gamification }: { gamification: Gamification | null }) {
+  const activePalette = useActivePalette();
   const xp = gamification?.totalXp ?? 0;
   const level = LEVELS.find((item) => item.level === (gamification?.level ?? 1)) ?? LEVELS[0];
   const next = LEVELS.find((item) => item.xp > xp) ?? LEVELS[LEVELS.length - 1];
@@ -26,14 +27,18 @@ export function XPBar({ gamification }: { gamification: Gamification | null }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <Text style={styles.level}>Lvl {gamification?.level ?? 1}</Text>
-        <Text style={styles.title}>{level.title}</Text>
-        <Text style={styles.xp}>{xp} XP</Text>
+        <Text style={[styles.level, { color: activePalette.primary }]}>Lvl {gamification?.level ?? 1}</Text>
+        <Text style={[styles.title, { color: activePalette.text }]}>{level.title}</Text>
+        <Text style={[styles.xp, { color: activePalette.muted }]}>{xp} XP</Text>
       </View>
       <View style={styles.track} onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}>
-        <Animated.View style={[styles.fill, fillStyle]} />
+        <Animated.View
+          style={[styles.fill, { backgroundColor: activePalette.primary, shadowColor: activePalette.primary }, fillStyle]}
+        />
       </View>
-      <Text style={styles.caption}>{next.xp > xp ? `${next.xp - xp} XP to ${next.title}` : "Max level unlocked"}</Text>
+      <Text style={[styles.caption, { color: activePalette.muted }]}>
+        {next.xp > xp ? `${next.xp - xp} XP to ${next.title}` : "Max level unlocked"}
+      </Text>
     </View>
   );
 }
@@ -48,16 +53,13 @@ const styles = StyleSheet.create({
     gap: 8
   },
   level: {
-    color: palette.primary,
     fontFamily: "Outfit_700Bold"
   },
   title: {
     flex: 1,
-    color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
   xp: {
-    color: palette.muted,
     fontSize: 12
   },
   track: {
@@ -69,13 +71,10 @@ const styles = StyleSheet.create({
   fill: {
     height: 12,
     borderRadius: 8,
-    backgroundColor: palette.primary,
-    shadowColor: palette.primary,
     shadowOpacity: 0.55,
     shadowRadius: 10
   },
   caption: {
-    color: palette.muted,
     fontSize: 12
   }
 });

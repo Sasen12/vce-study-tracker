@@ -9,11 +9,11 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { XPBar } from "@/components/gamification/XPBar";
 import { BadgeGrid } from "@/components/gamification/BadgeGrid";
-import { subjectColors, palette } from "@/constants/theme";
+import { subjectColors, palette, themeShopItems } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
-import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
+import type { Gamification, Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
 
 const scaleAdjustments: Record<string, number> = {
   "Specialist Mathematics": 10,
@@ -363,6 +363,112 @@ function AddSubjectDialog({
   );
 }
 
+function ThemeShop({
+  gamification,
+  onUnlock,
+  onApply
+}: {
+  gamification: Gamification | null;
+  onUnlock: (themeId: string) => Promise<void>;
+  onApply: (themeId: string) => Promise<void>;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [shopError, setShopError] = useState<string | null>(null);
+  const xpBalance = gamification?.xpBalance ?? 0;
+  const activeTheme = gamification?.activeTheme ?? "midnight";
+  const unlocked = useMemo(
+    () => new Set(["midnight", ...(gamification?.unlockedCosmetics ?? [])]),
+    [gamification?.unlockedCosmetics]
+  );
+
+  const chooseTheme = async (themeId: string, isUnlocked: boolean) => {
+    setBusyId(themeId);
+    setShopError(null);
+    try {
+      if (isUnlocked) {
+        await onApply(themeId);
+      } else {
+        await onUnlock(themeId);
+      }
+    } catch (error) {
+      setShopError(error instanceof Error ? error.message : "Could not update theme");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <AppCard style={styles.shopCard}>
+      <View style={styles.shopHeader}>
+        <View>
+          <Text variant="titleMedium" style={styles.cardTitle}>
+            Style shop
+          </Text>
+          <Text style={styles.muted}>Theme unlocks</Text>
+        </View>
+        <View style={styles.coinPill}>
+          <Text style={styles.coinValue}>{xpBalance}</Text>
+          <Text style={styles.coinLabel}>coins</Text>
+        </View>
+      </View>
+      <View style={styles.themeGrid}>
+        {themeShopItems.map((theme) => {
+          const isUnlocked = unlocked.has(theme.id);
+          const isActive = activeTheme === theme.id;
+          const canAfford = xpBalance >= theme.price;
+          const loadingTheme = busyId === theme.id;
+          const actionLabel = isActive
+            ? "Equipped"
+            : isUnlocked
+              ? "Use"
+              : canAfford
+                ? "Unlock"
+                : `${theme.price - xpBalance} more`;
+
+          return (
+            <View
+              key={theme.id}
+              style={[
+                styles.themeItem,
+                {
+                  borderColor: isActive ? theme.colors.primary : palette.border,
+                  backgroundColor: theme.colors.surface
+                }
+              ]}
+            >
+              <View style={[styles.themePreview, { backgroundColor: theme.colors.background }]}>
+                <View style={[styles.themePreviewCard, { backgroundColor: theme.colors.surfaceRaised }]}>
+                  <View style={[styles.themePreviewLine, { backgroundColor: theme.colors.primary }]} />
+                  <View style={[styles.themePreviewLineShort, { backgroundColor: theme.colors.secondary }]} />
+                </View>
+              </View>
+              <View style={styles.themeTextRow}>
+                <Text style={[styles.themeName, { color: theme.colors.text }]}>{theme.name}</Text>
+                <Text style={[styles.themePrice, { color: theme.colors.muted }]}>
+                  {theme.price ? `${theme.price} coins` : "Starter"}
+                </Text>
+              </View>
+              <Button
+                mode={isActive ? "outlined" : "contained"}
+                compact
+                loading={loadingTheme}
+                disabled={loadingTheme || isActive || (!isUnlocked && !canAfford)}
+                buttonColor={isActive ? undefined : theme.colors.primary}
+                textColor={isActive ? theme.colors.primary : theme.colors.background}
+                icon={isUnlocked ? "palette-outline" : "lock-open-outline"}
+                onPress={() => chooseTheme(theme.id, isUnlocked)}
+              >
+                {actionLabel}
+              </Button>
+            </View>
+          );
+        })}
+      </View>
+      {shopError ? <Text style={styles.errorText}>{shopError}</Text> : null}
+    </AppCard>
+  );
+}
+
 export default function ProfileScreen() {
   const {
     subjects,
@@ -375,7 +481,9 @@ export default function ProfileScreen() {
     loading,
     fetchAll,
     saveGoal,
-    createSubject
+    createSubject,
+    unlockTheme,
+    applyTheme
   } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -505,6 +613,8 @@ export default function ProfileScreen() {
         <XPBar gamification={gamification} />
       </AppCard>
 
+      <ThemeShop gamification={gamification} onUnlock={unlockTheme} onApply={applyTheme} />
+
       <AppCard style={styles.atarCard}>
         <View>
           <Text variant="titleMedium" style={styles.cardTitle}>
@@ -633,6 +743,83 @@ const styles = StyleSheet.create({
   muted: {
     color: palette.muted,
     lineHeight: 20
+  },
+  shopCard: {
+    gap: 14
+  },
+  shopHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12
+  },
+  coinPill: {
+    minWidth: 82,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}55`,
+    backgroundColor: `${palette.primary}18`,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center"
+  },
+  coinValue: {
+    color: palette.text,
+    fontSize: 22,
+    lineHeight: 26,
+    fontFamily: "Outfit_700Bold"
+  },
+  coinLabel: {
+    color: palette.muted,
+    fontSize: 11
+  },
+  themeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  themeItem: {
+    width: "48%",
+    minWidth: 148,
+    flexGrow: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    gap: 10
+  },
+  themePreview: {
+    height: 82,
+    borderRadius: 8,
+    padding: 10,
+    justifyContent: "flex-end"
+  },
+  themePreviewCard: {
+    borderRadius: 6,
+    padding: 8,
+    gap: 6
+  },
+  themePreviewLine: {
+    width: "72%",
+    height: 8,
+    borderRadius: 8
+  },
+  themePreviewLineShort: {
+    width: "46%",
+    height: 8,
+    borderRadius: 8
+  },
+  themeTextRow: {
+    gap: 2
+  },
+  themeName: {
+    fontFamily: "Outfit_700Bold"
+  },
+  themePrice: {
+    fontSize: 12
+  },
+  errorText: {
+    color: palette.secondary,
+    lineHeight: 18
   },
   atarCard: {
     gap: 10

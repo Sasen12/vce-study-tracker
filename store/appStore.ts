@@ -128,6 +128,8 @@ type AppState = {
   uploadResources: (formData: FormData) => Promise<void>;
   generatePlan: (input: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) => Promise<void>;
   refreshCoach: () => Promise<void>;
+  unlockTheme: (themeId: string) => Promise<void>;
+  applyTheme: (themeId: string) => Promise<void>;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -311,5 +313,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       resources: resources.resources,
       latestPlan: latestPlan.plan
     });
+  },
+  unlockTheme: async (themeId) => {
+    const data = await studyApi.unlockTheme(themeId);
+    set({ gamification: data.gamification });
+  },
+  applyTheme: async (themeId) => {
+    const data = await studyApi.applyTheme(themeId);
+    set({ gamification: data.gamification });
   }
 }));

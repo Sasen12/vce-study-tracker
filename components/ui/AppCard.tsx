@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
-import { palette } from "@/constants/theme";
+import { useActivePalette } from "@/hooks/useActiveTheme";
 
 type AppCardProps = {
   children: ReactNode;
@@ -8,16 +8,14 @@ type AppCardProps = {
 };
 
 export function AppCard({ children, style }: AppCardProps) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  const activePalette = useActivePalette();
+  return <View style={[styles.card, { backgroundColor: activePalette.surface, borderColor: activePalette.border }, style]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
     borderWidth: 1,
     borderRadius: 8,
     padding: 16
   }
 });
-

@@ -15,6 +15,7 @@ import type {
   StudyReflection,
   StudyResource,
   StudySession,
+  ThemeShopItem,
   EventRecurrence,
   EventType,
   UserSubject
@@ -153,5 +154,10 @@ export const studyApi = {
   generatePlan: (body: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) =>
     apiFetch<{ plan: AdaptiveStudyPlan }>("/coach/plans/generate", { method: "POST", body }),
   gamification: () => apiFetch<{ gamification: Gamification }>("/gamification"),
-  checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" })
+  checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
+  themeShop: () => apiFetch<{ items: ThemeShopItem[] }>("/gamification/shop"),
+  unlockTheme: (themeId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/unlock`, { method: "POST" }),
+  applyTheme: (themeId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/apply`, { method: "POST" })
 };

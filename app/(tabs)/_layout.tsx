@@ -1,11 +1,12 @@
 import { Redirect, Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { palette } from "@/constants/theme";
+import { useActivePalette } from "@/hooks/useActiveTheme";
 import { useStudyReminders } from "@/hooks/useStudyReminders";
 import { useAuthStore } from "@/store/authStore";
 
 export default function TabsLayout() {
   const user = useAuthStore((state) => state.user);
+  const activePalette = useActivePalette();
   useStudyReminders();
   if (!user) return <Redirect href="/(auth)/login" />;
 
@@ -15,14 +16,14 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: "#12121A",
-          borderTopColor: palette.border,
+          backgroundColor: activePalette.surface,
+          borderTopColor: activePalette.border,
           height: 74,
           paddingTop: 8,
           paddingBottom: 12
         },
-        tabBarActiveTintColor: palette.primary,
-        tabBarInactiveTintColor: palette.muted,
+        tabBarActiveTintColor: activePalette.primary,
+        tabBarInactiveTintColor: activePalette.muted,
         tabBarLabelStyle: {
           fontFamily: "Outfit_700Bold",
           fontSize: 11
