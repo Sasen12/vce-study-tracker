@@ -3,6 +3,7 @@ import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { limitAiUsage } from "../middleware/aiUsageLimit.js";
 import {
   answerStudyQuestion,
   generateAdaptiveStudyPlan,
@@ -505,6 +506,7 @@ coachRouter.delete(
 
 coachRouter.post(
   "/notetaker/chunk",
+  limitAiUsage(),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerChunkSchema.parse(req.body);
@@ -570,6 +572,7 @@ coachRouter.post(
 coachRouter.post(
   "/notetaker",
   upload.single("audio"),
+  limitAiUsage({ cost: 8 }),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerSchema.parse(req.body);
@@ -677,6 +680,7 @@ coachRouter.post(
 coachRouter.post(
   "/ask",
   upload.array("screenshots", 4),
+  limitAiUsage({ cost: (req) => (((req.files ?? []) as Express.Multer.File[]).length ? 3 : 1) }),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = askSchema.parse(req.body);
@@ -778,6 +782,7 @@ coachRouter.get(
 
 coachRouter.post(
   "/plans/generate",
+  limitAiUsage({ cost: 4 }),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = planSchema.parse(req.body);

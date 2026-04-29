@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { limitAiUsage } from "../middleware/aiUsageLimit.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 import { evaluateStudentAnswer, generatePracticeQuestions } from "../services/aiService.js";
 import { addXp, awardQuestionBadges } from "../services/gamificationService.js";
@@ -128,6 +129,7 @@ questionsRouter.get(
 
 questionsRouter.post(
   "/generate",
+  limitAiUsage({ cost: (req) => Number(req.body?.count ?? 1) }),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = generateSchema.parse(req.body);
@@ -160,6 +162,7 @@ questionsRouter.post(
 
 questionsRouter.post(
   "/timer-check",
+  limitAiUsage(),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = timerCheckSchema.parse(req.body);
@@ -215,6 +218,7 @@ questionsRouter.post(
 
 questionsRouter.post(
   "/check-answer",
+  limitAiUsage(),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = checkAnswerSchema.parse(req.body);
