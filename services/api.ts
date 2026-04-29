@@ -3,6 +3,8 @@ import { Platform } from "react-native";
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
 
+const shouldSkipNgrokWarning = API_URL.includes("ngrok");
+const NGROK_SKIP_WARNING_HEADER = "ngrok-skip-browser-warning";
 const ACCESS_TOKEN_KEY = "vce_access_token";
 const REFRESH_TOKEN_KEY = "vce_refresh_token";
 
@@ -73,9 +75,12 @@ const refreshAccessToken = async () => {
   const refreshToken = await getStoredRefreshToken();
   if (!refreshToken) return null;
 
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (shouldSkipNgrokWarning) headers.set(NGROK_SKIP_WARNING_HEADER, "true");
+
   const response = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ refreshToken })
   });
   if (!response.ok) {
@@ -92,6 +97,7 @@ export const apiFetch = async <T>(path: string, options: RequestOptions = {}, re
   const token = options.skipAuth ? null : await getStoredAccessToken();
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
+  if (shouldSkipNgrokWarning) headers.set(NGROK_SKIP_WARNING_HEADER, "true");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -113,6 +119,7 @@ export const apiFetch = async <T>(path: string, options: RequestOptions = {}, re
 export const apiUpload = async <T>(path: string, formData: FormData, retry = true): Promise<T> => {
   const token = await getStoredAccessToken();
   const headers = new Headers();
+  if (shouldSkipNgrokWarning) headers.set(NGROK_SKIP_WARNING_HEADER, "true");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${API_URL}${path}`, {
