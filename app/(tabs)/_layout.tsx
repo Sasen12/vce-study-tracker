@@ -66,6 +66,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="shop"
+        options={{
+          title: "Shop",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="shopping-outline" color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
