@@ -26,15 +26,24 @@ export type ThemeId =
   | "arcade"
   | "forest"
   | "rose_gold"
-  | "matrix";
+  | "matrix"
+  | "cherry_blossom"
+  | "spring_picnic"
+  | "summer_glow"
+  | "easter_pastel"
+  | "christmas_lights"
+  | "snow_day"
+  | "pink_cloud";
 
 export type ThemePalette = typeof palette;
+export type ThemeMotion = "blossom" | "spring" | "glow" | "pastel" | "lights" | "snow";
 
 export type ThemeShopItem = {
   id: ThemeId;
   name: string;
   price: number;
   colors: ThemePalette;
+  motion?: ThemeMotion;
 };
 
 export const themeShopItems: ThemeShopItem[] = [
@@ -276,6 +285,139 @@ export const themeShopItems: ThemeShopItem[] = [
       text: "#F1FFF5",
       muted: "#81A88C",
       border: "rgba(34,197,94,0.14)"
+    }
+  },
+  {
+    id: "cherry_blossom",
+    name: "Cherry Blossom",
+    price: 880,
+    motion: "blossom",
+    colors: {
+      background: "#160D15",
+      surface: "#251822",
+      surfaceRaised: "#352331",
+      primary: "#F9A8D4",
+      secondary: "#A7F3D0",
+      success: "#86EFAC",
+      warning: "#FDE68A",
+      info: "#93C5FD",
+      text: "#FFF7FB",
+      muted: "#D8AFC3",
+      border: "rgba(249,168,212,0.16)"
+    }
+  },
+  {
+    id: "spring_picnic",
+    name: "Spring Picnic",
+    price: 940,
+    motion: "spring",
+    colors: {
+      background: "#08130F",
+      surface: "#13221A",
+      surfaceRaised: "#203428",
+      primary: "#86EFAC",
+      secondary: "#F9A8D4",
+      success: "#A7F3D0",
+      warning: "#FDE047",
+      info: "#67E8F9",
+      text: "#F7FFF9",
+      muted: "#A6C7B1",
+      border: "rgba(134,239,172,0.15)"
+    }
+  },
+  {
+    id: "summer_glow",
+    name: "Summer Glow",
+    price: 1000,
+    motion: "glow",
+    colors: {
+      background: "#081018",
+      surface: "#132231",
+      surfaceRaised: "#20334A",
+      primary: "#38BDF8",
+      secondary: "#FBBF24",
+      success: "#34D399",
+      warning: "#FB923C",
+      info: "#A78BFA",
+      text: "#F5FBFF",
+      muted: "#9BBAD0",
+      border: "rgba(56,189,248,0.15)"
+    }
+  },
+  {
+    id: "easter_pastel",
+    name: "Easter Pastel",
+    price: 1060,
+    motion: "pastel",
+    colors: {
+      background: "#111022",
+      surface: "#1D1A33",
+      surfaceRaised: "#292542",
+      primary: "#C4B5FD",
+      secondary: "#F9A8D4",
+      success: "#A7F3D0",
+      warning: "#FDE68A",
+      info: "#93C5FD",
+      text: "#FBFAFF",
+      muted: "#BDB5D5",
+      border: "rgba(196,181,253,0.15)"
+    }
+  },
+  {
+    id: "christmas_lights",
+    name: "Christmas Lights",
+    price: 1120,
+    motion: "lights",
+    colors: {
+      background: "#07110C",
+      surface: "#121F17",
+      surfaceRaised: "#1C2C21",
+      primary: "#EF4444",
+      secondary: "#FACC15",
+      success: "#22C55E",
+      warning: "#F97316",
+      info: "#38BDF8",
+      text: "#F7FFF9",
+      muted: "#9BB69F",
+      border: "rgba(239,68,68,0.16)"
+    }
+  },
+  {
+    id: "snow_day",
+    name: "Snow Day",
+    price: 1180,
+    motion: "snow",
+    colors: {
+      background: "#071118",
+      surface: "#10202A",
+      surfaceRaised: "#18313D",
+      primary: "#BAE6FD",
+      secondary: "#C4B5FD",
+      success: "#86EFAC",
+      warning: "#FDE68A",
+      info: "#67E8F9",
+      text: "#F5FCFF",
+      muted: "#A8C5D3",
+      border: "rgba(186,230,253,0.16)"
+    }
+  },
+  {
+    id: "pink_cloud",
+    name: "Pink Cloud",
+    price: 1240,
+    motion: "blossom",
+    colors: {
+      background: "#150F1A",
+      surface: "#241929",
+      surfaceRaised: "#32233A",
+      primary: "#F0ABFC",
+      secondary: "#FDA4AF",
+      success: "#86EFAC",
+      warning: "#FDE047",
+      info: "#93C5FD",
+      text: "#FFF7FE",
+      muted: "#CDAFCC",
+      border: "rgba(240,171,252,0.16)"
     }
   }
 ];

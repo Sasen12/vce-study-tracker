@@ -113,7 +113,12 @@ export default function ShopScreen() {
                 </View>
               </View>
               <View style={styles.themeTextRow}>
-                <Text style={[styles.themeName, { color: theme.colors.text }]}>{theme.name}</Text>
+                <View style={styles.themeNameRow}>
+                  <Text style={[styles.themeName, { color: theme.colors.text }]}>{theme.name}</Text>
+                  {theme.motion ? (
+                    <MaterialCommunityIcons name="motion-play-outline" color={theme.colors.primary} size={16} />
+                  ) : null}
+                </View>
                 <Text style={[styles.themePrice, { color: theme.colors.muted }]}>
                   {theme.price ? `${theme.price} coins` : "Starter"}
                 </Text>
@@ -243,7 +248,14 @@ const styles = StyleSheet.create({
   themeTextRow: {
     gap: 2
   },
+  themeNameRow: {
+    minHeight: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
   themeName: {
+    flexShrink: 1,
     fontFamily: "Outfit_700Bold"
   },
   themePrice: {

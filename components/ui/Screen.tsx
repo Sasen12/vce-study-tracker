@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { ThemeAmbientMotion } from "@/components/ui/ThemeAmbientMotion";
 import { motion } from "@/constants/motion";
 import { useActivePalette } from "@/hooks/useActiveTheme";
 
@@ -43,12 +44,18 @@ export function Screen({ children, scroll = true }: ScreenProps) {
     <View style={styles.content}>{stack}</View>
   );
 
-  return <SafeAreaView style={[styles.root, { backgroundColor: activePalette.background }]}>{content}</SafeAreaView>;
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: activePalette.background }]}>
+      <ThemeAmbientMotion />
+      {content}
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1
+    flex: 1,
+    overflow: "hidden"
   },
   content: {
     padding: 20,
