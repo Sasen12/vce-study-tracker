@@ -1,7 +1,10 @@
 type StudyDesignContext = {
   source: string;
   context: string;
+  detailLevel: "detailed" | "generic";
 };
+
+type DetailedStudyDesignContext = Omit<StudyDesignContext, "detailLevel">;
 
 const appliedComputingSource =
   "VCAA VCE Applied Computing Study Design, accreditation from 2025. Local DOCX: backend/src/resources/study-designs/applied-computing-study-design.docx";
@@ -10,7 +13,7 @@ const biologySource =
 const vceStudyDesignListSource =
   "VCAA VCE Study Designs list, 2026. Use this as the current subject catalogue; detailed context is available for English/EAL, Biology, Applied Computing, Business Management and Mathematics.";
 
-const contexts: Record<string, StudyDesignContext> = {
+const contexts: Record<string, DetailedStudyDesignContext> = {
   English: {
     source:
       "VCAA VCE English and English as an Additional Language Study Design, Units 3 and 4 from 2024. Local DOCX: backend/src/resources/study-designs/english-eal-study-design.docx",
@@ -82,6 +85,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with the relevant VCAA language study design: interpret spoken, written and visual texts; communicate in the language; analyse culture and context; build vocabulary, grammar and text-type control; and practise exam-style listening, reading, writing and speaking tasks where applicable. Prefer vocabulary banks, grammar repair, model responses, timed writing, oral rehearsal, text annotation and correction logs.`
     };
@@ -90,6 +94,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/biology|chemistry|physics|psychology|environmental science|agricultural/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with scientific understanding, investigation skills, data interpretation, terminology, experimental design and exam-style explanation. Prefer concept repair, diagrams, practical-method reasoning, data/table interpretation, command-term responses, mixed exam questions and correction logs.`
     };
@@ -98,6 +103,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/accounting|economics|legal|geography|history|politics|philosophy|religion|sociology|classical|traditions|extended investigation/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with key knowledge, key skills, evidence, source/case analysis and VCAA command terms. Prefer terminology banks, evidence/source tables, short-answer plans, compare/analyse/evaluate paragraphs, timed responses and marked corrections.`
     };
@@ -106,6 +112,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/health|physical education|outdoor/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with key terms, models, data interpretation, case studies, application to populations or performance contexts, and VCAA command terms. Prefer summary tables, applied examples, data-response practice, short-answer drills and correction logs.`
     };
@@ -114,6 +121,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/art|dance|drama|media|music|theatre|visual communication/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with creative process, analysis, terminology, folio or performance development, artist/practitioner examples, audience, purpose, context and evaluation. Prefer production planning, annotation, critique paragraphs, terminology banks, rehearsal/revision tasks and reflective corrections.`
     };
@@ -122,6 +130,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/food|product design|systems engineering|technology|automotive|building|construction|engineering|digital|fashion|furnishing|plumbing|laboratory/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For VCE ${subject} Units 3 and 4, align study with design/problem-solving process, materials or systems knowledge, safety, criteria, testing, evaluation, documentation and applied scenario questions. Prefer design briefs, process notes, test tables, justification paragraphs, project checkpoints and marked corrections.`
     };
@@ -130,6 +139,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   if (matches(subject, [/vce vm|vet/i])) {
     return {
       source: vceStudyDesignListSource,
+      detailLevel: "generic",
       context:
         `For ${subject}, align study with applied evidence, workplace or vocational competencies, portfolio artefacts, reflective practice and task completion. Prefer checklists, evidence logs, applied scenarios, short reflections, oral rehearsal where relevant and practical next actions.`
     };
@@ -137,6 +147,7 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
 
   return {
     source: vceStudyDesignListSource,
+    detailLevel: "generic",
     context:
       `For VCE ${subject} Units 3 and 4, use the current VCAA study design as the authority. Keep tasks active and assessable: key knowledge recall, applied examples, exam-style questions, marking criteria, corrections and a clear next step.`
   };
@@ -144,16 +155,21 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
 
 const normaliseSubject = (subject: string) => subject.trim().toLowerCase();
 
+const detailedStudyDesignContext = (context: DetailedStudyDesignContext): StudyDesignContext => ({
+  ...context,
+  detailLevel: "detailed"
+});
+
 export const getStudyDesignContext = (subject: string) => {
   const direct = contexts[subject];
-  if (direct) return direct;
+  if (direct) return detailedStudyDesignContext(direct);
 
   const normalised = normaliseSubject(subject);
   if (normalised === "bio" || normalised === "vce bio" || normalised === "vce biology") {
-    return contexts.Biology;
+    return detailedStudyDesignContext(contexts.Biology);
   }
   if (normalised === "vet cookery" || normalised === "vce vet cookery" || normalised === "cookery") {
-    return contexts["VCE VET Hospitality: Cookery"];
+    return detailedStudyDesignContext(contexts["VCE VET Hospitality: Cookery"]);
   }
 
   return genericStudyDesignContext(subject);

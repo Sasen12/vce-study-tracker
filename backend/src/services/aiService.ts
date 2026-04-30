@@ -256,11 +256,41 @@ const defaultModel = "gpt-5.4-mini";
 const hasOpenAIKey = (apiKey?: string) =>
   Boolean(apiKey && !apiKey.includes("your_openai_key_here") && apiKey !== "sk-proj-...");
 
+type StudyDesignLookup = {
+  source: string;
+  context: string;
+  detailLevel: "detailed" | "generic";
+};
+
+const studyDesignCoverageLabel = (studyDesign: StudyDesignLookup) =>
+  studyDesign.detailLevel === "detailed"
+    ? "detailed local study-design summary"
+    : "generic subject-family fallback only";
+
+const buildStudyDesignBlock = (studyDesign?: StudyDesignLookup | null) =>
+  studyDesign
+    ? `\nStudy design context (${studyDesignCoverageLabel(studyDesign)}):\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
+    : "\nStudy design context: No local study-design context was found for this subject.\n";
+
+const studyDesignReliabilityRules = (studyDesign?: StudyDesignLookup | null) => {
+  const coverageRule =
+    studyDesign?.detailLevel === "detailed"
+      ? "- You may make study-design alignment claims only when the supplied detailed context supports them."
+      : studyDesign?.detailLevel === "generic"
+        ? "- The app only has a generic fallback for this subject right now. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes/screenshots prove them."
+        : "- No subject-specific study-design context was supplied. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes/screenshots prove them.";
+
+  return `Reliability rules:
+- Treat the study design context as the first authority, then uploaded notes/resources/screenshots, then general VCE knowledge.
+${coverageRule}
+- Do not invent VCAA dot points, dates, areas of study, formulas, statistics, teacher requirements or prescribed content.
+- If the evidence is weak, say what is uncertain in the answer/source detail/task wording instead of sounding certain.
+- If the student's topic appears outside the supplied Unit 3/4 context, flag it as possible prerequisite or off-study-design revision instead of quietly drifting into it.`;
+};
+
 const buildPrompt = ({ subject, topic, difficulty, count, personalContext, sourceMode = "balanced" }: GenerateInput) => {
   const studyDesign = getStudyDesignContext(subject);
-  const studyDesignBlock = studyDesign
-    ? `\nStudy design context:\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
-    : "";
+  const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const personalContextBlock = personalContext
     ? `\nStudent-specific context from uploaded resources, notes and reflections:\n${personalContext}\n`
     : "";
@@ -273,6 +303,12 @@ const buildPrompt = ({ subject, topic, difficulty, count, personalContext, sourc
 ${studyDesignBlock}
 ${personalContextBlock}
 ${sourceModeBlock}
+${studyDesignReliabilityRules(studyDesign)}
+
+Question-generation rules:
+- Generate questions from the supplied topic and the study-design context first.
+- If the context is generic fallback only, make the question assess the broad skill/topic without pretending it is an exact VCAA dot point.
+- If the supplied topic conflicts with the detailed Unit 3/4 context, keep the model answer honest about that mismatch.
 
 For each question, provide:
 1. A realistic exam-style question (match VCAA style and mark allocation)
@@ -1143,9 +1179,15 @@ Study design context by subject:
 ${input.subjects
   .map((subject) => {
     const studyDesign = getStudyDesignContext(subject);
-    return studyDesign ? `### ${subject}\n${studyDesign.context}\nSource: ${studyDesign.source}` : `### ${subject}\nNo local study design summary found.`;
+    return `### ${subject}\nCoverage: ${studyDesignCoverageLabel(studyDesign)}\n${studyDesign.context}\nSource: ${studyDesign.source}`;
   })
   .join("\n\n")}
+
+Study design reliability rules:
+- Treat each subject's study-design context as the first authority, then uploaded notes/resources, then general VCE knowledge.
+- When a subject is marked "generic subject-family fallback only", do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes/resources prove them.
+- Do not invent VCAA dates, formulas, statistics, teacher requirements or prescribed content.
+- If the evidence is weak, make the task wording conservative instead of sounding certain.
 
 Upcoming calendar assessments, already sorted by date:
 ${input.events
@@ -1177,6 +1219,7 @@ Make the plan seamless and assessment-first:
 - First use the calendar SACs, SATs, exams and tasks to decide priority.
 - Treat SAC/SAT as real assessments. Treat PRACTICE_SAC/PRACTICE_SAT as lower-stakes rehearsal checkpoints that support the nearest real SAC/SAT/exam.
 - Treat the event title and description as the topic clue, then align it to the subject's study design and uploaded textbook/notes context.
+- When a subject only has generic fallback context, make tasks skill/topic based and avoid exact VCAA dot-point claims unless the student's notes or uploaded resources supply them.
 - Work backwards from each assessment date and calculate what to do each day.
 - If scheduled study blocks exist for a day, treat those windows as the actual available time and place work inside them.
 - Respect fortnightly week 1 / week 2 study blocks exactly as listed.
@@ -1341,9 +1384,7 @@ export const transcribeClassAudio = async (input: TranscribeClassAudioInput): Pr
 
 const buildClassNotesPrompt = (input: GenerateClassNotesInput) => {
   const studyDesign = input.subject ? getStudyDesignContext(input.subject) : null;
-  const studyDesignBlock = studyDesign
-    ? `\nStudy design context:\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
-    : "";
+  const studyDesignBlock = buildStudyDesignBlock(studyDesign);
 
   return `You are a VCE class notetaker and study coach.
 
@@ -1357,6 +1398,7 @@ Teacher transcript:
 ${input.transcript}
 
 Turn this into study-ready notes. Do not dump the transcript. Extract what the student needs to revise, what is likely assessable, and what they should do next.
+${studyDesignReliabilityRules(studyDesign)}
 
 Rules:
 - Use subject-specific language. Business Management notes should mention strategies, stakeholders, KPIs, command terms and case examples where relevant.
@@ -1408,9 +1450,7 @@ export const generateClassNotesFromTranscript = async (input: GenerateClassNotes
 
 const buildClassNoteChunkPrompt = (input: GenerateClassNoteChunkInput) => {
   const studyDesign = input.subject ? getStudyDesignContext(input.subject) : null;
-  const studyDesignBlock = studyDesign
-    ? `\nStudy design context:\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
-    : "";
+  const studyDesignBlock = buildStudyDesignBlock(studyDesign);
 
   return `You are making live class note cards for a VCE student while class is still happening.
 
@@ -1425,6 +1465,7 @@ Transcript chunk:
 ${input.transcript}
 
 Create one polished live note card from only this chunk.
+${studyDesignReliabilityRules(studyDesign)}
 
 Rules:
 - Do not mention that this is a transcript.
@@ -1475,6 +1516,15 @@ export const generateClassNoteChunkFromTranscript = async (
 
 const inferSubjectFromQuestion = (question: string) => {
   if (/\b(vce\s*)?(unit\s*[34]\s*)?bio(logy)?\b/i.test(question)) return "Biology";
+  if (/\b(vet\s*)?(hospitality\s*:?\s*)?cookery\b/i.test(question)) return "VCE VET Hospitality: Cookery";
+  if (/\bbusiness management\b|\bbusman\b/i.test(question)) return "Business Management";
+  if (/\bsoftware development\b|\bsoft(ware)? dev\b/i.test(question)) return "Software Development";
+  if (/\bdata analytics\b|\bdata analysis\b/i.test(question)) return "Data Analytics";
+  if (/\bgeneral math(s|ematics)?\b/i.test(question)) return "General Mathematics";
+  if (/\bmath(ematical)? methods\b|\bmethods\b/i.test(question)) return "Mathematical Methods";
+  if (/\bspecialist math(s|ematics)?\b|\bspesh\b/i.test(question)) return "Specialist Mathematics";
+  if (/\bfoundation math(s|ematics)?\b/i.test(question)) return "Foundation Mathematics";
+  if (/\benglish\b|\beal\b/i.test(question)) return "English";
   return null;
 };
 
@@ -1503,9 +1553,7 @@ const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
 const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question);
   const studyDesign = subject ? getStudyDesignContext(subject) : null;
-  const studyDesignBlock = studyDesign
-    ? `\nStudy design context:\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
-    : "";
+  const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
     : "";
@@ -1526,6 +1574,13 @@ ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
 
 Answer the student directly. Use the subject's study design and uploaded materials where they are relevant. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
+${studyDesignReliabilityRules(studyDesign)}
+
+Confidence rules:
+- Use high confidence only when the answer is backed by detailed study-design context, uploaded resources, screenshots, or clearly standard subject knowledge.
+- Use medium confidence when the answer is mostly general VCE knowledge and does not rely on exact study-design claims.
+- Use low confidence when no subject is selected, only generic fallback context is available for a precise syllabus question, screenshots are unclear, or the student asks whether something is definitely in the study design and the supplied context does not prove it.
+- If you use study-design context, include it in sources_used with source_type "study_design" and detail saying whether it was detailed local context or generic fallback.
 
 For screenshots:
 - Extract the important visible question, diagram, table, working or feedback.
