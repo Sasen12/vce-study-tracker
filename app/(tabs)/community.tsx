@@ -9,9 +9,10 @@ import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
-import type { ChatAllowance, CommunityChatMessage, UserFeedback } from "@/types";
+import { useAppStore } from "@/store/appStore";
+import type { ChatAllowance, CommunityChatMessage, LeaderboardEntry, UserFeedback } from "@/types";
 
-type Mode = "feedback" | "chat";
+type Mode = "chat" | "leaderboard" | "feedback";
 type FeedbackCategory = UserFeedback["category"];
 
 const categoryCopy: Record<FeedbackCategory, string> = {
@@ -28,6 +29,15 @@ const formatTime = (value: string) =>
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
+
+const formatWeekRange = (start?: string, end?: string) => {
+  if (!start || !end) return "This week";
+  const formatter = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" });
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  endDate.setDate(endDate.getDate() - 1);
+  return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+};
 
 function ChatBubble({ item }: { item: CommunityChatMessage }) {
   return (
@@ -53,7 +63,25 @@ function FeedbackItem({ item }: { item: UserFeedback }) {
   );
 }
 
+function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
+  return (
+    <View style={[styles.leaderboardRow, entry.isCurrentUser && styles.leaderboardRowActive]}>
+      <Text style={styles.leaderboardRank}>#{entry.rank}</Text>
+      <View style={styles.leaderboardNameBlock}>
+        <Text style={styles.leaderboardName} numberOfLines={1}>
+          {entry.displayName}
+        </Text>
+        <Text style={styles.muted} numberOfLines={1}>
+          {entry.weekMinutes} min - {entry.sessionCount} sessions - level {entry.level}
+        </Text>
+      </View>
+      <Text style={styles.leaderboardXp}>{entry.weekXp} XP</Text>
+    </View>
+  );
+}
+
 export default function CommunityScreen() {
+  const { gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
   const [mode, setMode] = useState<Mode>("chat");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
@@ -65,6 +93,8 @@ export default function CommunityScreen() {
   const [category, setCategory] = useState<FeedbackCategory>("feature");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [chatMessage, setChatMessage] = useState("");
+  const [leaderboardSaving, setLeaderboardSaving] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
   const loadCommunity = useCallback(async () => {
     setError(null);
@@ -84,7 +114,8 @@ export default function CommunityScreen() {
     useCallback(() => {
       setLoading(true);
       loadCommunity();
-    }, [loadCommunity])
+      fetchAll();
+    }, [fetchAll, loadCommunity])
   );
 
   const allowanceLabel = useMemo(() => {
@@ -126,6 +157,22 @@ export default function CommunityScreen() {
     }
   };
 
+  const chooseLeaderboard = async (optIn: boolean) => {
+    setLeaderboardSaving(true);
+    setLeaderboardError(null);
+    try {
+      await setLeaderboardPreference(optIn);
+    } catch (error) {
+      setLeaderboardError(error instanceof Error ? error.message : "Could not update leaderboard choice");
+    } finally {
+      setLeaderboardSaving(false);
+    }
+  };
+
+  const leaderboardEntries = leaderboard?.entries ?? [];
+  const topThree = leaderboardEntries.slice(0, 3);
+  const viewerRank = leaderboard?.viewer?.rank;
+
   if (loading) {
     return (
       <Screen>
@@ -153,6 +200,7 @@ export default function CommunityScreen() {
         onValueChange={(value) => setMode(value as Mode)}
         buttons={[
           { value: "chat", label: "Student chat", icon: "chat-outline" },
+          { value: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
           { value: "feedback", label: "Direct feedback", icon: "inbox-arrow-up" }
         ]}
       />
@@ -160,7 +208,68 @@ export default function CommunityScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-      {mode === "feedback" ? (
+      {mode === "leaderboard" ? (
+        <>
+          {leaderboardError ? <Text style={styles.error}>{leaderboardError}</Text> : null}
+          <AppCard style={styles.leaderboardStatusCard}>
+            <View style={styles.allowanceTop}>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>{gamification?.leaderboardOptIn ? "You are competing" : "You are opted out"}</Text>
+                <Text style={styles.muted}>
+                  {gamification?.leaderboardOptIn
+                    ? viewerRank
+                      ? `Your current weekly rank is #${viewerRank}.`
+                      : "Log a study session to land on the board."
+                    : "Join when you want your weekly XP to count against other opted-in students."}
+                </Text>
+              </View>
+              <Button
+                mode={gamification?.leaderboardOptIn ? "outlined" : "contained"}
+                disabled={leaderboardSaving}
+                loading={leaderboardSaving}
+                onPress={() => chooseLeaderboard(!gamification?.leaderboardOptIn)}
+              >
+                {gamification?.leaderboardOptIn ? "Opt out" : "Join"}
+              </Button>
+            </View>
+            <Text style={styles.muted}>
+              {formatWeekRange(leaderboard?.weekStart, leaderboard?.weekEnd)} - shows display name, weekly XP, weekly
+              minutes and session count.
+            </Text>
+          </AppCard>
+
+          {topThree.length ? (
+            <View style={styles.podium}>
+              {topThree.map((entry) => (
+                <View key={entry.userId} style={[styles.podiumCard, entry.isCurrentUser && styles.leaderboardRowActive]}>
+                  <Text style={styles.podiumRank}>#{entry.rank}</Text>
+                  <Text style={styles.leaderboardName} numberOfLines={1}>
+                    {entry.displayName}
+                  </Text>
+                  <Text style={styles.podiumXp}>{entry.weekXp} XP</Text>
+                  <Text style={styles.muted}>{entry.weekMinutes} min</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.cardTitle}>Weekly rankings</Text>
+              <Text style={styles.muted}>{leaderboardEntries.length} competing</Text>
+            </View>
+            {leaderboardEntries.length ? (
+              <View style={styles.list}>
+                {leaderboardEntries.map((entry) => (
+                  <LeaderboardRow key={entry.userId} entry={entry} />
+                ))}
+              </View>
+            ) : (
+              <EmptyState title="No competitors yet" body="Once students opt in and log study sessions, the rankings appear here." />
+            )}
+          </AppCard>
+        </>
+      ) : mode === "feedback" ? (
         <>
           <AppCard style={styles.formCard}>
             <Text style={styles.cardTitle}>Send something in</Text>
@@ -290,6 +399,71 @@ const styles = StyleSheet.create({
   },
   formCard: {
     gap: 12
+  },
+  leaderboardStatusCard: {
+    gap: 12
+  },
+  flexText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4
+  },
+  podium: {
+    flexDirection: "row",
+    gap: 10
+  },
+  podiumCard: {
+    flex: 1,
+    minHeight: 124,
+    justifyContent: "center",
+    gap: 6,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.border
+  },
+  podiumRank: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 20
+  },
+  podiumXp: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18
+  },
+  leaderboardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 56,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  leaderboardRowActive: {
+    borderWidth: 1,
+    borderColor: "rgba(124,110,255,0.5)",
+    backgroundColor: "rgba(124,110,255,0.1)"
+  },
+  leaderboardRank: {
+    width: 40,
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold"
+  },
+  leaderboardNameBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  leaderboardName: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  leaderboardXp: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
   },
   listCard: {
     gap: 12

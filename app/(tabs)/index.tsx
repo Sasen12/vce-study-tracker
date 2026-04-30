@@ -314,7 +314,7 @@ export default function DashboardScreen() {
           <Dialog.Content>
             <Text style={styles.dialogBody}>
               Compete on weekly XP with other students who opt in. Your display name, weekly XP, study minutes and
-              session count will be visible on the leaderboard tab.
+              session count will be visible in Community.
             </Text>
             {leaderboardError ? <Text style={styles.error}>{leaderboardError}</Text> : null}
           </Dialog.Content>
