@@ -26,7 +26,7 @@ const parsePositiveLimit = (value: string | undefined, fallback: number) => {
 const perUserDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_PER_USER, 20);
 const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
 const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
-const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com", "sasenb@gmail.com"];
+const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com", "sasenb@gmail.com", "vjmadhus@gmail.com"];
 
 const unlimitedDomains = () => {
   const configured = process.env.AI_UNLIMITED_EMAIL_DOMAINS;
