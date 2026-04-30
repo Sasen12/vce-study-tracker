@@ -1473,26 +1473,36 @@ export const generateClassNoteChunkFromTranscript = async (
   return parsed;
 };
 
-const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => ({
-  answer: `For ${input.subject ?? "your selected subject"}, I would start by turning the question into a VCE-style explanation: define the key term, connect it to the specific scenario, then finish with the exact consequence or judgement. ${
-    input.screenshots?.length ? "I can see a screenshot was attached; with a real OpenAI key, I would read the image and use it directly in the answer." : ""
-  }`,
-  key_points: [
-    "Use subject-specific terminology before you explain the example.",
-    "Link each sentence back to the question instead of listing facts.",
-    "If this is exam practice, finish with a clear final judgement or calculation."
-  ],
-  sources_used: input.sourceLabels?.slice(0, 4).map((label) => ({ title: label, source_type: "local", detail: "Available app context" })) ?? [],
-  follow_up_questions: [
-    "Can you turn this into a 4-mark exam response?",
-    "What would the marking criteria be?",
-    "Can you give me one similar practice question?"
-  ],
-  confidence: input.context || input.screenshots?.length ? "medium" : "low"
-});
+const inferSubjectFromQuestion = (question: string) => {
+  if (/\b(vce\s*)?(unit\s*[34]\s*)?bio(logy)?\b/i.test(question)) return "Biology";
+  return null;
+};
+
+const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
+  const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
+
+  return {
+    answer: `For ${subject}, I would start by turning the question into a VCE-style explanation: define the key term, connect it to the specific scenario, then finish with the exact consequence or judgement. ${
+      input.screenshots?.length ? "I can see a screenshot was attached; with a real OpenAI key, I would read the image and use it directly in the answer." : ""
+    }`,
+    key_points: [
+      "Use subject-specific terminology before you explain the example.",
+      "Link each sentence back to the question instead of listing facts.",
+      "If this is exam practice, finish with a clear final judgement or calculation."
+    ],
+    sources_used: input.sourceLabels?.slice(0, 4).map((label) => ({ title: label, source_type: "local", detail: "Available app context" })) ?? [],
+    follow_up_questions: [
+      "Can you turn this into a 4-mark exam response?",
+      "What would the marking criteria be?",
+      "Can you give me one similar practice question?"
+    ],
+    confidence: input.context || input.screenshots?.length ? "medium" : "low"
+  };
+};
 
 const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
-  const studyDesign = input.subject ? getStudyDesignContext(input.subject) : null;
+  const subject = input.subject ?? inferSubjectFromQuestion(input.question);
+  const studyDesign = subject ? getStudyDesignContext(subject) : null;
   const studyDesignBlock = studyDesign
     ? `\nStudy design context:\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
     : "";
@@ -1505,7 +1515,7 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
 
   return `You are a precise, encouraging VCE study tutor.
 
-Subject: ${input.subject ?? "General VCE study"}
+Subject: ${subject ?? "General VCE study"}
 
 Student question:
 ${input.question}

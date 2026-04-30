@@ -5,8 +5,10 @@ type StudyDesignContext = {
 
 const appliedComputingSource =
   "VCAA VCE Applied Computing Study Design, accreditation from 2025. Local DOCX: backend/src/resources/study-designs/applied-computing-study-design.docx";
+const biologySource =
+  "VCAA VCE Biology Study Design, implementation from 2022. Official DOCX: https://vcaacorporateprod.prod.acquia-sites.com/sites/default/files/2025-10/2022BiologySD.docx";
 const vceStudyDesignListSource =
-  "VCAA VCE Study Designs list, 2026. Use this as the current subject catalogue; detailed local DOCX context is available for English/EAL, Applied Computing, Business Management and Mathematics.";
+  "VCAA VCE Study Designs list, 2026. Use this as the current subject catalogue; detailed context is available for English/EAL, Biology, Applied Computing, Business Management and Mathematics.";
 
 const contexts: Record<string, StudyDesignContext> = {
   English: {
@@ -42,6 +44,11 @@ const contexts: Record<string, StudyDesignContext> = {
       "VCAA VCE Mathematics Study Design, accreditation from 2023. Local DOCX: backend/src/resources/study-designs/mathematics-study-design.docx",
     context:
       "For VCE General Mathematics Units 3 and 4, align work with data analysis, probability and statistics, recursion and financial modelling, matrices, networks and decision mathematics. General Mathematics study can include formulas, but should always pair them with conditions, worked examples, calculator/CAS steps where appropriate, interpretation, error logs and final conclusions in context. Prefer exam-style questions involving interpretation, multi-step calculations, technology-aware reasoning, clear working and final conclusions in context."
+  },
+  Biology: {
+    source: biologySource,
+    context:
+      "For VCE Biology Units 3 and 4, use the VCAA Biology Study Design as the authority. If the student asks for Unit 3 Biology, do not drift into Unit 1 cellular regulation, homeostasis, organ systems or basic cell-cycle content unless they explicitly ask for prerequisite revision. Unit 3 is 'How do cells maintain life?'. Area of Study 1 is nucleic acids and proteins: DNA structure, mRNA/rRNA/tRNA, transcription, RNA processing in eukaryotes, translation, gene structure including exons, introns, promoter and operator regions, prokaryotic trp operon regulation, amino acids and protein structure, proteome, enzymes, protein export through rough ER/Golgi/vesicles, and DNA manipulation using polymerase, ligase, endonucleases, CRISPR-Cas9, PCR, gel electrophoresis, recombinant plasmids, bacterial transformation, insulin production, GM/transgenic organisms and agricultural applications. Area of Study 2 is biochemical pathways: structure and regulation of photosynthesis and cellular respiration, enzymes and coenzymes, temperature/pH/substrate concentration, competitive and non-competitive inhibitors, light-dependent and light-independent photosynthesis in C3 plants, Rubisco, C3/C4/CAM adaptations, limiting factors for photosynthesis, glycolysis/Krebs cycle/electron transport chain inputs/outputs/locations and ATP yield, anaerobic fermentation in animals and yeasts, respiration rate factors, CRISPR-Cas9 applications to photosynthetic efficiency and crop yield, and anaerobic fermentation of biomass for biofuel. Unit 4 is immunity, disease, evolution, allele-frequency change, relatedness and human change over time. Prefer VCAA-style data interpretation, bioethical issue evaluation, biological case studies, practical-method evaluation, command-term responses and marked corrections."
   },
   "Foundation Mathematics": {
     source:
@@ -129,4 +136,16 @@ const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   };
 };
 
-export const getStudyDesignContext = (subject: string) => contexts[subject] ?? genericStudyDesignContext(subject);
+const normaliseSubject = (subject: string) => subject.trim().toLowerCase();
+
+export const getStudyDesignContext = (subject: string) => {
+  const direct = contexts[subject];
+  if (direct) return direct;
+
+  const normalised = normaliseSubject(subject);
+  if (normalised === "bio" || normalised === "vce bio" || normalised === "vce biology") {
+    return contexts.Biology;
+  }
+
+  return genericStudyDesignContext(subject);
+};
