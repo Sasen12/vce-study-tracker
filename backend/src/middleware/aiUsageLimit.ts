@@ -26,6 +26,7 @@ const parsePositiveLimit = (value: string | undefined, fallback: number) => {
 const perUserDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_PER_USER, 20);
 const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
 const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
+const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com"];
 
 const unlimitedDomains = () => {
   const configured = process.env.AI_UNLIMITED_EMAIL_DOMAINS;
@@ -39,7 +40,18 @@ const unlimitedDomains = () => {
 
 const hasUnlimitedAi = (email: string) => {
   const normalisedEmail = email.trim().toLowerCase();
-  return unlimitedDomains().some((domain) => normalisedEmail.endsWith(`@${domain}`));
+  const configuredEmails = process.env.AI_UNLIMITED_EMAILS;
+  const unlimitedEmails = configuredEmails?.trim()
+    ? configuredEmails
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+    : defaultUnlimitedEmails;
+
+  return (
+    unlimitedEmails.includes(normalisedEmail) ||
+    unlimitedDomains().some((domain) => normalisedEmail.endsWith(`@${domain}`))
+  );
 };
 
 const costForRequest = (req: AuthenticatedRequest, cost: CostInput | undefined) => {
