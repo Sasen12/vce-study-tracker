@@ -67,6 +67,12 @@ const contexts: Record<string, StudyDesignContext> = {
       "VCAA VCE Mathematics Study Design, accreditation from 2023. Local DOCX: backend/src/resources/study-designs/mathematics-study-design.docx",
     context:
       "For VCE Specialist Mathematics Units 3 and 4, align study with advanced functions, complex numbers, vectors, mechanics, calculus, differential equations, probability and statistics. Prefer proof-like reasoning, clear notation, worked examples with conditions, mixed exam problems, modelling interpretation and correction logs."
+  },
+  "VCE VET Hospitality: Cookery": {
+    source:
+      "VCAA VCE VET Hospitality: Cookery program information, current VCE VET subject list. VCAA notes this replaced VCE VET Hospitality: Kitchen Operations from 2024.",
+    context:
+      "For VCE VET Hospitality: Cookery, align support with applied cookery competency evidence, food safety, hygiene, safe work practices, kitchen organisation, preparation techniques, cookery methods, recipe interpretation, mise en place, service timing, quality checks, cleaning and sustainability expectations. Prefer practical checklists, workflow plans, evidence logs, short applied scenarios, terminology repair, reflection prompts, service-readiness checks and task-by-task next actions. When generating questions, avoid generic VCE theory essays; make them workplace/practical and assessment-evidence focused unless the student asks for broader hospitality theory."
   }
 };
 
@@ -145,6 +151,9 @@ export const getStudyDesignContext = (subject: string) => {
   const normalised = normaliseSubject(subject);
   if (normalised === "bio" || normalised === "vce bio" || normalised === "vce biology") {
     return contexts.Biology;
+  }
+  if (normalised === "vet cookery" || normalised === "vce vet cookery" || normalised === "cookery") {
+    return contexts["VCE VET Hospitality: Cookery"];
   }
 
   return genericStudyDesignContext(subject);

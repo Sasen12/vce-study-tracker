@@ -151,6 +151,7 @@ export const VCE_SUBJECTS: VceSubject[] = [
   { name: "VCE VET Hair and Beauty", units: ["3/4"], category: "VCE VET" },
   { name: "VCE VET Health", units: ["3/4"], category: "VCE VET" },
   { name: "VCE VET Hospitality", units: ["3/4"], category: "VCE VET" },
+  { name: "VCE VET Hospitality: Cookery", units: ["3/4"], category: "VCE VET" },
   { name: "VCE VET Information and Communications Technology", units: ["3/4"], category: "VCE VET" },
   { name: "VCE VET Integrated Technologies", units: ["3/4"], category: "VCE VET" },
   { name: "VCE VET Laboratory Skills", units: ["3/4"], category: "VCE VET" },
