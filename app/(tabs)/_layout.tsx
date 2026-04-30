@@ -66,10 +66,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="feedback"
+        name="community"
         options={{
-          title: "Feedback",
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="message-text-outline" color={color} size={size} />
+          title: "Community",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="forum-outline" color={color} size={size} />
         }}
       />
       <Tabs.Screen

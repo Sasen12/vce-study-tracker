@@ -53,8 +53,8 @@ function FeedbackItem({ item }: { item: UserFeedback }) {
   );
 }
 
-export default function FeedbackScreen() {
-  const [mode, setMode] = useState<Mode>("feedback");
+export default function CommunityScreen() {
+  const [mode, setMode] = useState<Mode>("chat");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
@@ -140,7 +140,7 @@ export default function FeedbackScreen() {
         <View>
           <Text style={styles.eyebrow}>Community</Text>
           <Text variant="headlineLarge" style={styles.title}>
-            Feedback
+            Community
           </Text>
         </View>
         <View style={styles.headerIcon}>
@@ -152,8 +152,8 @@ export default function FeedbackScreen() {
         value={mode}
         onValueChange={(value) => setMode(value as Mode)}
         buttons={[
-          { value: "feedback", label: "Direct feedback", icon: "inbox-arrow-up" },
-          { value: "chat", label: "Student chat", icon: "chat-outline" }
+          { value: "chat", label: "Student chat", icon: "chat-outline" },
+          { value: "feedback", label: "Direct feedback", icon: "inbox-arrow-up" }
         ]}
       />
 
