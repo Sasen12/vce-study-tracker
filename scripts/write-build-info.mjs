@@ -15,18 +15,16 @@ const git = (args) => {
 };
 
 const buildId = process.env.COMMIT_REF || git(["rev-parse", "HEAD"]) || `local-${Date.now()}`;
-const recentChanges = git(["log", "-5", "--pretty=format:%s"])
-  .split(/\r?\n/)
+const publicMessage = process.env.PUBLIC_RELEASE_MESSAGE || "Study Tracker was updated";
+const publicChanges = (process.env.PUBLIC_RELEASE_CHANGES || "App improvements and fixes are ready after reload")
+  .split("|")
   .map((message) => message.trim())
   .filter(Boolean);
-const primaryMessage = process.env.COMMIT_MSG || recentChanges[0] || "New app update";
 const payload = {
   buildId,
   shortHash: buildId.slice(0, 7),
-  branch: process.env.BRANCH || git(["rev-parse", "--abbrev-ref", "HEAD"]) || null,
-  message: primaryMessage,
-  changes: Array.from(new Set([primaryMessage, ...recentChanges])).slice(0, 5),
-  author: git(["log", "-1", "--pretty=%an"]) || null,
+  message: publicMessage,
+  changes: publicChanges.length ? publicChanges.slice(0, 5) : [publicMessage],
   committedAt: git(["log", "-1", "--pretty=%cI"]) || null,
   builtAt: new Date().toISOString()
 };
