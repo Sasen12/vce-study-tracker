@@ -10,9 +10,9 @@ import { SkeletonStack } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
-import type { ChatAllowance, CommunityChatMessage, LeaderboardEntry, UserFeedback } from "@/types";
+import type { ChatAllowance, CommunityChatMessage, CommunityUserSummary, LeaderboardEntry, UserFeedback } from "@/types";
 
-type Mode = "chat" | "leaderboard" | "feedback";
+type Mode = "chat" | "leaderboard" | "feedback" | "users";
 type FeedbackCategory = UserFeedback["category"];
 
 const categoryCopy: Record<FeedbackCategory, string> = {
@@ -121,11 +121,41 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
+function UserRow({ item }: { item: CommunityUserSummary }) {
+  return (
+    <View style={styles.userItem}>
+      <View style={styles.userTop}>
+        <View style={styles.flexText}>
+          <Text style={styles.userName} numberOfLines={1}>
+            {item.displayName}
+          </Text>
+          <Text style={styles.userEmail} numberOfLines={1}>
+            {item.email}
+          </Text>
+        </View>
+        <View style={[styles.optInPill, item.leaderboardOptIn ? styles.optInPillActive : styles.optInPillMuted]}>
+          <Text style={styles.optInText}>{item.leaderboardOptIn ? "Opted in" : "Opted out"}</Text>
+        </View>
+      </View>
+      <Text style={styles.mutedSmall}>Joined {formatTime(item.createdAt)}</Text>
+      <View style={styles.userStats}>
+        <Text style={styles.userStat}>Level {item.level}</Text>
+        <Text style={styles.userStat}>{item.totalXp} XP</Text>
+        <Text style={styles.userStat}>{item.sessionCount} sessions</Text>
+        <Text style={styles.userStat}>{item.subjectCount} subjects</Text>
+        <Text style={styles.userStat}>{item.feedbackCount} feedback</Text>
+        <Text style={styles.userStat}>{item.chatMessageCount} chats</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function CommunityScreen() {
   const { gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
   const [mode, setMode] = useState<Mode>("chat");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
+  const [users, setUsers] = useState<CommunityUserSummary[]>([]);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -145,8 +175,9 @@ export default function CommunityScreen() {
       const data = await studyApi.community();
       setFeedback(data.feedback);
       setChat(data.chat);
+      setUsers(data.users ?? []);
       setAllowance(data.allowance);
-      setIsAdmin(data.isAdmin);
+      setIsAdmin(Boolean(data.isAdmin));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load feedback");
     } finally {
@@ -260,14 +291,31 @@ export default function CommunityScreen() {
         buttons={[
           { value: "chat", label: "Student chat", icon: "chat-outline" },
           { value: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
-          { value: "feedback", label: isAdmin ? "Feedback inbox" : "Direct feedback", icon: "inbox-arrow-up" }
+          { value: "feedback", label: isAdmin ? "Feedback inbox" : "Direct feedback", icon: "inbox-arrow-up" },
+          ...(isAdmin ? [{ value: "users", label: "Users", icon: "account-group-outline" }] : [])
         ]}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-      {mode === "leaderboard" ? (
+      {mode === "users" && isAdmin ? (
+        <AppCard style={styles.listCard}>
+          <View style={styles.feedbackHeader}>
+            <Text style={styles.cardTitle}>Users</Text>
+            <Text style={styles.muted}>{users.length} total</Text>
+          </View>
+          {users.length ? (
+            <View style={styles.list}>
+              {users.map((item) => (
+                <UserRow key={item.id} item={item} />
+              ))}
+            </View>
+          ) : (
+            <EmptyState title="No users yet" body="Registered students will appear here." />
+          )}
+        </AppCard>
+      ) : mode === "leaderboard" ? (
         <>
           {leaderboardError ? <Text style={styles.error}>{leaderboardError}</Text> : null}
           <AppCard style={styles.leaderboardStatusCard}>
@@ -546,6 +594,58 @@ const styles = StyleSheet.create({
   },
   leaderboardXp: {
     color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  userItem: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  userTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  userName: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  userEmail: {
+    color: palette.info,
+    lineHeight: 20
+  },
+  userStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  userStat: {
+    color: palette.text,
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden"
+  },
+  optInPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: "hidden"
+  },
+  optInPillActive: {
+    backgroundColor: "rgba(74,222,128,0.14)"
+  },
+  optInPillMuted: {
+    backgroundColor: "rgba(136,136,170,0.14)"
+  },
+  optInText: {
+    color: palette.text,
+    fontSize: 12,
     fontFamily: "Outfit_700Bold"
   },
   listCard: {

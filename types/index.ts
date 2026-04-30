@@ -132,6 +132,20 @@ export type ChatAllowance = {
   studyMinutesPerChatMinute: number;
 };
 
+export type CommunityUserSummary = {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+  level: number;
+  totalXp: number;
+  leaderboardOptIn: boolean;
+  subjectCount: number;
+  sessionCount: number;
+  feedbackCount: number;
+  chatMessageCount: number;
+};
+
 export type ThemeShopItem = {
   id: string;
   name: string;

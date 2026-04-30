@@ -80,6 +80,48 @@ const publicUser = (user: { displayName: string }) => ({
   displayName: user.displayName
 });
 
+const adminUsers = async () => {
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      createdAt: true,
+      gamification: {
+        select: {
+          totalXp: true,
+          level: true,
+          leaderboardOptIn: true
+        }
+      },
+      _count: {
+        select: {
+          subjects: true,
+          sessions: true,
+          feedbackItems: true,
+          chatMessages: true
+        }
+      }
+    }
+  });
+
+  return users.map((user) => ({
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    createdAt: user.createdAt,
+    level: user.gamification?.level ?? 1,
+    totalXp: user.gamification?.totalXp ?? 0,
+    leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,
+    subjectCount: user._count.subjects,
+    sessionCount: user._count.sessions,
+    feedbackCount: user._count.feedbackItems,
+    chatMessageCount: user._count.chatMessages
+  }));
+};
+
 const chatAllowanceFor = async (userId: string) => {
   const { start, end } = todayRange();
   const [study, used] = await Promise.all([
@@ -122,7 +164,7 @@ const chatAllowanceFor = async (userId: string) => {
 
 const communityPayload = async (user: AuthenticatedRequest["user"]) => {
   const isAdmin = isAdminEmail(user.email);
-  const [feedback, chatDesc, allowance] = await Promise.all([
+  const [feedback, chatDesc, allowance, users] = await Promise.all([
     prisma.userFeedback.findMany({
       where: isAdmin ? {} : { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -145,7 +187,8 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
         }
       }
     }),
-    chatAllowanceFor(user.id)
+    chatAllowanceFor(user.id),
+    isAdmin ? adminUsers() : Promise.resolve([])
   ]);
 
   const chat = chatDesc.reverse().map((message) => ({
@@ -157,7 +200,7 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     isCurrentUser: message.userId === user.id
   }));
 
-  return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance };
+  return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance, users };
 };
 
 communityRouter.get(

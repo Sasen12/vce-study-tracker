@@ -6,6 +6,7 @@ import type {
   ClassNoteDraft,
   ChatAllowance,
   CommunityChatMessage,
+  CommunityUserSummary,
   DailyInspiration,
   Gamification,
   GeneratedQuestion,
@@ -164,6 +165,7 @@ export const studyApi = {
       feedback: UserFeedback[];
       chat: CommunityChatMessage[];
       allowance: ChatAllowance;
+      users: CommunityUserSummary[];
     }>("/community"),
   sendFeedback: (body: { category: UserFeedback["category"]; message: string }) =>
     apiFetch<{ feedback: UserFeedback }>("/community/feedback", { method: "POST", body }),
