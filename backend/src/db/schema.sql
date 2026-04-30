@@ -68,7 +68,9 @@ CREATE TABLE user_gamification (
   last_study_date DATE,
   badges JSONB DEFAULT '[]',
   unlocked_cosmetics JSONB DEFAULT '["midnight"]',
-  active_theme TEXT DEFAULT 'midnight'
+  active_theme TEXT DEFAULT 'midnight',
+  leaderboard_opt_in BOOLEAN DEFAULT FALSE,
+  leaderboard_prompted_at TIMESTAMPTZ
 );
 
 CREATE TABLE saved_questions (

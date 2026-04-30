@@ -13,6 +13,537 @@ const biologySource =
 const vceStudyDesignListSource =
   "VCAA VCE Study Designs list, 2026. Use this as the current subject catalogue; detailed context is available for English/EAL, Biology, Applied Computing, Business Management and Mathematics.";
 
+type SubjectProfile = {
+  program?: "VCE" | "VCE VM" | "VCE VET";
+  focus: string;
+  prefer: string;
+  avoid?: string;
+};
+
+const subjectProfiles: Record<string, SubjectProfile> = {
+  "English Language": {
+    focus:
+      "English language structures, subsystems, metalanguage, spoken and written discourse, language variation, identity, contemporary Australian English and analytical commentary.",
+    prefer:
+      "metalanguage drills, short analytical commentaries, discourse-feature annotation, subsystem tables, contemporary examples, transcript analysis and precise expression repair",
+    avoid: "generic essay plans that ignore linguistic evidence and metalanguage"
+  },
+  Literature: {
+    focus:
+      "close literary analysis, interpretation, form, structure, language, views and values, adaptations or transformations, literary perspectives and evidence-rich written responses.",
+    prefer:
+      "passage annotation, quote banks, interpretation comparisons, literary-perspective paragraphs, language/form analysis, timed close analysis and revision of contention and evidence",
+    avoid: "plot summary without interpretation"
+  },
+  Algorithmics: {
+    focus:
+      "computational thinking, algorithms, data structures, abstraction, correctness, complexity, representation, decomposition and formal reasoning.",
+    prefer:
+      "algorithm traces, pseudocode, complexity comparisons, proof sketches, data-structure choices, edge-case testing and worked problem explanations",
+    avoid: "software-project management tasks unless the student explicitly asks for them"
+  },
+  "Agricultural and Horticultural Studies": {
+    focus:
+      "agricultural and horticultural systems, plant and animal production, soils, climate, sustainability, biosecurity, technology use and practical investigation.",
+    prefer:
+      "system diagrams, case studies, practical-method evaluation, terminology repair, sustainability trade-off tables and data-response questions"
+  },
+  Chemistry: {
+    focus:
+      "chemical structures and properties, analytical techniques, reaction pathways, equilibrium, acids and bases, redox, fuels, organic chemistry, calculations and experimental design.",
+    prefer:
+      "balanced equations, worked calculations, conditions and assumptions, spectroscopy interpretation, reaction-pathway maps, practical-method critique and error logs"
+  },
+  "Environmental Science": {
+    focus:
+      "Earth systems, biodiversity, pollution, climate, energy, ecological change, resource use, sustainability, risk and scientific investigation.",
+    prefer:
+      "case-study evidence tables, data interpretation, system diagrams, cause-effect chains, experimental design checks and evaluation paragraphs"
+  },
+  Physics: {
+    focus:
+      "motion, fields, electricity, waves, light, matter, models, uncertainty, practical investigation, data analysis and mathematical reasoning.",
+    prefer:
+      "formula conditions, diagrams, unit checks, worked calculations, graph interpretation, practical-method critique and mistake logs"
+  },
+  Psychology: {
+    focus:
+      "nervous system processes, learning, memory, consciousness, sleep, mental wellbeing, research methods, ethics, data interpretation and biopsychosocial explanations.",
+    prefer:
+      "research-method drills, key-term repair, study design evaluation, data-response practice, compare/explain paragraphs and application to scenarios"
+  },
+  "Applied Computing": {
+    focus:
+      "the Applied Computing problem-solving methodology, data and information, programming, networks, cyber security, digital systems and solution evaluation.",
+    prefer:
+      "requirements tables, data dictionaries, pseudocode, test cases, design sketches, security justifications and evaluation criteria"
+  },
+  "Product Design and Technologies": {
+    focus:
+      "design processes, materials, production methods, sustainability, design briefs, evaluation criteria, testing, documentation and user needs.",
+    prefer:
+      "design-brief breakdowns, criteria tables, material/property comparisons, production plans, test logs, annotation prompts and evaluation paragraphs"
+  },
+  "Food Studies": {
+    focus:
+      "food systems, nutrition, food choice, food security, sustainability, preparation, sensory analysis, health messages and practical investigation.",
+    prefer:
+      "nutrition terminology repair, case studies, sensory-analysis tables, food-system diagrams, practical-method evaluation and applied short responses"
+  },
+  "Systems Engineering": {
+    focus:
+      "mechanical and electrotechnological systems, systems thinking, design, production, testing, diagnostics, control, energy and evaluation.",
+    prefer:
+      "system diagrams, fault-finding tables, input-process-output maps, testing logs, design justifications and applied scenario questions"
+  },
+  Accounting: {
+    focus:
+      "recording, reporting, budgeting, financial performance, accounting assumptions, qualitative characteristics, analysis and advice for businesses.",
+    prefer:
+      "transaction classification, ledger and report practice, ratio interpretation, budgeting tasks, advice paragraphs and correction of calculation errors"
+  },
+  "Ancient History": {
+    focus:
+      "ancient societies, historical sources, interpretations, evidence, continuity and change, significance, causes and consequences.",
+    prefer:
+      "source annotation, evidence tables, historian interpretation comparisons, short-answer plans and timed evidence-based paragraphs"
+  },
+  "Australian and Global Politics": {
+    focus:
+      "political actors, power, democracy, global cooperation and conflict, policy, international relations, case studies and contemporary evidence.",
+    prefer:
+      "case-study banks, concept definitions, source/evidence tables, compare/analyse/evaluate paragraphs and contemporary example repair"
+  },
+  "Australian History": {
+    focus:
+      "Australian historical change, evidence, perspectives, causes and consequences, historical significance and source interpretation.",
+    prefer:
+      "timeline repair, source annotation, evidence banks, perspective comparisons and timed analytical paragraphs"
+  },
+  "Classical Studies": {
+    focus:
+      "classical texts, material culture, societies, values, evidence, interpretation, context and comparison.",
+    prefer:
+      "text/source annotation, context tables, theme banks, evidence-based paragraphs and interpretation comparisons"
+  },
+  Economics: {
+    focus:
+      "markets, resource allocation, macroeconomic goals, policy, aggregate demand and supply, economic indicators, efficiency, equity and contemporary data.",
+    prefer:
+      "diagram practice, policy cause-effect chains, data interpretation, definition repair, contemporary example banks and evaluate paragraphs"
+  },
+  "Extended Investigation": {
+    focus:
+      "research question design, literature review, methodology, ethics, evidence, critical thinking, argument, presentation and evaluation.",
+    prefer:
+      "research-question refinement, source credibility checks, methodology tables, argument maps, presentation rehearsal and evaluation notes"
+  },
+  Geography: {
+    focus:
+      "places, spatial patterns, fieldwork, data, human-environment interactions, change, sustainability, maps and geographic concepts.",
+    prefer:
+      "map/data interpretation, fieldwork-method critique, case-study tables, spatial-pattern paragraphs and concept application"
+  },
+  "Global Politics": {
+    focus:
+      "global actors, power, sovereignty, cooperation, conflict, ethical issues, global challenges and contemporary case studies.",
+    prefer:
+      "actor-power tables, case-study banks, policy evaluation, source analysis, compare/analyse/evaluate response plans"
+  },
+  History: {
+    focus:
+      "historical sources, evidence, perspectives, causes and consequences, continuity and change, significance and argument.",
+    prefer:
+      "timeline repair, source analysis, evidence banks, historian interpretation comparisons and timed analytical paragraphs"
+  },
+  "History: Revolutions": {
+    focus:
+      "causes and consequences of revolution, revolutionary ideas, leaders, movements, crises, new regimes, source analysis and historical interpretations.",
+    prefer:
+      "cause-consequence chains, chronology repair, source annotation, historian view tables, evidence banks and timed revolution paragraphs"
+  },
+  "Industry and Enterprise": {
+    focus:
+      "workplace participation, enterprise skills, industry change, employability, project planning, reflection, communication and applied evidence.",
+    prefer:
+      "evidence logs, workplace scenario responses, skill reflection, project checkpoints, terminology repair and short applied tasks"
+  },
+  "Legal Studies": {
+    focus:
+      "legal foundations, rights, criminal and civil justice systems, institutions, law reform, case studies, principles of justice and evaluation.",
+    prefer:
+      "case/example banks, legal-term repair, compare/evaluate paragraphs, scenario application, justice-principle links and source-response practice"
+  },
+  Philosophy: {
+    focus:
+      "philosophical arguments, logic, concepts, objections, ethical and metaphysical questions, reasoning and text analysis.",
+    prefer:
+      "argument maps, objection-response tables, concept distinctions, close text analysis and concise evaluative paragraphs"
+  },
+  "Religion and Society": {
+    focus:
+      "religious traditions, beliefs, ethics, rituals, communities, social change, texts, meaning and evidence-based analysis.",
+    prefer:
+      "belief-practice links, tradition example banks, compare/evaluate paragraphs, source analysis and terminology repair"
+  },
+  Sociology: {
+    focus:
+      "social categories, culture, deviance, identity, community, social theory, research methods and evidence-based analysis.",
+    prefer:
+      "concept definitions, theory-example links, research-method critique, case-study tables and analytical paragraphs"
+  },
+  "Texts and Traditions": {
+    focus:
+      "religious and textual traditions, interpretation, context, themes, passages, commentaries and evidence.",
+    prefer:
+      "passage annotation, theme banks, context tables, interpretation comparison and text-based response plans"
+  },
+  "Health and Human Development": {
+    focus:
+      "health, wellbeing, development, health status data, health promotion, the Australian and global health systems, sustainability and equity.",
+    prefer:
+      "definition repair, data-response practice, model/framework tables, cause-effect chains, compare/evaluate paragraphs and example banks"
+  },
+  "Outdoor and Environmental Studies": {
+    focus:
+      "relationships with outdoor environments, environmental change, sustainability, risk, outdoor experiences, Indigenous perspectives and practical evidence.",
+    prefer:
+      "experience-evidence reflections, case studies, sustainability trade-off tables, terminology repair and applied short responses"
+  },
+  "Physical Education": {
+    focus:
+      "body systems, movement, energy systems, training principles, acute and chronic adaptations, skill acquisition, data and performance analysis.",
+    prefer:
+      "scenario application, data interpretation, training-plan critique, terminology repair, comparison tables and short-answer drills"
+  },
+  "Art Creative Practice": {
+    focus:
+      "creative practice, art process, personal ideas, artists, materials, techniques, interpretation, documentation and reflection.",
+    prefer:
+      "folio checkpoints, artist-reference tables, annotation prompts, visual-analysis paragraphs, process reflection and evaluation"
+  },
+  "Art Making and Exhibiting": {
+    focus:
+      "art making, materials, techniques, exhibition practice, curation, conservation, artists, audiences and documentation.",
+    prefer:
+      "exhibition-analysis notes, material trials, artist comparison, folio evidence logs, annotation and evaluation prompts"
+  },
+  Dance: {
+    focus:
+      "choreography, performance, safe dance practice, expressive intention, movement analysis, production elements and evaluation.",
+    prefer:
+      "rehearsal logs, movement motif analysis, choreographic intention paragraphs, performance feedback and terminology repair"
+  },
+  Drama: {
+    focus:
+      "dramatic elements, performance styles, devised and scripted work, expressive skills, stimulus development, production areas and evaluation.",
+    prefer:
+      "performance reflection, style/elements tables, rehearsal notes, character/intention prompts and evaluative paragraphs"
+  },
+  Media: {
+    focus:
+      "media forms, narratives, audiences, representations, production design, media codes and conventions, agency and regulation.",
+    prefer:
+      "code/convention annotation, production plans, audience-purpose tables, representation analysis and short evaluative responses"
+  },
+  Music: {
+    focus:
+      "music language, listening, performance, composition, interpretation, analysis, technique and expressive control.",
+    prefer:
+      "listening-analysis prompts, practice logs, technique checkpoints, terminology repair, repertoire notes and reflection tasks"
+  },
+  "Music Composition": {
+    focus:
+      "composition process, music language, creative intention, notation or production, development, reflection and analysis.",
+    prefer:
+      "motif development tasks, composition logs, listening references, technique experiments, notation checks and reflection prompts"
+  },
+  "Music Contemporary Performance": {
+    focus:
+      "contemporary performance, repertoire, style, technique, interpretation, rehearsal, ensemble skills and performance reflection.",
+    prefer:
+      "practice plans, repertoire analysis, style-feature tables, performance feedback, technique goals and reflection prompts"
+  },
+  "Music Inquiry": {
+    focus:
+      "music inquiry, research, performance or composition investigation, analysis, interpretation, creative process and evidence.",
+    prefer:
+      "inquiry-question refinement, listening notes, evidence logs, performance/composition checkpoints and analytical reflection"
+  },
+  "Music Repertoire Performance": {
+    focus:
+      "repertoire performance, interpretation, technique, expressive control, style, analysis, practice and performance reflection.",
+    prefer:
+      "repertoire maps, technique drills, interpretation notes, practice logs, feedback cycles and listening-analysis prompts"
+  },
+  "Theatre Studies": {
+    focus:
+      "script interpretation, production roles, theatre styles, performance, stagecraft, audience, context and evaluation.",
+    prefer:
+      "production-role checklists, script annotation, stagecraft analysis, rehearsal reflection and evaluative paragraphs"
+  },
+  "Visual Communication Design": {
+    focus:
+      "design process, visual language, communication needs, typography, layout, drawing, design fields, critique and presentation.",
+    prefer:
+      "design-brief breakdowns, visual-language annotation, thumbnail iterations, critique tables, presentation planning and evaluation"
+  },
+  "VCE VM Literacy": {
+    program: "VCE VM",
+    focus:
+      "reading, writing, speaking, listening, digital and workplace communication, audience, purpose, text types and practical evidence.",
+    prefer:
+      "text-type planning, vocabulary repair, spoken rehearsal, workplace communication tasks, reflection and portfolio evidence"
+  },
+  "VCE VM Numeracy": {
+    program: "VCE VM",
+    focus:
+      "practical numeracy, measurement, finance, data, shape, location, estimation, problem solving and real-world mathematical communication.",
+    prefer:
+      "worked practical examples, calculator steps, unit checks, budgeting/data tasks, visual representations and correction logs"
+  },
+  "VCE VM Personal Development Skills": {
+    program: "VCE VM",
+    focus:
+      "personal identity, community, teamwork, leadership, health, wellbeing, project planning, reflection and applied evidence.",
+    prefer:
+      "reflection prompts, project checklists, evidence logs, scenario responses, teamwork plans and practical next actions"
+  },
+  "VCE VM Work Related Skills": {
+    program: "VCE VM",
+    focus:
+      "career planning, workplace skills, employability, rights and responsibilities, workplace communication, industry research and applied evidence.",
+    prefer:
+      "resume/interview tasks, workplace scenario responses, industry research tables, evidence logs and reflection prompts"
+  },
+  "VCE VET Agriculture, Horticulture, Conservation and Ecosystem Management": {
+    program: "VCE VET",
+    focus:
+      "practical agriculture, horticulture, conservation, ecosystem management, safety, equipment, sustainability and competency evidence.",
+    prefer: "checklists, evidence logs, practical scenarios, safety steps, terminology repair and workplace reflection"
+  },
+  "VCE VET Animal Care": {
+    program: "VCE VET",
+    focus:
+      "animal care routines, welfare, hygiene, safety, handling, observation, communication and workplace competency evidence.",
+    prefer: "care checklists, scenario responses, safety/hygiene steps, terminology repair and evidence logs"
+  },
+  "VCE VET Apparel, Fashion and Textiles": {
+    program: "VCE VET",
+    focus:
+      "textile production, design briefs, pattern and garment construction, equipment safety, quality checks and portfolio evidence.",
+    prefer: "process checklists, material/property tables, production plans, quality-control logs and practical reflections"
+  },
+  "VCE VET Applied Language": {
+    program: "VCE VET",
+    focus:
+      "applied workplace language, communication tasks, listening, speaking, reading, writing, cultural context and competency evidence.",
+    prefer: "role-play rehearsal, vocabulary banks, workplace texts, short responses, correction logs and evidence checklists"
+  },
+  "VCE VET Automotive": {
+    program: "VCE VET",
+    focus:
+      "automotive systems, tools, diagnostics, safety, servicing, technical terminology, procedures and competency evidence.",
+    prefer: "fault-finding tables, safety steps, tool/procedure checklists, terminology repair and practical evidence logs"
+  },
+  "VCE VET Building and Construction": {
+    program: "VCE VET",
+    focus:
+      "construction processes, plans, materials, tools, site safety, measurements, quality checks and competency evidence.",
+    prefer: "site-safety checklists, measurement tasks, workflow plans, materials comparisons and evidence logs"
+  },
+  "VCE VET Business": {
+    program: "VCE VET",
+    focus:
+      "business communication, customer service, workplace documents, administration, technology, teamwork and competency evidence.",
+    prefer: "workplace scenarios, document checklists, communication repair, customer-service responses and evidence logs"
+  },
+  "VCE VET Cisco": {
+    program: "VCE VET",
+    focus:
+      "networking concepts, devices, addressing, configuration, troubleshooting, cybersecurity, documentation and competency evidence.",
+    prefer: "network diagrams, command/checklist practice, troubleshooting tables, terminology repair and configuration evidence"
+  },
+  "VCE VET Civil Infrastructure": {
+    program: "VCE VET",
+    focus:
+      "civil construction, plant/equipment, site safety, materials, measurements, environmental controls and competency evidence.",
+    prefer: "safety checklists, workflow plans, measurement tasks, equipment notes and evidence logs"
+  },
+  "VCE VET Community Services": {
+    program: "VCE VET",
+    focus:
+      "community support, communication, client needs, duty of care, safety, inclusion, reflection and competency evidence.",
+    prefer: "scenario responses, communication scripts, rights/responsibility tables, reflection prompts and evidence logs"
+  },
+  "VCE VET Creative and Digital Media": {
+    program: "VCE VET",
+    focus:
+      "digital media production, design process, briefs, software tools, audiences, technical skills, feedback and portfolio evidence.",
+    prefer: "production plans, design-brief notes, asset checklists, critique logs, workflow checkpoints and reflection"
+  },
+  "VCE VET Dance": {
+    program: "VCE VET",
+    focus:
+      "dance performance, rehearsal, safe practice, choreography, technique, industry expectations and competency evidence.",
+    prefer: "rehearsal logs, safe-practice checklists, performance feedback, technique goals and evidence logs"
+  },
+  "VCE VET Electrical Industry": {
+    program: "VCE VET",
+    focus:
+      "electrical safety, circuits, tools, measurements, diagrams, workplace procedures and competency evidence.",
+    prefer: "safety steps, circuit diagrams, tool/procedure checklists, troubleshooting tables and evidence logs"
+  },
+  "VCE VET Engineering": {
+    program: "VCE VET",
+    focus:
+      "engineering tools, materials, machining or fabrication processes, safety, measurements, drawings, testing and competency evidence.",
+    prefer: "process plans, safety checklists, drawing interpretation, measurement checks, quality logs and evidence records"
+  },
+  "VCE VET Equine Studies": {
+    program: "VCE VET",
+    focus:
+      "horse care, handling, safety, welfare, equipment, routines, observation and competency evidence.",
+    prefer: "care checklists, safety steps, handling scenarios, terminology repair and evidence logs"
+  },
+  "VCE VET Events and Tourism": {
+    program: "VCE VET",
+    focus:
+      "event planning, tourism services, customer communication, itineraries, risk, teamwork and competency evidence.",
+    prefer: "planning checklists, customer scenarios, itinerary tasks, risk tables, reflection and evidence logs"
+  },
+  "VCE VET Furnishing": {
+    program: "VCE VET",
+    focus:
+      "furnishing materials, tools, production processes, drawings, safety, quality checks and competency evidence.",
+    prefer: "process checklists, material/tool tables, drawing interpretation, safety steps, quality logs and reflections"
+  },
+  "VCE VET Hair and Beauty": {
+    program: "VCE VET",
+    focus:
+      "client consultation, hygiene, salon safety, treatments, products, communication, service quality and competency evidence.",
+    prefer: "client scenarios, hygiene/safety checklists, product terminology, service workflows and evidence logs"
+  },
+  "VCE VET Health": {
+    program: "VCE VET",
+    focus:
+      "health workplace communication, infection control, client support, safety, ethics, documentation and competency evidence.",
+    prefer: "scenario responses, infection-control checklists, communication scripts, rights/responsibility tables and evidence logs"
+  },
+  "VCE VET Hospitality": {
+    program: "VCE VET",
+    focus:
+      "hospitality service, food and beverage operations, hygiene, workplace safety, customer service, teamwork and competency evidence.",
+    prefer: "service checklists, customer scenarios, hygiene/safety steps, workflow plans and evidence logs"
+  },
+  "VCE VET Information and Communications Technology": {
+    program: "VCE VET",
+    focus:
+      "ICT support, systems, networking, software tools, troubleshooting, cybersecurity, documentation and competency evidence.",
+    prefer: "troubleshooting tables, network/system diagrams, procedure checklists, terminology repair and evidence logs"
+  },
+  "VCE VET Integrated Technologies": {
+    program: "VCE VET",
+    focus:
+      "integrated technology systems, electronics, control, tools, safety, troubleshooting, testing and competency evidence.",
+    prefer: "system diagrams, safety checklists, fault-finding tables, testing logs and practical evidence records"
+  },
+  "VCE VET Laboratory Skills": {
+    program: "VCE VET",
+    focus:
+      "laboratory procedures, safety, equipment, measurement, sampling, recording, quality control and competency evidence.",
+    prefer: "method checklists, safety steps, data tables, equipment terminology, quality-control logs and practical scenarios"
+  },
+  "VCE VET Music Industry": {
+    program: "VCE VET",
+    focus:
+      "music performance or sound production, industry practice, rehearsal, technical setup, collaboration and competency evidence.",
+    prefer: "practice logs, setup checklists, performance feedback, terminology repair, workflow plans and evidence logs"
+  },
+  "VCE VET Plumbing": {
+    program: "VCE VET",
+    focus:
+      "plumbing tools, materials, measurements, safety, plans, installation procedures, quality checks and competency evidence.",
+    prefer: "safety steps, measurement tasks, procedure checklists, plan interpretation, quality logs and evidence records"
+  },
+  "VCE VET Renewable Energy": {
+    program: "VCE VET",
+    focus:
+      "renewable energy systems, electrical safety, components, installation concepts, testing, sustainability and competency evidence.",
+    prefer: "system diagrams, safety checklists, component tables, troubleshooting prompts and evidence logs"
+  },
+  "VCE VET Small Business": {
+    program: "VCE VET",
+    focus:
+      "small business planning, customers, operations, finance basics, marketing, communication and competency evidence.",
+    prefer: "business-plan checkpoints, customer scenarios, simple finance tasks, marketing notes and evidence logs"
+  },
+  "VCE VET Sport and Recreation": {
+    program: "VCE VET",
+    focus:
+      "sport and recreation participation, coaching, safety, planning, communication, fitness or activity delivery and competency evidence.",
+    prefer: "session plans, safety/risk checklists, coaching scenarios, reflection prompts and evidence logs"
+  },
+  "VCE VET Visual Arts": {
+    program: "VCE VET",
+    focus:
+      "visual arts production, materials, techniques, briefs, presentation, critique, workplace practice and portfolio evidence.",
+    prefer: "folio checklists, material trials, process reflection, critique prompts, presentation planning and evidence logs"
+  }
+};
+
+const languageSubjects = new Set(
+  [
+    "Aboriginal Languages of Victoria",
+    "Arabic",
+    "Armenian",
+    "Auslan",
+    "Bengali",
+    "Bosnian",
+    "Chinese First Language",
+    "Chinese Language, Culture and Society",
+    "Chinese Second Language",
+    "Chinese Second Language Advanced",
+    "Chin Hakha",
+    "Classical Greek",
+    "Classical Hebrew",
+    "Croatian",
+    "Dutch",
+    "Filipino",
+    "French",
+    "German",
+    "Greek",
+    "Hebrew",
+    "Hindi",
+    "Hungarian",
+    "Indonesian First Language",
+    "Indonesian Second Language",
+    "Italian",
+    "Japanese First Language",
+    "Japanese Second Language",
+    "Karen",
+    "Khmer",
+    "Korean First Language",
+    "Korean Second Language",
+    "Latin",
+    "Macedonian",
+    "Persian",
+    "Polish",
+    "Portuguese",
+    "Punjabi",
+    "Romanian",
+    "Russian",
+    "Serbian",
+    "Sinhala",
+    "Spanish",
+    "Swedish",
+    "Tamil",
+    "Turkish",
+    "Vietnamese First Language",
+    "Vietnamese Second Language"
+  ].map((subject) => subject.toLowerCase())
+);
+
 const contexts: Record<string, DetailedStudyDesignContext> = {
   English: {
     source:
@@ -81,7 +612,36 @@ const contexts: Record<string, DetailedStudyDesignContext> = {
 
 const matches = (subject: string, patterns: RegExp[]) => patterns.some((pattern) => pattern.test(subject));
 
+const profileStudyDesignContext = (subject: string): StudyDesignContext | null => {
+  const normalised = normaliseSubject(subject);
+  const exactProfile =
+    subjectProfiles[subject] ??
+    Object.entries(subjectProfiles).find(([profileSubject]) => normaliseSubject(profileSubject) === normalised)?.[1];
+
+  if (exactProfile) {
+    const program = exactProfile.program ?? "VCE";
+    return {
+      source: vceStudyDesignListSource,
+      detailLevel: "generic",
+      context: `For ${program} ${subject}, use the current VCAA study design or program requirements as the authority. Local subject-specific coaching context: ${exactProfile.focus} Prefer ${exactProfile.prefer}.${exactProfile.avoid ? ` Avoid ${exactProfile.avoid}.` : ""} Keep advice active and assessable, and do not invent exact dot points unless the student's uploaded notes, screenshots or resources support them.`
+    };
+  }
+
+  if (languageSubjects.has(normalised)) {
+    return {
+      source: vceStudyDesignListSource,
+      detailLevel: "generic",
+      context: `For VCE ${subject} Units 3 and 4, use the relevant VCAA language study design as the authority. Local subject-specific coaching context: interpret spoken, written and visual texts; communicate in ${subject}; analyse culture, audience, purpose and context; build vocabulary, grammar, text-type control and exam-ready expression. Prefer vocabulary banks, grammar repair, listening/reading annotation, model responses, timed writing, oral rehearsal where applicable and correction logs. Do not invent prescribed themes or exact assessment requirements unless the student's uploaded materials support them.`
+    };
+  }
+
+  return null;
+};
+
 const genericStudyDesignContext = (subject: string): StudyDesignContext => {
+  const profile = profileStudyDesignContext(subject);
+  if (profile) return profile;
+
   if (matches(subject, [/language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/i])) {
     return {
       source: vceStudyDesignListSource,

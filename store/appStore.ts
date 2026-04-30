@@ -8,6 +8,7 @@ import type {
   Gamification,
   GeneratedQuestion,
   Goal,
+  Leaderboard,
   SavedQuestion,
   StudyAnswer,
   StudyEvent,
@@ -39,6 +40,7 @@ type AppState = {
   resources: StudyResource[];
   latestPlan: AdaptiveStudyPlan | null;
   gamification: Gamification | null;
+  leaderboard: Leaderboard | null;
   stats: Stats | null;
   loading: boolean;
   error: string | null;
@@ -128,6 +130,7 @@ type AppState = {
   uploadResources: (formData: FormData) => Promise<void>;
   generatePlan: (input: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) => Promise<void>;
   refreshCoach: () => Promise<void>;
+  setLeaderboardPreference: (optIn: boolean) => Promise<void>;
   unlockTheme: (themeId: string) => Promise<void>;
   applyTheme: (themeId: string) => Promise<void>;
 };
@@ -144,6 +147,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   resources: [],
   latestPlan: null,
   gamification: null,
+  leaderboard: null,
   stats: null,
   loading: false,
   error: null,
@@ -158,6 +162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         goals,
         savedQuestions,
         gamification,
+        leaderboard,
         reflections,
         notes,
         resources,
@@ -170,6 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         studyApi.goals(),
         studyApi.savedQuestions(),
         studyApi.gamification(),
+        studyApi.leaderboard().catch(() => ({ leaderboard: null })),
         studyApi.reflections(),
         studyApi.notes(),
         studyApi.resources(),
@@ -187,6 +193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         resources: resources.resources,
         latestPlan: latestPlan.plan,
         gamification: gamification.gamification,
+        leaderboard: leaderboard.leaderboard,
         loading: false
       });
     } catch (error) {
@@ -194,12 +201,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   refreshStats: async () => {
-    const [sessions, stats, gamification] = await Promise.all([
+    const [sessions, stats, gamification, leaderboard] = await Promise.all([
       studyApi.sessions(),
       studyApi.sessionStats(),
-      studyApi.gamification()
+      studyApi.gamification(),
+      studyApi.leaderboard().catch(() => ({ leaderboard: null }))
     ]);
-    set({ sessions: sessions.sessions, stats: stats.stats, gamification: gamification.gamification });
+    set({
+      sessions: sessions.sessions,
+      stats: stats.stats,
+      gamification: gamification.gamification,
+      leaderboard: leaderboard.leaderboard
+    });
   },
   createSubject: async (input) => {
     const data = await studyApi.createSubject(input);
@@ -313,6 +326,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       resources: resources.resources,
       latestPlan: latestPlan.plan
     });
+  },
+  setLeaderboardPreference: async (optIn) => {
+    const data = await studyApi.setLeaderboardPreference(optIn);
+    set({ gamification: data.gamification, leaderboard: data.leaderboard });
   },
   unlockTheme: async (themeId) => {
     const data = await studyApi.unlockTheme(themeId);

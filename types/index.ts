@@ -72,6 +72,29 @@ export type Gamification = {
   badges: string[];
   unlockedCosmetics: string[];
   activeTheme: string;
+  leaderboardOptIn: boolean;
+  leaderboardPromptedAt?: string | null;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string;
+  totalXp: number;
+  level: number;
+  weekXp: number;
+  weekMinutes: number;
+  sessionCount: number;
+  isCurrentUser: boolean;
+};
+
+export type Leaderboard = {
+  weekStart: string;
+  weekEnd: string;
+  entries: LeaderboardEntry[];
+  viewer?: LeaderboardEntry | null;
+  optedIn: boolean;
+  prompted: boolean;
 };
 
 export type ThemeShopItem = {

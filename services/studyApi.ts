@@ -8,6 +8,7 @@ import type {
   Gamification,
   GeneratedQuestion,
   Goal,
+  Leaderboard,
   SavedQuestion,
   StudyAnswer,
   StudyEvent,
@@ -155,6 +156,12 @@ export const studyApi = {
     apiFetch<{ plan: AdaptiveStudyPlan }>("/coach/plans/generate", { method: "POST", body }),
   gamification: () => apiFetch<{ gamification: Gamification }>("/gamification"),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
+  leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
+  setLeaderboardPreference: (optIn: boolean) =>
+    apiFetch<{ gamification: Gamification; leaderboard: Leaderboard }>("/gamification/leaderboard-preference", {
+      method: "POST",
+      body: { optIn }
+    }),
   themeShop: () => apiFetch<{ items: ThemeShopItem[] }>("/gamification/shop"),
   unlockTheme: (themeId: string) =>
     apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/unlock`, { method: "POST" }),
