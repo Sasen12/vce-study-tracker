@@ -179,6 +179,9 @@ export default function CalendarScreen() {
         .slice(0, 10),
     [occurrences]
   );
+  const dueSoonCount = useMemo(() => upcoming.filter((occurrence) => daysUntil(occurrence.dateKey) <= 7).length, [upcoming]);
+  const todayAssessmentCount = useMemo(() => upcoming.filter((occurrence) => daysUntil(occurrence.dateKey) === 0).length, [upcoming]);
+  const nextAssessment = upcoming[0];
 
   const resetForm = (kind: EventKind) => {
     setEventKind(kind);
@@ -313,6 +316,38 @@ export default function CalendarScreen() {
           </Button>
         </View>
       </View>
+
+      <AppCard style={styles.radarCard}>
+        <View style={styles.radarTop}>
+          <View>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Assessment pressure
+            </Text>
+            <Text style={styles.description}>
+              {nextAssessment
+                ? `Next: ${nextAssessment.event.title} ${daysUntil(nextAssessment.dateKey) === 0 ? "today" : `in ${daysUntil(nextAssessment.dateKey)} days`}`
+                : "No active deadlines on the radar."}
+            </Text>
+          </View>
+          <Button mode="outlined" compact icon="plus" disabled={!subjects.length} onPress={() => openAddDialog("assessment")}>
+            Add
+          </Button>
+        </View>
+        <View style={styles.radarTiles}>
+          <View style={styles.radarTile}>
+            <Text style={styles.radarValue}>{todayAssessmentCount}</Text>
+            <Text style={styles.radarLabel}>today</Text>
+          </View>
+          <View style={styles.radarTile}>
+            <Text style={styles.radarValue}>{dueSoonCount}</Text>
+            <Text style={styles.radarLabel}>next 7 days</Text>
+          </View>
+          <View style={styles.radarTile}>
+            <Text style={styles.radarValue}>{upcoming.length}</Text>
+            <Text style={styles.radarLabel}>upcoming</Text>
+          </View>
+        </View>
+      </AppCard>
 
       <AppCard>
         <Calendar
@@ -556,6 +591,38 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: 12
+  },
+  radarCard: {
+    gap: 12,
+    borderColor: "rgba(245,158,11,0.22)",
+    backgroundColor: "rgba(245,158,11,0.08)"
+  },
+  radarTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12
+  },
+  radarTiles: {
+    flexDirection: "row",
+    gap: 8
+  },
+  radarTile: {
+    flex: 1,
+    minHeight: 64,
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 10
+  },
+  radarValue: {
+    color: palette.text,
+    fontSize: 22,
+    fontFamily: "Outfit_700Bold"
+  },
+  radarLabel: {
+    color: palette.muted,
+    fontSize: 12
   },
   cardTitle: {
     color: palette.text,

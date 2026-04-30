@@ -169,6 +169,7 @@ export default function QuestionsScreen() {
   const [cooldownActive, setCooldownActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterSubjectId, setFilterSubjectId] = useState<string | null>(null);
+  const [savedSearch, setSavedSearch] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
   const [gameIndex, setGameIndex] = useState(0);
   const [gameScore, setGameScore] = useState(0);
@@ -198,8 +199,24 @@ export default function QuestionsScreen() {
   }, [cooldownActive]);
 
   const filteredSaved = useMemo(
-    () => savedQuestions.filter((question) => !filterSubjectId || question.subjectId === filterSubjectId),
-    [filterSubjectId, savedQuestions]
+    () => {
+      const query = savedSearch.trim().toLowerCase();
+      return savedQuestions.filter((question) => {
+        const matchesSubject = !filterSubjectId || question.subjectId === filterSubjectId;
+        const matchesQuery =
+          !query ||
+          question.question.toLowerCase().includes(query) ||
+          question.modelAnswer.toLowerCase().includes(query) ||
+          (question.topic ?? "").toLowerCase().includes(query) ||
+          (question.subject?.subjectName ?? "").toLowerCase().includes(query);
+        return matchesSubject && matchesQuery;
+      });
+    },
+    [filterSubjectId, savedQuestions, savedSearch]
+  );
+  const oldestSaved = useMemo(
+    () => [...filteredSaved].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, 3),
+    [filteredSaved]
   );
 
   const currentGameQuestion = generatedQuestions[gameIndex];
@@ -696,6 +713,27 @@ export default function QuestionsScreen() {
               onSelect={(subject) => setFilterSubjectId(filterSubjectId === subject.id ? null : subject.id)}
             />
           ) : null}
+          <AppCard style={styles.savedTools}>
+            <TextInput
+              mode="outlined"
+              label="Search saved questions"
+              value={savedSearch}
+              onChangeText={setSavedSearch}
+              left={<TextInput.Icon icon="magnify" />}
+              style={styles.answerInput}
+            />
+            <View style={styles.reviewQueue}>
+              <View>
+                <Text style={styles.answerTitle}>Review queue</Text>
+                <Text style={styles.muted}>{filteredSaved.length} matching saved questions</Text>
+              </View>
+              {oldestSaved.length ? (
+                <Text style={styles.reviewHint} numberOfLines={2}>
+                  Start with: {oldestSaved.map((item) => item.topic || item.subject?.subjectName || "saved question").join(", ")}
+                </Text>
+              ) : null}
+            </View>
+          </AppCard>
           {loading && !savedQuestions.length ? (
             <AppCard style={styles.loadingCard}>
               <Skeleton style={styles.skeletonTitle} />
@@ -958,6 +996,22 @@ const styles = StyleSheet.create({
   },
   savedCard: {
     gap: 12
+  },
+  savedTools: {
+    gap: 12
+  },
+  reviewQueue: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center"
+  },
+  reviewHint: {
+    flex: 1,
+    color: palette.info,
+    textAlign: "right",
+    lineHeight: 18,
+    fontFamily: "Outfit_700Bold"
   },
   loadingCard: {
     gap: 12

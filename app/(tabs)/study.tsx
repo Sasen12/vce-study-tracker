@@ -53,6 +53,7 @@ export default function StudyScreen() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [studyTopic, setStudyTopic] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [targetMinutes, setTargetMinutes] = useState("25");
   const [running, setRunning] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [notes, setNotes] = useState("");
@@ -106,6 +107,8 @@ export default function StudyScreen() {
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const xp = calculateXp(elapsed) + timerBonusXp;
+  const targetSeconds = Number(targetMinutes) * 60;
+  const targetProgress = targetSeconds ? Math.min(100, Math.round((elapsed / targetSeconds) * 100)) : 0;
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
@@ -319,13 +322,27 @@ export default function StudyScreen() {
               style={styles.topicInput}
               textColor={palette.text}
             />
+            <View style={styles.targetBlock}>
+              <Text style={styles.targetLabel}>Target length</Text>
+              <SegmentedButtons
+                value={targetMinutes}
+                onValueChange={setTargetMinutes}
+                buttons={[
+                  { value: "25", label: "25m" },
+                  { value: "50", label: "50m" },
+                  { value: "75", label: "75m" }
+                ]}
+              />
+            </View>
             <Animated.View style={timerStyle}>
               <Text style={styles.timer}>{formatElapsed(elapsed)}</Text>
             </Animated.View>
             <View style={styles.timerMetaRow}>
               <Text style={styles.xp}>{xp} XP estimated</Text>
+              <Text style={styles.progressPill}>{targetProgress}% target</Text>
               {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} check-in XP</Text> : null}
             </View>
+            {elapsed >= targetSeconds && elapsed > 0 ? <Text style={styles.targetReached}>Target reached. Save now or keep going.</Text> : null}
             {running ? (
               <Text style={styles.checkInMeta}>
                 {checkpointGenerating ? "Building check-in..." : `Next check-in in ${minutesUntilCheckpoint} min`}
@@ -473,6 +490,17 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     backgroundColor: palette.surface
   },
+  targetBlock: {
+    width: "100%",
+    maxWidth: 520,
+    gap: 8
+  },
+  targetLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
   status: {
     color: palette.muted
   },
@@ -503,6 +531,21 @@ const styles = StyleSheet.create({
     backgroundColor: `${palette.success}18`,
     paddingHorizontal: 10,
     paddingVertical: 5
+  },
+  progressPill: {
+    color: palette.text,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}55`,
+    backgroundColor: `${palette.primary}18`,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  targetReached: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold"
   },
   checkInMeta: {
     color: palette.muted,

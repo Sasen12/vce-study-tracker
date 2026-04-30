@@ -124,6 +124,24 @@ export default function DashboardScreen() {
     return weeklyHours ? Math.round((weeklyHours * 60) / 7) : 120;
   }, [goals]);
 
+  const weekStart = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    const day = date.getDay();
+    date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day));
+    return date;
+  }, []);
+
+  const weeklySecondsBySubject = useMemo(
+    () =>
+      sessions.reduce<Record<string, number>>((acc, session) => {
+        if (!session.subjectId || new Date(session.createdAt) < weekStart) return acc;
+        acc[session.subjectId] = (acc[session.subjectId] ?? 0) + session.durationSeconds;
+        return acc;
+      }, {}),
+    [sessions, weekStart]
+  );
+
   const chartData = useMemo(
     () =>
       Object.values(stats?.perSubject ?? {}).map((item) => ({
@@ -136,6 +154,67 @@ export default function DashboardScreen() {
 
   const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
   const leaderboardPromptVisible = Boolean(gamification && gamification.leaderboardPromptedAt == null);
+  const nextBestMove = useMemo(() => {
+    const urgentEvent = upcomingEvents.find((event) => daysUntil(event.eventDate) <= 7);
+    const weakestSubject = subjects
+      .map((subject) => {
+        const goal = goals.find((item) => item.subjectId === subject.id);
+        const targetMinutes = Number(goal?.weeklyHoursTarget ?? 0) * 60;
+        const weekMinutes = Math.round((weeklySecondsBySubject[subject.id] ?? 0) / 60);
+        return {
+          subject,
+          targetMinutes,
+          weekMinutes,
+          ratio: targetMinutes ? weekMinutes / targetMinutes : 1
+        };
+      })
+      .filter((item) => item.targetMinutes > 0)
+      .sort((a, b) => a.ratio - b.ratio)[0];
+
+    if (urgentEvent) {
+      return {
+        icon: "calendar-alert",
+        title: "Protect the next deadline",
+        body: `${urgentEvent.title} is ${countdownLabel(urgentEvent)}. Start with one focused block for ${
+          urgentEvent.subject?.subjectName ?? "that subject"
+        }.`,
+        action: "Study it",
+        route: "study" as const,
+        subjectId: urgentEvent.subjectId ?? quickSubject?.id
+      };
+    }
+
+    if (weakestSubject && weakestSubject.ratio < 0.75) {
+      return {
+        icon: "scale-balance",
+        title: "Balance the week",
+        body: `${weakestSubject.subject.subjectName} is at ${weakestSubject.weekMinutes}/${weakestSubject.targetMinutes} planned minutes.`,
+        action: "Start block",
+        route: "study" as const,
+        subjectId: weakestSubject.subject.id
+      };
+    }
+
+    if (todayMinutes < dailyTargetMinutes) {
+      return {
+        icon: "timer-play-outline",
+        title: "Hit today's floor",
+        body: `${Math.max(0, dailyTargetMinutes - todayMinutes)} minutes gets you to today's target.`,
+        action: "Start timer",
+        route: "study" as const,
+        subjectId: quickSubject?.id
+      };
+    }
+
+    return {
+      icon: "cards-outline",
+      title: "Bank retrieval practice",
+      body: "You are on pace. A short question drill will keep recall sharp without adding clutter.",
+      action: "Practice",
+      route: "questions" as const,
+      subjectId: undefined
+    };
+  }, [dailyTargetMinutes, goals, quickSubject?.id, subjects, todayMinutes, upcomingEvents, weeklySecondsBySubject]);
 
   const chooseLeaderboard = async (optIn: boolean) => {
     setLeaderboardSaving(true);
@@ -205,6 +284,40 @@ export default function DashboardScreen() {
             sublabel="daily"
             color={palette.success}
           />
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(65)}>
+        <AppCard style={styles.nextMoveCard}>
+          <View style={styles.nextMoveTop}>
+            <View style={styles.nextMoveIcon}>
+              <MaterialCommunityIcons
+                name={nextBestMove.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                color={palette.primary}
+                size={22}
+              />
+            </View>
+            <View style={styles.nextMoveText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                {nextBestMove.title}
+              </Text>
+              <Text style={styles.muted}>{nextBestMove.body}</Text>
+            </View>
+          </View>
+          <Button
+            mode="contained"
+            icon={nextBestMove.route === "questions" ? "cards-outline" : "play"}
+            onPress={() =>
+              nextBestMove.route === "questions"
+                ? router.push("/(tabs)/questions")
+                : router.push({
+                    pathname: "/(tabs)/study",
+                    params: nextBestMove.subjectId ? { subjectId: nextBestMove.subjectId } : {}
+                  })
+            }
+          >
+            {nextBestMove.action}
+          </Button>
         </AppCard>
       </Animated.View>
 
@@ -398,6 +511,28 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     flex: 1
+  },
+  nextMoveCard: {
+    gap: 14,
+    borderColor: "rgba(124,110,255,0.22)",
+    backgroundColor: "rgba(124,110,255,0.08)"
+  },
+  nextMoveTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  nextMoveIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.primary}18`
+  },
+  nextMoveText: {
+    flex: 1,
+    minWidth: 0
   },
   label: {
     color: palette.muted,
