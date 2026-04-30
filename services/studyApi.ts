@@ -2,9 +2,6 @@ import { apiFetch, apiUpload } from "./api";
 import type {
   AdaptiveStudyPlan,
   AnswerFeedback,
-  BillingPlanId,
-  BillingProfile,
-  BillingUsage,
   ClassNoteChunk,
   ClassNoteDraft,
   ChatAllowance,
@@ -178,13 +175,6 @@ export const studyApi = {
       body
     }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
-  billing: () => apiFetch<{ billing: BillingProfile; usage: BillingUsage }>("/billing"),
-  createCheckout: (body: { plan: Exclude<BillingPlanId, "free">; returnUrl?: string }) =>
-    apiFetch<{ url: string }>("/billing/checkout", { method: "POST", body }),
-  createBillingPortal: (body: { returnUrl?: string }) =>
-    apiFetch<{ url: string }>("/billing/portal", { method: "POST", body }),
-  setUserBillingPlan: (id: string, body: { plan: BillingPlanId; status?: string }) =>
-    apiFetch<{ user: CommunityUserSummary }>(`/billing/admin/users/${id}/plan`, { method: "POST", body }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>

@@ -6,11 +6,6 @@ CREATE TABLE users (
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   avatar_url TEXT,
-  billing_plan TEXT NOT NULL DEFAULT 'free',
-  billing_status TEXT NOT NULL DEFAULT 'free',
-  billing_renews_at TIMESTAMPTZ,
-  stripe_customer_id TEXT UNIQUE,
-  stripe_subscription_id TEXT UNIQUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

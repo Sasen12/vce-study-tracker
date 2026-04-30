@@ -76,11 +76,6 @@ const adminUsers = async () => {
       email: true,
       displayName: true,
       createdAt: true,
-      billingPlan: true,
-      billingStatus: true,
-      billingRenewsAt: true,
-      stripeCustomerId: true,
-      stripeSubscriptionId: true,
       gamification: {
         select: {
           totalXp: true,
@@ -104,11 +99,6 @@ const adminUsers = async () => {
     email: user.email,
     displayName: user.displayName,
     createdAt: user.createdAt,
-    billingPlan: user.billingPlan,
-    billingStatus: user.billingStatus,
-    billingRenewsAt: user.billingRenewsAt,
-    stripeCustomerId: user.stripeCustomerId,
-    stripeSubscriptionId: user.stripeSubscriptionId,
     level: user.gamification?.level ?? 1,
     totalXp: user.gamification?.totalXp ?? 0,
     leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,

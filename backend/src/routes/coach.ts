@@ -4,7 +4,6 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { limitAiUsage } from "../middleware/aiUsageLimit.js";
-import { getPlanLimitsForUser } from "../services/billingService.js";
 import {
   answerStudyQuestion,
   generateAdaptiveStudyPlan,
@@ -22,6 +21,16 @@ import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const coachRouter = Router();
 coachRouter.use(requireAuth);
+
+const defaultLimits = {
+  maxSubjects: 4,
+  aiActionsPerDay: 20,
+  maxResources: 10,
+  maxUploadsPerBatch: 3,
+  maxScreenshotsPerAsk: 2,
+  maxPlanHorizonDays: 90,
+  classNotetaker: true
+};
 
 type SubjectForPlan = {
   subjectName: string;
@@ -462,15 +471,15 @@ coachRouter.post(
     const files = (req.files ?? []) as Express.Multer.File[];
     if (!files.length) throw new HttpError(400, "Upload at least one PDF, Word, Markdown or text file");
 
-    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    const limits = defaultLimits;
     if (files.length > limits.maxUploadsPerBatch) {
-      throw new HttpError(402, `Your plan can upload up to ${limits.maxUploadsPerBatch} files at once.`);
+      throw new HttpError(400, `Can upload up to ${limits.maxUploadsPerBatch} files at once.`);
     }
     const existingResourceCount = await prisma.studyResource.count({ where: { userId: authReq.user.id } });
     if (existingResourceCount + files.length > limits.maxResources) {
       throw new HttpError(
-        402,
-        `Your plan can store up to ${limits.maxResources} study files. Remove files or upgrade before uploading more.`
+        400,
+        `Can store up to ${limits.maxResources} study files. Remove files before uploading more.`
       );
     }
 
@@ -709,7 +718,7 @@ coachRouter.post(
     const files = ((req.files ?? []) as Express.Multer.File[]).filter(Boolean);
     const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
     if (files.length > limits.maxScreenshotsPerAsk) {
-      throw new HttpError(402, `Your plan can attach up to ${limits.maxScreenshotsPerAsk} screenshot(s) per question.`);
+      throw new HttpError(400, `Can attach up to ${limits.maxScreenshotsPerAsk} screenshot(s) per question.`);
     }
 
     for (const file of files) {
@@ -812,7 +821,7 @@ coachRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = planSchema.parse(req.body);
     const today = dateOnly(payload.planDate);
-    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    const limits = defaultLimits;
     const horizonDays = Math.min(payload.horizonDays, limits.maxPlanHorizonDays);
 
     const horizonEnd = addDays(today, horizonDays);

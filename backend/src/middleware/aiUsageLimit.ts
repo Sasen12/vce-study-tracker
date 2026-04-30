@@ -1,6 +1,5 @@
 import type { RequestHandler } from "express";
 import type { AuthenticatedRequest } from "./authMiddleware.js";
-import { getBillingAccessForUser, type BillingPlanId } from "../services/billingService.js";
 import { todayMelbourne } from "../utils/date.js";
 import { HttpError } from "../utils/http.js";
 
@@ -24,8 +23,8 @@ const parsePositiveLimit = (value: string | undefined, fallback: number) => {
   return Math.max(0, Math.floor(parsed));
 };
 
-const perUserDailyLimit = (plan: BillingPlanId, fallback: number) =>
-  parsePositiveLimit(process.env[`AI_DAILY_LIMIT_${plan.toUpperCase()}`], fallback);
+const perUserDailyLimit = () =>
+  parsePositiveLimit(process.env.AI_DAILY_LIMIT_FREE, 20);
 const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
 const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
 const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com", "sasenb@gmail.com", "vjmadhus@gmail.com"];
@@ -94,16 +93,15 @@ export const limitAiUsage =
       const today = todayMelbourne();
       resetGlobalIfNeeded(today);
 
-      const { plan, limits } = await getBillingAccessForUser(authReq.user.id, authReq.user.email);
       const requestCost = costForRequest(authReq, cost);
-      const userLimit = perUserDailyLimit(plan, limits.aiActionsPerDay);
+      const userLimit = perUserDailyLimit();
       const globalLimit = globalDailyLimit();
       const userCounter = counterForUser(authReq.user.id, today);
 
       if (userLimit > 0 && userCounter.used + requestCost > userLimit) {
         throw new HttpError(
           429,
-          `Daily AI limit reached for your plan. Try again tomorrow. (${userCounter.used}/${userLimit} used)`
+          `Daily AI limit reached. Try again tomorrow. (${userCounter.used}/${userLimit} used)`
         );
       }
 

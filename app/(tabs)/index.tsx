@@ -188,7 +188,7 @@ export default function DashboardScreen() {
       return {
         icon: "scale-balance",
         title: "Balance the week",
-        body: `${weakestSubject.subject.subjectName} is at ${weakestSubject.weekMinutes}/${weakestSubject.targetMinutes} planned minutes.`,
+        body: `${weakestSubject.subject.subjectName} is at ${weakestSubject.weekMinutes}/${weakestSubject.targetMinutes} target minutes.`,
         action: "Start block",
         route: "study" as const,
         subjectId: weakestSubject.subject.id

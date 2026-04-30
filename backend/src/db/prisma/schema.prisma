@@ -14,11 +14,6 @@ model User {
   passwordHash   String              @map("password_hash")
   displayName    String              @map("display_name")
   avatarUrl      String?             @map("avatar_url")
-  billingPlan    String              @default("free") @map("billing_plan")
-  billingStatus  String              @default("free") @map("billing_status")
-  billingRenewsAt DateTime?          @map("billing_renews_at") @db.Timestamptz(6)
-  stripeCustomerId String?           @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?       @unique @map("stripe_subscription_id")
   createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   subjects       UserSubject[]
   sessions       StudySession[]
