@@ -1,7 +1,9 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
+const expoEnv = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined>; }; };
+
+export const API_URL = expoEnv.process?.env?.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
 
 const NGROK_SKIP_WARNING_HEADER = "ngrok-skip-browser-warning";
 const ACCESS_TOKEN_KEY = "vce_access_token";

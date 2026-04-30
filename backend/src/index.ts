@@ -1,5 +1,5 @@
 import "dotenv/config";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import cron from "node-cron";
 import express from "express";
 import { authRouter } from "./routes/auth.js";
@@ -19,7 +19,30 @@ import { APP_TIME_ZONE } from "./utils/date.js";
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
-app.use(cors());
+const allowedOrigins = [
+  "https://vce-study-tracker-sasen.netlify.app",
+  "http://localhost:3000",
+  "http://localhost:8081",
+  "http://localhost:19006"
+];
+
+const corsOptions: CorsOptions = {
+  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked origin: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
+};
+
+app.use(cors(corsOptions));
+app.options("/api/*", cors(corsOptions));
+
 app.post("/api/billing/webhook", express.raw({ type: "application/json" }), stripeWebhookHandler);
 app.use(express.json({ limit: "8mb" }));
 
