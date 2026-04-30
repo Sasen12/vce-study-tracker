@@ -5,6 +5,7 @@ import { PaperProvider, MD3DarkTheme } from "react-native-paper";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts, Outfit_400Regular, Outfit_700Bold } from "@expo-google-fonts/outfit";
 import { StatusBar } from "expo-status-bar";
+import { BuildUpdateNotice } from "@/components/BuildUpdateNotice";
 import { useActivePalette } from "@/hooks/useActiveTheme";
 import { useAuthStore } from "@/store/authStore";
 
@@ -57,6 +58,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PaperProvider theme={paperTheme}>
         <StatusBar style="light" />
+        <BuildUpdateNotice />
         <Stack screenOptions={{ headerShown: false, animation: "fade_from_bottom" }} />
       </PaperProvider>
     </GestureHandlerRootView>

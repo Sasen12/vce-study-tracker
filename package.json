@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "expo export -p web",
+    "build:web": "expo export -p web && node scripts/write-build-info.mjs",
     "launch": "powershell -ExecutionPolicy Bypass -File ./launch.ps1",
     "lint": "expo lint",
     "backend": "npm run dev --prefix backend",
