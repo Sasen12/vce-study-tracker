@@ -25,6 +25,22 @@ const parsePositiveLimit = (value: string | undefined, fallback: number) => {
 
 const perUserDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_PER_USER, 20);
 const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
+const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
+
+const unlimitedDomains = () => {
+  const configured = process.env.AI_UNLIMITED_EMAIL_DOMAINS;
+  if (!configured?.trim()) return defaultUnlimitedDomains;
+
+  return configured
+    .split(",")
+    .map((domain) => domain.trim().replace(/^@/, "").toLowerCase())
+    .filter(Boolean);
+};
+
+const hasUnlimitedAi = (email: string) => {
+  const normalisedEmail = email.trim().toLowerCase();
+  return unlimitedDomains().some((domain) => normalisedEmail.endsWith(`@${domain}`));
+};
 
 const costForRequest = (req: AuthenticatedRequest, cost: CostInput | undefined) => {
   const value = typeof cost === "function" ? cost(req) : cost;
@@ -54,6 +70,12 @@ export const limitAiUsage =
   ({ cost }: LimitOptions = {}) =>
   ((req, res, next) => {
     const authReq = req as AuthenticatedRequest;
+    if (hasUnlimitedAi(authReq.user.email)) {
+      res.setHeader("X-AI-Remaining", "unlimited");
+      next();
+      return;
+    }
+
     const today = todayMelbourne();
     resetGlobalIfNeeded(today);
 
