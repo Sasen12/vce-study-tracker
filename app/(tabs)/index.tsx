@@ -51,6 +51,8 @@ const fallbackDailyInspiration: DailyInspiration = {
   action: "Do 12 focused minutes, then write the correction."
 };
 
+const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
+
 export default function DashboardScreen() {
   const user = useAuthStore((state) => state.user);
   const {
@@ -154,6 +156,7 @@ export default function DashboardScreen() {
 
   const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
   const leaderboardPromptVisible = Boolean(gamification && gamification.leaderboardPromptedAt == null);
+  const showThemeRequestThankYou = user?.email?.trim().toLowerCase() === themeRequestThankYouEmail;
   const nextBestMove = useMemo(() => {
     const urgentEvent = upcomingEvents.find((event) => daysUntil(event.eventDate) <= 7);
     const weakestSubject = subjects
@@ -249,6 +252,23 @@ export default function DashboardScreen() {
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {showThemeRequestThankYou ? (
+        <Animated.View entering={motion.card(18)}>
+          <AppCard style={styles.thankYouCard}>
+            <View style={styles.thankYouIcon}>
+              <MaterialCommunityIcons name="flower-tulip-outline" color="#F9A8D4" size={22} />
+            </View>
+            <View style={styles.thankYouText}>
+              <Text style={styles.thankYouTitle}>Thank you, Lakeesha</Text>
+              <Text style={styles.thankYouBody}>
+                Your seasonal theme idea helped shape the new cute theme drop, so Cherry Blossom has been unlocked for
+                you as a thank-you.
+              </Text>
+            </View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={motion.card(25)}>
         <AppCard style={styles.inspirationCard}>
@@ -461,6 +481,35 @@ const styles = StyleSheet.create({
   },
   error: {
     color: palette.secondary
+  },
+  thankYouCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderColor: "rgba(249,168,212,0.24)",
+    backgroundColor: "rgba(249,168,212,0.08)"
+  },
+  thankYouIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(249,168,212,0.14)"
+  },
+  thankYouText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4
+  },
+  thankYouTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  thankYouBody: {
+    color: palette.muted,
+    lineHeight: 20
   },
   inspirationCard: {
     gap: 12,
