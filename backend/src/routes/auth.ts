@@ -10,10 +10,11 @@ import {
   type AuthenticatedRequest
 } from "../middleware/authMiddleware.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
+import { planLimits } from "../services/billingService.js";
 
 export const authRouter = Router();
 
-const MAX_SUBJECTS = 8;
+const FREE_SUBJECT_LIMIT = planLimits.free.maxSubjects;
 
 const subjectSchema = z.object({
   subjectName: z.string().min(2),
@@ -26,7 +27,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   displayName: z.string().min(2),
-  subjects: z.array(subjectSchema).max(MAX_SUBJECTS, `Choose up to ${MAX_SUBJECTS} subjects.`).default([])
+  subjects: z.array(subjectSchema).max(FREE_SUBJECT_LIMIT, `Choose up to ${FREE_SUBJECT_LIMIT} subjects on Free.`).default([])
 });
 
 const loginSchema = z.object({
@@ -39,12 +40,18 @@ const publicUser = (user: {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  billingPlan: string;
+  billingStatus: string;
+  billingRenewsAt: Date | null;
   createdAt: Date;
 }) => ({
   id: user.id,
   email: user.email,
   displayName: user.displayName,
   avatarUrl: user.avatarUrl,
+  billingPlan: user.billingPlan,
+  billingStatus: user.billingStatus,
+  billingRenewsAt: user.billingRenewsAt,
   createdAt: user.createdAt
 });
 

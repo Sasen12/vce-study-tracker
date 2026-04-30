@@ -11,6 +11,7 @@ import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
+import { billingRouter, stripeWebhookHandler } from "./routes/billing.js";
 import { errorHandler } from "./utils/http.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
 import { APP_TIME_ZONE } from "./utils/date.js";
@@ -19,6 +20,7 @@ const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors());
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), stripeWebhookHandler);
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => {
@@ -34,6 +36,7 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
 app.use("/api/community", communityRouter);
+app.use("/api/billing", billingRouter);
 
 app.use(errorHandler);
 

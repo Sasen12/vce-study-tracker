@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import type { AuthenticatedRequest } from "./authMiddleware.js";
+import { getBillingAccessForUser, type BillingPlanId } from "../services/billingService.js";
 import { todayMelbourne } from "../utils/date.js";
 import { HttpError } from "../utils/http.js";
 
@@ -23,7 +24,8 @@ const parsePositiveLimit = (value: string | undefined, fallback: number) => {
   return Math.max(0, Math.floor(parsed));
 };
 
-const perUserDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_PER_USER, 20);
+const perUserDailyLimit = (plan: BillingPlanId, fallback: number) =>
+  parsePositiveLimit(process.env[`AI_DAILY_LIMIT_${plan.toUpperCase()}`], fallback);
 const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
 const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
 const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com", "sasenb@gmail.com", "vjmadhus@gmail.com"];
@@ -80,36 +82,44 @@ const resetGlobalIfNeeded = (today: string) => {
 
 export const limitAiUsage =
   ({ cost }: LimitOptions = {}) =>
-  ((req, res, next) => {
+  (async (req, res, next) => {
     const authReq = req as AuthenticatedRequest;
-    if (hasUnlimitedAi(authReq.user.email)) {
-      res.setHeader("X-AI-Remaining", "unlimited");
+    try {
+      if (hasUnlimitedAi(authReq.user.email)) {
+        res.setHeader("X-AI-Remaining", "unlimited");
+        next();
+        return;
+      }
+
+      const today = todayMelbourne();
+      resetGlobalIfNeeded(today);
+
+      const { plan, limits } = await getBillingAccessForUser(authReq.user.id, authReq.user.email);
+      const requestCost = costForRequest(authReq, cost);
+      const userLimit = perUserDailyLimit(plan, limits.aiActionsPerDay);
+      const globalLimit = globalDailyLimit();
+      const userCounter = counterForUser(authReq.user.id, today);
+
+      if (userLimit > 0 && userCounter.used + requestCost > userLimit) {
+        throw new HttpError(
+          429,
+          `Daily AI limit reached for your plan. Try again tomorrow. (${userCounter.used}/${userLimit} used)`
+        );
+      }
+
+      if (globalLimit > 0 && globalUsage.used + requestCost > globalLimit) {
+        throw new HttpError(429, "The shared AI budget is paused for today. Try again tomorrow.");
+      }
+
+      userCounter.used += requestCost;
+      globalUsage.used += requestCost;
+
+      if (userLimit > 0) {
+        res.setHeader("X-AI-Remaining", Math.max(0, userLimit - userCounter.used).toString());
+      }
+
       next();
-      return;
+    } catch (error) {
+      next(error);
     }
-
-    const today = todayMelbourne();
-    resetGlobalIfNeeded(today);
-
-    const requestCost = costForRequest(authReq, cost);
-    const userLimit = perUserDailyLimit();
-    const globalLimit = globalDailyLimit();
-    const userCounter = counterForUser(authReq.user.id, today);
-
-    if (userLimit > 0 && userCounter.used + requestCost > userLimit) {
-      throw new HttpError(429, `Daily AI limit reached. Try again tomorrow. (${userCounter.used}/${userLimit} used)`);
-    }
-
-    if (globalLimit > 0 && globalUsage.used + requestCost > globalLimit) {
-      throw new HttpError(429, "The shared AI budget is paused for today. Try again tomorrow.");
-    }
-
-    userCounter.used += requestCost;
-    globalUsage.used += requestCost;
-
-    if (userLimit > 0) {
-      res.setHeader("X-AI-Remaining", Math.max(0, userLimit - userCounter.used).toString());
-    }
-
-    next();
   }) satisfies RequestHandler;

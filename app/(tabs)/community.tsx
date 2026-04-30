@@ -10,7 +10,7 @@ import { SkeletonStack } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
-import type { ChatAllowance, CommunityChatMessage, CommunityUserSummary, LeaderboardEntry, UserFeedback } from "@/types";
+import type { BillingPlanId, ChatAllowance, CommunityChatMessage, CommunityUserSummary, LeaderboardEntry, UserFeedback } from "@/types";
 
 type Mode = "chat" | "leaderboard" | "feedback" | "users";
 type FeedbackCategory = UserFeedback["category"];
@@ -121,7 +121,15 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
-function UserRow({ item }: { item: CommunityUserSummary }) {
+function UserRow({
+  item,
+  savingPlan,
+  onPlanChange
+}: {
+  item: CommunityUserSummary;
+  savingPlan?: boolean;
+  onPlanChange?: (id: string, plan: BillingPlanId) => void;
+}) {
   return (
     <View style={styles.userItem}>
       <View style={styles.userTop}>
@@ -137,7 +145,21 @@ function UserRow({ item }: { item: CommunityUserSummary }) {
           <Text style={styles.optInText}>{item.leaderboardOptIn ? "Opted in" : "Opted out"}</Text>
         </View>
       </View>
-      <Text style={styles.mutedSmall}>Joined {formatTime(item.createdAt)}</Text>
+      <View style={styles.userPlanRow}>
+        <View style={styles.planBadge}>
+          <Text style={styles.planBadgeText}>{item.billingPlan.toUpperCase()}</Text>
+        </View>
+        <Text style={styles.mutedSmall}>Joined {formatTime(item.createdAt)} - {item.billingStatus}</Text>
+      </View>
+      <SegmentedButtons
+        value={item.billingPlan}
+        onValueChange={(value) => onPlanChange?.(item.id, value as BillingPlanId)}
+        buttons={[
+          { value: "free", label: "Free", disabled: savingPlan },
+          { value: "plus", label: "Plus", disabled: savingPlan },
+          { value: "max", label: "Max", disabled: savingPlan }
+        ]}
+      />
       <View style={styles.userStats}>
         <Text style={styles.userStat}>Level {item.level}</Text>
         <Text style={styles.userStat}>{item.totalXp} XP</Text>
@@ -161,6 +183,7 @@ export default function CommunityScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [savingPlanUserId, setSavingPlanUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [category, setCategory] = useState<FeedbackCategory>("feature");
@@ -227,6 +250,24 @@ export default function CommunityScreen() {
       setError(error instanceof Error ? error.message : "Could not delete chat message");
     } finally {
       setDeletingChatId(null);
+    }
+  };
+
+  const updateUserPlan = async (id: string, plan: BillingPlanId) => {
+    const existing = users.find((item) => item.id === id);
+    if (!existing || existing.billingPlan === plan) return;
+
+    setSavingPlanUserId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.setUserBillingPlan(id, { plan });
+      setUsers((current) => current.map((item) => (item.id === id ? data.user : item)));
+      setNotice(`${data.user.displayName} is now on ${data.user.billingPlan}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update user plan");
+    } finally {
+      setSavingPlanUserId(null);
     }
   };
 
@@ -308,7 +349,7 @@ export default function CommunityScreen() {
           {users.length ? (
             <View style={styles.list}>
               {users.map((item) => (
-                <UserRow key={item.id} item={item} />
+                <UserRow key={item.id} item={item} savingPlan={savingPlanUserId === item.id} onPlanChange={updateUserPlan} />
               ))}
             </View>
           ) : (
@@ -616,6 +657,24 @@ const styles = StyleSheet.create({
   userEmail: {
     color: palette.info,
     lineHeight: 20
+  },
+  userPlanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap"
+  },
+  planBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    backgroundColor: `${palette.primary}18`,
+    overflow: "hidden"
+  },
+  planBadgeText: {
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11
   },
   userStats: {
     flexDirection: "row",

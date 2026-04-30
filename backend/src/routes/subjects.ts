@@ -2,12 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { getPlanLimitsForUser } from "../services/billingService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(requireAuth);
-
-const MAX_SUBJECTS = 8;
 
 const upsertSubjectSchema = z.object({
   subjectName: z.string().min(2),
@@ -33,11 +32,17 @@ subjectsRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = upsertSubjectSchema.parse(req.body);
-    const existingCount = await prisma.userSubject.count({
-      where: { userId: authReq.user.id }
-    });
-    if (existingCount >= MAX_SUBJECTS) {
-      throw new HttpError(400, `You can track up to ${MAX_SUBJECTS} subjects at once. Remove one before adding another.`);
+    const [existingCount, limits] = await Promise.all([
+      prisma.userSubject.count({
+        where: { userId: authReq.user.id }
+      }),
+      getPlanLimitsForUser(authReq.user.id, authReq.user.email)
+    ]);
+    if (existingCount >= limits.maxSubjects) {
+      throw new HttpError(
+        402,
+        `Your current plan can track up to ${limits.maxSubjects} subjects. Upgrade or remove one before adding another.`
+      );
     }
 
     const subject = await prisma.userSubject.create({

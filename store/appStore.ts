@@ -3,6 +3,8 @@ import { studyApi } from "@/services/studyApi";
 import type {
   AdaptiveStudyPlan,
   AnswerFeedback,
+  BillingProfile,
+  BillingUsage,
   ClassNoteChunk,
   ClassNoteDraft,
   Gamification,
@@ -40,12 +42,15 @@ type AppState = {
   resources: StudyResource[];
   latestPlan: AdaptiveStudyPlan | null;
   gamification: Gamification | null;
+  billing: BillingProfile | null;
+  billingUsage: BillingUsage | null;
   leaderboard: Leaderboard | null;
   stats: Stats | null;
   loading: boolean;
   error: string | null;
   fetchAll: () => Promise<void>;
   refreshStats: () => Promise<void>;
+  refreshBilling: () => Promise<void>;
   createSubject: (input: {
     subjectName: string;
     unit: string;
@@ -148,6 +153,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   resources: [],
   latestPlan: null,
   gamification: null,
+  billing: null,
+  billingUsage: null,
   leaderboard: null,
   stats: null,
   loading: false,
@@ -163,6 +170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         goals,
         savedQuestions,
         gamification,
+        billing,
         leaderboard,
         reflections,
         notes,
@@ -176,6 +184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         studyApi.goals(),
         studyApi.savedQuestions(),
         studyApi.gamification(),
+        studyApi.billing(),
         studyApi.leaderboard().catch(() => ({ leaderboard: null })),
         studyApi.reflections(),
         studyApi.notes(),
@@ -194,6 +203,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         resources: resources.resources,
         latestPlan: latestPlan.plan,
         gamification: gamification.gamification,
+        billing: billing.billing,
+        billingUsage: billing.usage,
         leaderboard: leaderboard.leaderboard,
         loading: false
       });
@@ -214,6 +225,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       gamification: gamification.gamification,
       leaderboard: leaderboard.leaderboard
     });
+  },
+  refreshBilling: async () => {
+    const data = await studyApi.billing();
+    set({ billing: data.billing, billingUsage: data.usage });
   },
   createSubject: async (input) => {
     const data = await studyApi.createSubject(input);

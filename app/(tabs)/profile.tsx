@@ -11,6 +11,7 @@ import { XPBar } from "@/components/gamification/XPBar";
 import { BadgeGrid } from "@/components/gamification/BadgeGrid";
 import { subjectColors, palette } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
+import { planById } from "@/constants/pricing";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
@@ -31,7 +32,6 @@ const scaleAdjustments: Record<string, number> = {
 
 const clampScore = (score: number) => Math.max(0, Math.min(55, score));
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-const maxSubjects = 8;
 
 const startOfWeek = () => {
   const date = new Date();
@@ -249,11 +249,13 @@ function GoalCard({
 function AddSubjectDialog({
   visible,
   existingSubjects,
+  maxSubjects,
   onDismiss,
   onCreate
 }: {
   visible: boolean;
   existingSubjects: UserSubject[];
+  maxSubjects: number;
   onDismiss: () => void;
   onCreate: (input: { subjectName: string; unit: string; targetScore?: number | null; color: string }) => Promise<void>;
 }) {
@@ -400,6 +402,8 @@ export default function ProfileScreen() {
     reflections,
     notes,
     gamification,
+    billing,
+    billingUsage,
     loading,
     fetchAll,
     saveGoal,
@@ -411,6 +415,10 @@ export default function ProfileScreen() {
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [deletingSubject, setDeletingSubject] = useState<UserSubject | null>(null);
   const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
+  const currentPlan = billing?.currentPlan ?? planById(user?.billingPlan);
+  const subjectLimit = billing?.limits.maxSubjects ?? currentPlan.limits.maxSubjects;
+  const resourceLimit = billing?.limits.maxResources ?? currentPlan.limits.maxResources;
+  const resourceCount = billingUsage?.resources ?? 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -547,6 +555,23 @@ export default function ProfileScreen() {
         <XPBar gamification={gamification} />
       </AppCard>
 
+      <AppCard style={styles.billingCard}>
+        <View style={styles.billingTop}>
+          <View style={styles.flexText}>
+            <Text style={styles.cardTitle}>Plan: {currentPlan.name}</Text>
+            <Text style={styles.muted}>{currentPlan.summary}</Text>
+          </View>
+          <Button mode="contained" icon="credit-card-outline" onPress={() => router.push("/pricing")}>
+            Pricing
+          </Button>
+        </View>
+        <View style={styles.billingLimits}>
+          <Text style={styles.billingLimit}>{subjects.length}/{subjectLimit} subjects</Text>
+          <Text style={styles.billingLimit}>{resourceCount}/{resourceLimit} files</Text>
+          <Text style={styles.billingLimit}>{billing?.limits.aiActionsPerDay ?? currentPlan.limits.aiActionsPerDay} AI/day</Text>
+        </View>
+      </AppCard>
+
       <AppCard style={styles.atarCard}>
         <View>
           <Text variant="titleMedium" style={styles.cardTitle}>
@@ -614,19 +639,19 @@ export default function ProfileScreen() {
       <View>
         <View style={styles.sectionHeader}>
           <Text variant="titleLarge" style={styles.sectionTitle}>
-            Subjects and goals ({subjects.length}/{maxSubjects})
+            Subjects and goals ({subjects.length}/{subjectLimit})
           </Text>
           <Button
             mode="outlined"
             icon="plus"
-            disabled={subjects.length >= maxSubjects}
+            disabled={subjects.length >= subjectLimit}
             onPress={() => setAddSubjectOpen(true)}
           >
             Add
           </Button>
         </View>
-        {subjects.length >= maxSubjects ? (
-          <Text style={styles.subjectLimitText}>You are at the 8-subject limit. Remove a dropped subject before adding another.</Text>
+        {subjects.length >= subjectLimit ? (
+          <Text style={styles.subjectLimitText}>You are at your {subjectLimit}-subject plan limit. Remove a dropped subject or upgrade.</Text>
         ) : null}
       </View>
       {subjects.length ? (
@@ -654,6 +679,7 @@ export default function ProfileScreen() {
       <AddSubjectDialog
         visible={addSubjectOpen}
         existingSubjects={subjects}
+        maxSubjects={subjectLimit}
         onDismiss={() => setAddSubjectOpen(false)}
         onCreate={createSubject}
       />
@@ -707,6 +733,35 @@ const styles = StyleSheet.create({
   muted: {
     color: palette.muted,
     lineHeight: 20
+  },
+  flexText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4
+  },
+  billingCard: {
+    gap: 12
+  },
+  billingTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  billingLimits: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  billingLimit: {
+    color: palette.text,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden"
   },
   atarCard: {
     gap: 10

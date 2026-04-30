@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useActivePalette } from "@/hooks/useActiveTheme";
 
 type AppCardProps = {
   children: ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function AppCard({ children, style }: AppCardProps) {

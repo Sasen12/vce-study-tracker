@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { isAdminEmail, requireAdmin } from "../services/adminService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const communityRouter = Router();
@@ -19,20 +20,6 @@ const chatSchema = z.object({
 const BASE_CHAT_MINUTES = 3;
 const STUDY_MINUTES_PER_CHAT_MINUTE = 5;
 const MAX_DAILY_CHAT_MINUTES = 60;
-const DEFAULT_ADMIN_EMAILS = ["sasenb@gmail.com"];
-const ADMIN_EMAILS = new Set(
-  [...DEFAULT_ADMIN_EMAILS, ...(process.env.ADMIN_EMAILS ?? "").split(",")]
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean)
-);
-
-const isAdminEmail = (email: string) => ADMIN_EMAILS.has(email.trim().toLowerCase());
-
-const requireAdmin = (user: AuthenticatedRequest["user"]) => {
-  if (!isAdminEmail(user.email)) {
-    throw new HttpError(403, "Admin only");
-  }
-};
 
 const serialiseFeedback = (
   item: {
@@ -89,6 +76,11 @@ const adminUsers = async () => {
       email: true,
       displayName: true,
       createdAt: true,
+      billingPlan: true,
+      billingStatus: true,
+      billingRenewsAt: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
       gamification: {
         select: {
           totalXp: true,
@@ -112,6 +104,11 @@ const adminUsers = async () => {
     email: user.email,
     displayName: user.displayName,
     createdAt: user.createdAt,
+    billingPlan: user.billingPlan,
+    billingStatus: user.billingStatus,
+    billingRenewsAt: user.billingRenewsAt,
+    stripeCustomerId: user.stripeCustomerId,
+    stripeSubscriptionId: user.stripeSubscriptionId,
     level: user.gamification?.level ?? 1,
     totalXp: user.gamification?.totalXp ?? 0,
     leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { limitAiUsage } from "../middleware/aiUsageLimit.js";
+import { getPlanLimitsForUser } from "../services/billingService.js";
 import {
   answerStudyQuestion,
   generateAdaptiveStudyPlan,
@@ -461,6 +462,18 @@ coachRouter.post(
     const files = (req.files ?? []) as Express.Multer.File[];
     if (!files.length) throw new HttpError(400, "Upload at least one PDF, Word, Markdown or text file");
 
+    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    if (files.length > limits.maxUploadsPerBatch) {
+      throw new HttpError(402, `Your plan can upload up to ${limits.maxUploadsPerBatch} files at once.`);
+    }
+    const existingResourceCount = await prisma.studyResource.count({ where: { userId: authReq.user.id } });
+    if (existingResourceCount + files.length > limits.maxResources) {
+      throw new HttpError(
+        402,
+        `Your plan can store up to ${limits.maxResources} study files. Remove files or upgrade before uploading more.`
+      );
+    }
+
     const subjectId = typeof req.body.subjectId === "string" && req.body.subjectId ? req.body.subjectId : null;
     const sourceType =
       typeof req.body.sourceType === "string" &&
@@ -510,6 +523,10 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerChunkSchema.parse(req.body);
+    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    if (!limits.classNotetaker) {
+      throw new HttpError(402, "Class notetaker is included in Max.");
+    }
     if (!payload.consentAcknowledged) {
       throw new HttpError(400, "Only record when your teacher and class allow it.");
     }
@@ -576,6 +593,10 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerSchema.parse(req.body);
+    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    if (!limits.classNotetaker) {
+      throw new HttpError(402, "Class notetaker is included in Max.");
+    }
     if (!payload.consentAcknowledged) {
       throw new HttpError(400, "Only record when your teacher and class allow it.");
     }
@@ -686,6 +707,10 @@ coachRouter.post(
     const payload = askSchema.parse(req.body);
     const subject = await ensureSubject(authReq.user.id, payload.subjectId);
     const files = ((req.files ?? []) as Express.Multer.File[]).filter(Boolean);
+    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    if (files.length > limits.maxScreenshotsPerAsk) {
+      throw new HttpError(402, `Your plan can attach up to ${limits.maxScreenshotsPerAsk} screenshot(s) per question.`);
+    }
 
     for (const file of files) {
       if (!supportedScreenshotTypes.has(file.mimetype)) {
@@ -787,8 +812,10 @@ coachRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = planSchema.parse(req.body);
     const today = dateOnly(payload.planDate);
+    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
+    const horizonDays = Math.min(payload.horizonDays, limits.maxPlanHorizonDays);
 
-    const horizonEnd = addDays(today, payload.horizonDays);
+    const horizonEnd = addDays(today, horizonDays);
     const [subjects, reflections, events, sessions, notes, resources] = await Promise.all([
       prisma.userSubject.findMany({ where: { userId: authReq.user.id }, orderBy: { subjectName: "asc" } }),
       prisma.studyReflection.findMany({
@@ -836,7 +863,7 @@ coachRouter.post(
 
     const assessmentEvents = events.filter((event: EventForPlan) => event.eventType !== "STUDY_TIME");
     const studyTimeEvents = events.filter((event: EventForPlan) => event.eventType === "STUDY_TIME");
-    const studyBlocks = expandStudyBlocks(studyTimeEvents, today, payload.horizonDays);
+    const studyBlocks = expandStudyBlocks(studyTimeEvents, today, horizonDays);
     const eventQuery = assessmentEvents
       .map((event: EventForPlan) => `${event.subject?.subjectName ?? ""} ${event.title} ${event.description ?? ""}`)
       .join(" ");
@@ -874,7 +901,7 @@ coachRouter.post(
     const plan = await generateAdaptiveStudyPlan({
       planDate: payload.planDate,
       availableMinutes: payload.availableMinutes,
-      horizonDays: payload.horizonDays,
+      horizonDays,
       priority: payload.priority,
       subjects: subjects.map((subject: SubjectForPlan) => subject.subjectName),
       events: planEvents,

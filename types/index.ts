@@ -3,7 +3,49 @@ export type User = {
   email: string;
   displayName: string;
   avatarUrl?: string | null;
+  billingPlan?: BillingPlanId;
+  billingStatus?: string;
+  billingRenewsAt?: string | null;
   createdAt?: string;
+};
+
+export type BillingPlanId = "free" | "plus" | "max";
+
+export type BillingLimits = {
+  maxSubjects: number;
+  aiActionsPerDay: number;
+  maxResources: number;
+  maxUploadsPerBatch: number;
+  maxScreenshotsPerAsk: number;
+  maxPlanHorizonDays: number;
+  classNotetaker: boolean;
+};
+
+export type BillingPlan = {
+  id: BillingPlanId;
+  name: string;
+  priceLabel: string;
+  summary: string;
+  limits: BillingLimits;
+  features: string[];
+};
+
+export type BillingProfile = {
+  plan: BillingPlanId;
+  status: string;
+  renewsAt?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  isAdmin: boolean;
+  checkoutConfigured: boolean;
+  currentPlan: BillingPlan;
+  plans: BillingPlan[];
+  limits: BillingLimits;
+};
+
+export type BillingUsage = {
+  subjects: number;
+  resources: number;
 };
 
 export type UserSubject = {
@@ -137,6 +179,11 @@ export type CommunityUserSummary = {
   email: string;
   displayName: string;
   createdAt: string;
+  billingPlan: BillingPlanId;
+  billingStatus: string;
+  billingRenewsAt?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
   level: number;
   totalXp: number;
   leaderboardOptIn: boolean;
