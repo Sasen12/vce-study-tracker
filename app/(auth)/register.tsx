@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Link, router } from "expo-router";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
@@ -10,10 +10,12 @@ import { useAuthStore } from "@/store/authStore";
 
 type SelectedSubject = {
   subjectName: string;
-  unit: string;
+  unit: "1/2" | "3/4";
   color: string;
   targetScore?: number | null;
 };
+
+const maxSubjects = 8;
 
 export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState("");
@@ -28,8 +30,7 @@ export default function RegisterScreen() {
     const query = subjectSearch.trim().toLowerCase();
     return VCE_SUBJECTS.filter(
       (subject) =>
-        subject.units.includes("3/4") &&
-        (!query || subject.name.toLowerCase().includes(query) || subject.category.toLowerCase().includes(query))
+        !query || subject.name.toLowerCase().includes(query) || subject.category.toLowerCase().includes(query)
     );
   }, [subjectSearch]);
   const groupedSubjects = useMemo(
@@ -46,16 +47,24 @@ export default function RegisterScreen() {
       if (current.some((subject) => subject.subjectName === subjectName)) {
         return current.filter((subject) => subject.subjectName !== subjectName);
       }
+      if (current.length >= maxSubjects) return current;
+      const source = VCE_SUBJECTS.find((subject) => subject.name === subjectName);
       return [
         ...current,
         {
           subjectName,
-          unit: "3/4",
+          unit: source?.units.includes("3/4") ? "3/4" : "1/2",
           color: subjectColors[current.length % subjectColors.length],
           targetScore: null
         }
       ];
     });
+  };
+
+  const updateUnit = (subjectName: string, unit: "1/2" | "3/4") => {
+    setSelected((current) =>
+      current.map((subject) => (subject.subjectName === subjectName ? { ...subject, unit } : subject))
+    );
   };
 
   const updateTarget = (subjectName: string, value: string) => {
@@ -85,7 +94,7 @@ export default function RegisterScreen() {
           <Text variant="headlineLarge" style={styles.title}>
             Build your VCE stack
           </Text>
-          <Text style={styles.subtitle}>Pick your Unit 3/4 subjects and optional target study scores.</Text>
+          <Text style={styles.subtitle}>Pick up to 8 Unit 1/2 or Unit 3/4 subjects and optional target study scores.</Text>
         </View>
 
         <AppCard style={styles.form}>
@@ -113,9 +122,9 @@ export default function RegisterScreen() {
               <Text variant="titleMedium" style={styles.sectionTitle}>
                 Subjects
               </Text>
-              <Text style={styles.subjectHint}>Search the full VCE Unit 3/4 list.</Text>
+              <Text style={styles.subjectHint}>Search the VCE list. Students can add and remove subjects later.</Text>
             </View>
-            <Text style={styles.selectedCount}>{selected.length} selected</Text>
+            <Text style={styles.selectedCount}>{selected.length}/{maxSubjects} selected</Text>
           </View>
           <TextInput
             mode="outlined"
@@ -132,11 +141,13 @@ export default function RegisterScreen() {
               <View style={styles.subjectGrid}>
                 {group.subjects.map((subject) => {
                   const active = selected.some((item) => item.subjectName === subject.name);
+                  const locked = !active && selected.length >= maxSubjects;
                   return (
                     <Pressable
                       key={subject.name}
                       onPress={() => toggleSubject(subject.name)}
-                      style={[styles.subjectChip, active && styles.activeSubject]}
+                      disabled={locked}
+                      style={[styles.subjectChip, active && styles.activeSubject, locked && styles.lockedSubject]}
                     >
                       <Text style={[styles.subjectText, active && styles.activeSubjectText]} numberOfLines={2}>
                         {subject.name}
@@ -154,6 +165,15 @@ export default function RegisterScreen() {
               <Text style={styles.targetName} numberOfLines={1}>
                 {subject.subjectName}
               </Text>
+              <SegmentedButtons
+                value={subject.unit}
+                onValueChange={(value) => updateUnit(subject.subjectName, value as "1/2" | "3/4")}
+                buttons={(VCE_SUBJECTS.find((item) => item.name === subject.subjectName)?.units ?? ["3/4"]).map((unit) => ({
+                  value: unit,
+                  label: unit
+                }))}
+                style={styles.unitButtons}
+              />
               <TextInput
                 mode="outlined"
                 dense
@@ -251,6 +271,9 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
     backgroundColor: `${palette.primary}22`
   },
+  lockedSubject: {
+    opacity: 0.4
+  },
   subjectText: {
     color: palette.muted,
     textAlign: "center",
@@ -273,6 +296,9 @@ const styles = StyleSheet.create({
   targetName: {
     flex: 1,
     color: palette.text
+  },
+  unitButtons: {
+    width: 126
   },
   targetInput: {
     width: 92

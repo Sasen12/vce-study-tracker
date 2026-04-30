@@ -7,9 +7,11 @@ import { asyncHandler, HttpError } from "../utils/http.js";
 export const subjectsRouter = Router();
 subjectsRouter.use(requireAuth);
 
+const MAX_SUBJECTS = 8;
+
 const upsertSubjectSchema = z.object({
   subjectName: z.string().min(2),
-  unit: z.string().default("3/4"),
+  unit: z.enum(["1/2", "3/4"]).default("3/4"),
   targetScore: z.number().int().min(20).max(50).optional().nullable(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/)
 });
@@ -31,6 +33,13 @@ subjectsRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = upsertSubjectSchema.parse(req.body);
+    const existingCount = await prisma.userSubject.count({
+      where: { userId: authReq.user.id }
+    });
+    if (existingCount >= MAX_SUBJECTS) {
+      throw new HttpError(400, `You can track up to ${MAX_SUBJECTS} subjects at once. Remove one before adding another.`);
+    }
+
     const subject = await prisma.userSubject.create({
       data: {
         userId: authReq.user.id,
@@ -58,4 +67,3 @@ subjectsRouter.delete(
     res.status(204).send();
   })
 );
-

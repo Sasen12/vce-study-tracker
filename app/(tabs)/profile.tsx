@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { Button, Dialog, IconButton, Portal, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,6 +31,7 @@ const scaleAdjustments: Record<string, number> = {
 
 const clampScore = (score: number) => Math.max(0, Math.min(55, score));
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const maxSubjects = 8;
 
 const startOfWeek = () => {
   const date = new Date();
@@ -156,11 +157,13 @@ function GoalCard({
   subject,
   goal,
   weekSeconds,
+  onDelete,
   onSave
 }: {
   subject: UserSubject;
   goal?: Goal;
   weekSeconds: number;
+  onDelete: (subject: UserSubject) => void;
   onSave: (input: { subjectId: string; targetStudyScore?: number | null; weeklyHoursTarget?: number | null }) => Promise<void>;
 }) {
   const [targetScore, setTargetScore] = useState(String(goal?.targetStudyScore ?? subject.targetScore ?? ""));
@@ -183,18 +186,31 @@ function GoalCard({
       <View style={styles.goalHeader}>
         <View style={styles.subjectTitleRow}>
           <View style={[styles.dot, { backgroundColor: subject.color }]} />
-          <Text variant="titleMedium" style={styles.cardTitle} numberOfLines={1}>
-            {subject.subjectName}
-          </Text>
+          <View style={styles.subjectTitleText}>
+            <Text variant="titleMedium" style={styles.cardTitle} numberOfLines={1}>
+              {subject.subjectName}
+            </Text>
+            <Text style={styles.unitLabel}>Unit {subject.unit}</Text>
+          </View>
         </View>
-        <ProgressRing
-          size={82}
-          stroke={8}
-          color={subject.color}
-          progress={weeklyHours ? studiedHours / weeklyHours : 0}
-          label={`${Math.round(studiedHours * 10) / 10}h`}
-          sublabel={`${weeklyHours}h`}
-        />
+        <View style={styles.goalHeaderRight}>
+          <ProgressRing
+            size={82}
+            stroke={8}
+            color={subject.color}
+            progress={weeklyHours ? studiedHours / weeklyHours : 0}
+            label={`${Math.round(studiedHours * 10) / 10}h`}
+            sublabel={`${weeklyHours}h`}
+          />
+          <IconButton
+            icon="delete-outline"
+            mode="outlined"
+            size={18}
+            iconColor={palette.secondary}
+            accessibilityLabel={`Remove ${subject.subjectName}`}
+            onPress={() => onDelete(subject)}
+          />
+        </View>
       </View>
 
       <View style={styles.goalInputs}>
@@ -242,14 +258,15 @@ function AddSubjectDialog({
   onCreate: (input: { subjectName: string; unit: string; targetScore?: number | null; color: string }) => Promise<void>;
 }) {
   const [subjectSearch, setSubjectSearch] = useState("");
+  const [selectedUnit, setSelectedUnit] = useState<"1/2" | "3/4">("3/4");
   const availableSubjects = useMemo(
     () =>
       VCE_SUBJECTS.filter(
         (subject) =>
-          subject.units.includes("3/4") &&
+          subject.units.includes(selectedUnit) &&
           !existingSubjects.some((existing) => existing.subjectName === subject.name)
       ),
-    [existingSubjects]
+    [existingSubjects, selectedUnit]
   );
   const visibleSubjects = useMemo(() => {
     const query = subjectSearch.trim().toLowerCase();
@@ -284,7 +301,7 @@ function AddSubjectDialog({
     setSaving(true);
     await onCreate({
       subjectName: selectedName,
-      unit: "3/4",
+      unit: selectedUnit,
       targetScore: targetScore ? Number(targetScore) : null,
       color
     });
@@ -298,6 +315,17 @@ function AddSubjectDialog({
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
         <Dialog.Title style={styles.dialogTitle}>Add subject</Dialog.Title>
         <Dialog.Content style={styles.dialogContent}>
+          <Text style={styles.muted}>
+            {existingSubjects.length}/{maxSubjects} subjects. Remove a dropped subject if you need to make room.
+          </Text>
+          <SegmentedButtons
+            value={selectedUnit}
+            onValueChange={(value) => setSelectedUnit(value as "1/2" | "3/4")}
+            buttons={[
+              { value: "1/2", label: "Unit 1/2" },
+              { value: "3/4", label: "Unit 3/4" }
+            ]}
+          />
           {availableSubjects.length ? (
             <>
               <TextInput
@@ -375,11 +403,14 @@ export default function ProfileScreen() {
     loading,
     fetchAll,
     saveGoal,
-    createSubject
+    createSubject,
+    deleteSubject
   } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
+  const [deletingSubject, setDeletingSubject] = useState<UserSubject | null>(null);
+  const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -479,6 +510,17 @@ export default function ProfileScreen() {
     router.replace("/(auth)/login");
   };
 
+  const confirmDeleteSubject = async () => {
+    if (!deletingSubject) return;
+    setDeletingSubjectSaving(true);
+    try {
+      await deleteSubject(deletingSubject.id);
+      setDeletingSubject(null);
+    } finally {
+      setDeletingSubjectSaving(false);
+    }
+  };
+
   if (loading && !subjects.length) {
     return (
       <Screen>
@@ -572,12 +614,20 @@ export default function ProfileScreen() {
       <View>
         <View style={styles.sectionHeader}>
           <Text variant="titleLarge" style={styles.sectionTitle}>
-            Subjects and goals
+            Subjects and goals ({subjects.length}/{maxSubjects})
           </Text>
-          <Button mode="outlined" icon="plus" onPress={() => setAddSubjectOpen(true)}>
+          <Button
+            mode="outlined"
+            icon="plus"
+            disabled={subjects.length >= maxSubjects}
+            onPress={() => setAddSubjectOpen(true)}
+          >
             Add
           </Button>
         </View>
+        {subjects.length >= maxSubjects ? (
+          <Text style={styles.subjectLimitText}>You are at the 8-subject limit. Remove a dropped subject before adding another.</Text>
+        ) : null}
       </View>
       {subjects.length ? (
         subjects.map((subject) => (
@@ -586,6 +636,7 @@ export default function ProfileScreen() {
             subject={subject}
             goal={goals.find((goal) => goal.subjectId === subject.id)}
             weekSeconds={weeklySecondsBySubject[subject.id] ?? 0}
+            onDelete={setDeletingSubject}
             onSave={saveGoal}
           />
         ))
@@ -606,6 +657,29 @@ export default function ProfileScreen() {
         onDismiss={() => setAddSubjectOpen(false)}
         onCreate={createSubject}
       />
+      <Portal>
+        <Dialog visible={Boolean(deletingSubject)} onDismiss={() => setDeletingSubject(null)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Remove subject</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.muted}>
+              Remove {deletingSubject?.subjectName}? Past sessions, notes, calendar events and saved questions stay in the app,
+              but they will no longer be attached to this subject.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDeletingSubject(null)}>Cancel</Button>
+            <Button
+              mode="contained"
+              buttonColor={palette.secondary}
+              loading={deletingSubjectSaving}
+              disabled={deletingSubjectSaving}
+              onPress={confirmDeleteSubject}
+            >
+              Remove
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }
@@ -744,6 +818,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12
   },
+  subjectLimitText: {
+    color: palette.warning,
+    marginTop: 8,
+    lineHeight: 20
+  },
   goalCard: {
     gap: 14
   },
@@ -757,6 +836,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10
+  },
+  subjectTitleText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  unitLabel: {
+    color: palette.muted,
+    fontSize: 12
+  },
+  goalHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4
   },
   dot: {
     width: 12,

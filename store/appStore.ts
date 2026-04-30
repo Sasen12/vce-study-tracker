@@ -52,6 +52,7 @@ type AppState = {
     targetScore?: number | null;
     color: string;
   }) => Promise<void>;
+  deleteSubject: (id: string) => Promise<void>;
   saveSession: (input: { subjectId: string; durationSeconds: number; notes?: string | null; bonusXp?: number }) => Promise<void>;
   createEvent: (input: {
     subjectId?: string | null;
@@ -219,6 +220,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       subjects: [...get().subjects, data.subject].sort((a, b) => a.subjectName.localeCompare(b.subjectName))
     });
+  },
+  deleteSubject: async (id) => {
+    await studyApi.deleteSubject(id);
+    await get().fetchAll();
   },
   saveSession: async (input) => {
     const data = await studyApi.createSession(input);
