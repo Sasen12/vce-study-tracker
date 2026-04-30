@@ -52,6 +52,7 @@ const fallbackDailyInspiration: DailyInspiration = {
 };
 
 const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
+const themeRequestThankYouThemeId = "cherry_blossom";
 
 export default function DashboardScreen() {
   const user = useAuthStore((state) => state.user);
@@ -156,7 +157,9 @@ export default function DashboardScreen() {
 
   const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
   const leaderboardPromptVisible = Boolean(gamification && gamification.leaderboardPromptedAt == null);
-  const showThemeRequestThankYou = user?.email?.trim().toLowerCase() === themeRequestThankYouEmail;
+  const showThemeRequestThankYou =
+    user?.email?.trim().toLowerCase() === themeRequestThankYouEmail &&
+    Boolean(gamification?.unlockedCosmetics.includes(themeRequestThankYouThemeId));
   const nextBestMove = useMemo(() => {
     const urgentEvent = upcomingEvents.find((event) => daysUntil(event.eventDate) <= 7);
     const weakestSubject = subjects
