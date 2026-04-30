@@ -66,6 +66,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="feedback"
+        options={{
+          title: "Feedback",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="message-text-outline" color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",

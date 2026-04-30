@@ -10,6 +10,7 @@ import { goalsRouter } from "./routes/goals.js";
 import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
+import { communityRouter } from "./routes/community.js";
 import { errorHandler } from "./utils/http.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
 import { APP_TIME_ZONE } from "./utils/date.js";
@@ -32,6 +33,7 @@ app.use("/api/goals", goalsRouter);
 app.use("/api/questions", questionsRouter);
 app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
+app.use("/api/community", communityRouter);
 
 app.use(errorHandler);
 

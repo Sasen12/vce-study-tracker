@@ -25,6 +25,8 @@ model User {
   notes          StudyNote[]
   resources      StudyResource[]
   plans          AdaptiveStudyPlan[]
+  feedbackItems  UserFeedback[]
+  chatMessages   CommunityChatMessage[]
 
   @@map("users")
 }
@@ -210,4 +212,30 @@ model AdaptiveStudyPlan {
 
   @@index([userId, createdAt])
   @@map("adaptive_study_plans")
+}
+
+model UserFeedback {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  category  String
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("user_feedback")
+}
+
+model CommunityChatMessage {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  message   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("community_chat_messages")
 }

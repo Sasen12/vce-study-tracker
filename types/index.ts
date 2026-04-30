@@ -97,6 +97,37 @@ export type Leaderboard = {
   prompted: boolean;
 };
 
+export type UserFeedback = {
+  id: string;
+  userId: string;
+  category: "bug" | "feature" | "content" | "other";
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
+export type CommunityChatMessage = {
+  id: string;
+  userId: string;
+  message: string;
+  createdAt: string;
+  user: {
+    displayName: string;
+  };
+  isCurrentUser: boolean;
+};
+
+export type ChatAllowance = {
+  baseMinutes: number;
+  studiedMinutes: number;
+  earnedMinutes: number;
+  totalMinutes: number;
+  usedMinutes: number;
+  remainingMinutes: number;
+  minutesPerMessage: number;
+  studyMinutesPerChatMinute: number;
+};
+
 export type ThemeShopItem = {
   id: string;
   name: string;

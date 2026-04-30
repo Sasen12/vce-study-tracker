@@ -4,6 +4,8 @@ import type {
   AnswerFeedback,
   ClassNoteChunk,
   ClassNoteDraft,
+  ChatAllowance,
+  CommunityChatMessage,
   DailyInspiration,
   Gamification,
   GeneratedQuestion,
@@ -12,6 +14,7 @@ import type {
   SavedQuestion,
   StudyAnswer,
   StudyEvent,
+  UserFeedback,
   StudyNote,
   StudyReflection,
   StudyResource,
@@ -155,6 +158,19 @@ export const studyApi = {
   generatePlan: (body: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) =>
     apiFetch<{ plan: AdaptiveStudyPlan }>("/coach/plans/generate", { method: "POST", body }),
   gamification: () => apiFetch<{ gamification: Gamification }>("/gamification"),
+  community: () =>
+    apiFetch<{
+      feedback: UserFeedback[];
+      chat: CommunityChatMessage[];
+      allowance: ChatAllowance;
+    }>("/community"),
+  sendFeedback: (body: { category: UserFeedback["category"]; message: string }) =>
+    apiFetch<{ feedback: UserFeedback }>("/community/feedback", { method: "POST", body }),
+  sendCommunityChat: (body: { message: string }) =>
+    apiFetch<{ chatMessage: CommunityChatMessage; allowance: ChatAllowance }>("/community/chat", {
+      method: "POST",
+      body
+    }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>

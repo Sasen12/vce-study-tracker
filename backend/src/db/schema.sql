@@ -135,6 +135,22 @@ CREATE TABLE adaptive_study_plans (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE user_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE community_chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX study_sessions_user_created_idx ON study_sessions(user_id, created_at);
 CREATE INDEX events_user_date_idx ON events(user_id, event_date);
 CREATE INDEX saved_questions_user_created_idx ON saved_questions(user_id, created_at);
@@ -142,3 +158,7 @@ CREATE INDEX study_reflections_user_date_idx ON study_reflections(user_id, class
 CREATE INDEX study_notes_user_updated_idx ON study_notes(user_id, updated_at);
 CREATE INDEX study_resources_user_created_idx ON study_resources(user_id, created_at);
 CREATE INDEX adaptive_study_plans_user_created_idx ON adaptive_study_plans(user_id, created_at);
+CREATE INDEX user_feedback_user_created_idx ON user_feedback(user_id, created_at);
+CREATE INDEX user_feedback_created_idx ON user_feedback(created_at);
+CREATE INDEX community_chat_messages_created_idx ON community_chat_messages(created_at);
+CREATE INDEX community_chat_messages_user_created_idx ON community_chat_messages(user_id, created_at);
