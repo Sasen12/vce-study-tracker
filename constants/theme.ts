@@ -12,7 +12,21 @@ export const palette = {
   border: "rgba(255,255,255,0.04)"
 };
 
-export type ThemeId = "midnight" | "mint" | "sunset" | "ocean" | "royal";
+export type ThemeId =
+  | "midnight"
+  | "mint"
+  | "sunset"
+  | "ocean"
+  | "royal"
+  | "aurora"
+  | "citrus"
+  | "cherry"
+  | "glacier"
+  | "graphite"
+  | "arcade"
+  | "forest"
+  | "rose_gold"
+  | "matrix";
 
 export type ThemePalette = typeof palette;
 
@@ -100,6 +114,168 @@ export const themeShopItems: ThemeShopItem[] = [
       text: "#FAF7FF",
       muted: "#A99BC6",
       border: "rgba(167,139,250,0.14)"
+    }
+  },
+  {
+    id: "aurora",
+    name: "Aurora Shift",
+    price: 360,
+    colors: {
+      background: "#07110F",
+      surface: "#10201D",
+      surfaceRaised: "#172B29",
+      primary: "#2DD4BF",
+      secondary: "#F472B6",
+      success: "#84CC16",
+      warning: "#F59E0B",
+      info: "#38BDF8",
+      text: "#F8FFFE",
+      muted: "#89B8B1",
+      border: "rgba(45,212,191,0.13)"
+    }
+  },
+  {
+    id: "citrus",
+    name: "Citrus Lab",
+    price: 420,
+    colors: {
+      background: "#10130A",
+      surface: "#1D2212",
+      surfaceRaised: "#293018",
+      primary: "#A3E635",
+      secondary: "#F97316",
+      success: "#4ADE80",
+      warning: "#FACC15",
+      info: "#22D3EE",
+      text: "#FAFFF0",
+      muted: "#B3BE8E",
+      border: "rgba(163,230,53,0.13)"
+    }
+  },
+  {
+    id: "cherry",
+    name: "Cherry Desk",
+    price: 460,
+    colors: {
+      background: "#17090D",
+      surface: "#261018",
+      surfaceRaised: "#351724",
+      primary: "#F43F5E",
+      secondary: "#22D3EE",
+      success: "#34D399",
+      warning: "#FBBF24",
+      info: "#A78BFA",
+      text: "#FFF1F4",
+      muted: "#CFA0AD",
+      border: "rgba(244,63,94,0.14)"
+    }
+  },
+  {
+    id: "glacier",
+    name: "Glacier Notes",
+    price: 520,
+    colors: {
+      background: "#071218",
+      surface: "#10212A",
+      surfaceRaised: "#18313E",
+      primary: "#67E8F9",
+      secondary: "#C084FC",
+      success: "#86EFAC",
+      warning: "#FDE047",
+      info: "#60A5FA",
+      text: "#F0FCFF",
+      muted: "#91B9C6",
+      border: "rgba(103,232,249,0.14)"
+    }
+  },
+  {
+    id: "graphite",
+    name: "Graphite Focus",
+    price: 560,
+    colors: {
+      background: "#111315",
+      surface: "#1D2224",
+      surfaceRaised: "#273033",
+      primary: "#D1D5DB",
+      secondary: "#F97316",
+      success: "#22C55E",
+      warning: "#FACC15",
+      info: "#38BDF8",
+      text: "#F7FAFC",
+      muted: "#94A3B8",
+      border: "rgba(209,213,219,0.13)"
+    }
+  },
+  {
+    id: "arcade",
+    name: "Arcade Sprint",
+    price: 620,
+    colors: {
+      background: "#0E0A18",
+      surface: "#1B1230",
+      surfaceRaised: "#281A46",
+      primary: "#22D3EE",
+      secondary: "#FB7185",
+      success: "#A3E635",
+      warning: "#F59E0B",
+      info: "#818CF8",
+      text: "#FAF7FF",
+      muted: "#AFA4CC",
+      border: "rgba(34,211,238,0.13)"
+    }
+  },
+  {
+    id: "forest",
+    name: "Forest Method",
+    price: 680,
+    colors: {
+      background: "#07120D",
+      surface: "#102218",
+      surfaceRaised: "#183322",
+      primary: "#4ADE80",
+      secondary: "#FBBF24",
+      success: "#86EFAC",
+      warning: "#F97316",
+      info: "#67E8F9",
+      text: "#F4FFF7",
+      muted: "#8FBA9D",
+      border: "rgba(74,222,128,0.13)"
+    }
+  },
+  {
+    id: "rose_gold",
+    name: "Rose Gold",
+    price: 740,
+    colors: {
+      background: "#160D11",
+      surface: "#24161B",
+      surfaceRaised: "#322027",
+      primary: "#FDA4AF",
+      secondary: "#F59E0B",
+      success: "#34D399",
+      warning: "#FDE047",
+      info: "#93C5FD",
+      text: "#FFF7F8",
+      muted: "#C6A0A8",
+      border: "rgba(253,164,175,0.14)"
+    }
+  },
+  {
+    id: "matrix",
+    name: "Matrix Mode",
+    price: 820,
+    colors: {
+      background: "#050A07",
+      surface: "#0D1711",
+      surfaceRaised: "#14241A",
+      primary: "#22C55E",
+      secondary: "#38BDF8",
+      success: "#A3E635",
+      warning: "#FACC15",
+      info: "#2DD4BF",
+      text: "#F1FFF5",
+      muted: "#81A88C",
+      border: "rgba(34,197,94,0.14)"
     }
   }
 ];

@@ -44,6 +44,60 @@ export const THEME_SHOP_ITEMS = [
     name: "Royal Grind",
     price: 320,
     colors: { primary: "#A78BFA", secondary: "#F472B6", background: "#120B22", surface: "#1F1633" }
+  },
+  {
+    id: "aurora",
+    name: "Aurora Shift",
+    price: 360,
+    colors: { primary: "#2DD4BF", secondary: "#F472B6", background: "#07110F", surface: "#10201D" }
+  },
+  {
+    id: "citrus",
+    name: "Citrus Lab",
+    price: 420,
+    colors: { primary: "#A3E635", secondary: "#F97316", background: "#10130A", surface: "#1D2212" }
+  },
+  {
+    id: "cherry",
+    name: "Cherry Desk",
+    price: 460,
+    colors: { primary: "#F43F5E", secondary: "#22D3EE", background: "#17090D", surface: "#261018" }
+  },
+  {
+    id: "glacier",
+    name: "Glacier Notes",
+    price: 520,
+    colors: { primary: "#67E8F9", secondary: "#C084FC", background: "#071218", surface: "#10212A" }
+  },
+  {
+    id: "graphite",
+    name: "Graphite Focus",
+    price: 560,
+    colors: { primary: "#D1D5DB", secondary: "#F97316", background: "#111315", surface: "#1D2224" }
+  },
+  {
+    id: "arcade",
+    name: "Arcade Sprint",
+    price: 620,
+    colors: { primary: "#22D3EE", secondary: "#FB7185", background: "#0E0A18", surface: "#1B1230" }
+  },
+  {
+    id: "forest",
+    name: "Forest Method",
+    price: 680,
+    colors: { primary: "#4ADE80", secondary: "#FBBF24", background: "#07120D", surface: "#102218" }
+  },
+  {
+    id: "rose_gold",
+    name: "Rose Gold",
+    price: 740,
+    colors: { primary: "#FDA4AF", secondary: "#F59E0B", background: "#160D11", surface: "#24161B" }
+  },
+  {
+    id: "matrix",
+    name: "Matrix Mode",
+    price: 820,
+    colors: { primary: "#22C55E", secondary: "#38BDF8", background: "#050A07", surface: "#0D1711" }
   }
 ] as const;
 

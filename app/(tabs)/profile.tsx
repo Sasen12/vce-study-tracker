@@ -402,9 +402,9 @@ function ThemeShop({
       <View style={styles.shopHeader}>
         <View>
           <Text variant="titleMedium" style={styles.cardTitle}>
-            Style shop
+            Coin shop
           </Text>
-          <Text style={styles.muted}>Theme unlocks</Text>
+          <Text style={styles.muted}>{themeShopItems.length} theme unlocks</Text>
         </View>
         <View style={styles.coinPill}>
           <Text style={styles.coinValue}>{xpBalance}</Text>
