@@ -459,7 +459,7 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const files = (req.files ?? []) as Express.Multer.File[];
-    if (!files.length) throw new HttpError(400, "Upload at least one PDF, Markdown or text file");
+    if (!files.length) throw new HttpError(400, "Upload at least one PDF, Word, Markdown or text file");
 
     const subjectId = typeof req.body.subjectId === "string" && req.body.subjectId ? req.body.subjectId : null;
     const sourceType =

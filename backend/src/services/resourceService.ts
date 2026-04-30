@@ -2,6 +2,20 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse/lib/pdf-parse.js") as typeof import("pdf-parse");
+const mammoth = require("mammoth") as {
+  extractRawText: (input: { buffer: Buffer }) => Promise<{ value?: string }>;
+};
+const WordExtractor = require("word-extractor") as new () => {
+  extract: (input: Buffer) => Promise<{
+    getBody: () => string;
+    getFootnotes?: () => string;
+    getEndnotes?: () => string;
+    getHeaders?: () => string;
+    getFooters?: () => string;
+    getAnnotations?: () => string;
+    getTextboxes?: () => string;
+  }>;
+};
 
 const maxStoredChars = 250_000;
 
@@ -16,6 +30,13 @@ const normalizeText = (text: string) =>
 export const detectResourceType = (file: Express.Multer.File) => {
   const name = file.originalname.toLowerCase();
   if (file.mimetype === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (
+    file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    name.endsWith(".docx")
+  ) {
+    return "docx";
+  }
+  if (file.mimetype === "application/msword" || name.endsWith(".doc")) return "doc";
   if (name.endsWith(".md") || file.mimetype === "text/markdown") return "markdown";
   return "text";
 };
@@ -28,6 +49,32 @@ export const extractResourceText = async (file: Express.Multer.File) => {
     return {
       fileType,
       text: normalizeText(parsed.text || "")
+    };
+  }
+
+  if (fileType === "docx") {
+    const parsed = await mammoth.extractRawText({ buffer: file.buffer });
+    return {
+      fileType,
+      text: normalizeText(parsed.value || "")
+    };
+  }
+
+  if (fileType === "doc") {
+    const extractor = new WordExtractor();
+    const parsed = await extractor.extract(file.buffer);
+    const parts = [
+      parsed.getBody(),
+      parsed.getHeaders?.(),
+      parsed.getFooters?.(),
+      parsed.getFootnotes?.(),
+      parsed.getEndnotes?.(),
+      parsed.getAnnotations?.(),
+      parsed.getTextboxes?.()
+    ].filter(Boolean);
+    return {
+      fileType,
+      text: normalizeText(parts.join("\n\n"))
     };
   }
 

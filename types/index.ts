@@ -270,7 +270,7 @@ export type StudyResource = {
   userId: string;
   subjectId?: string | null;
   fileName: string;
-  fileType: "pdf" | "markdown" | "text" | string;
+  fileType: "pdf" | "docx" | "doc" | "markdown" | "text" | string;
   sourceType: ResourceSourceType | string;
   extractedTextPreview?: string;
   createdAt: string;

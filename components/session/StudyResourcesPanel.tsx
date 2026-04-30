@@ -14,11 +14,15 @@ type StudyResourcesPanelProps = {
   onSelectSubject: (subject: UserSubject) => void;
 };
 
-type SourceType = Extract<ResourceSourceType, "textbook" | "obsidian" | "exam" | "exam_report" | "practice_sac" | "practice_sat">;
+type SourceType = Extract<
+  ResourceSourceType,
+  "textbook" | "obsidian" | "notes" | "exam" | "exam_report" | "practice_sac" | "practice_sat"
+>;
 
 const sourceLabels: Record<SourceType, string> = {
-  textbook: "Textbook PDF",
+  textbook: "Textbook file",
   obsidian: "Obsidian MD",
+  notes: "Word / notes",
   exam: "Exam paper",
   exam_report: "Exam report",
   practice_sac: "Practice SAC",
@@ -28,10 +32,32 @@ const sourceLabels: Record<SourceType, string> = {
 const sourceMessages: Record<SourceType, string> = {
   textbook: "Textbook context added.",
   obsidian: "Obsidian notes imported.",
+  notes: "Notes file imported.",
   exam: "Exam paper added to the question bank.",
   exam_report: "Exam report added to the marking knowledge base.",
   practice_sac: "Practice SAC added to the question bank.",
   practice_sat: "Practice SAT added to the question bank."
+};
+
+const pdfTypes = ["application/pdf"];
+const wordTypes = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".doc",
+  ".docx"
+];
+const textTypes = ["text/markdown", "text/plain", "application/octet-stream", ".md", ".txt"];
+
+const acceptedTypesFor = (sourceType: SourceType) => {
+  if (sourceType === "obsidian") return textTypes;
+  if (sourceType === "notes") return [...wordTypes, ...textTypes];
+  return [...pdfTypes, ...wordTypes];
+};
+
+const iconFor = (sourceType: SourceType) => {
+  if (sourceType === "obsidian") return "folder-upload";
+  if (sourceType === "notes") return "file-word-box";
+  return "file-document-outline";
 };
 
 const appendAsset = (formData: FormData, asset: DocumentPicker.DocumentPickerAsset) => {
@@ -82,10 +108,7 @@ export function StudyResourcesPanel({ subjects, selectedSubjectId, onSelectSubje
     setMessage(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type:
-          sourceType === "textbook" || sourceType === "exam" || sourceType === "exam_report" || sourceType === "practice_sac" || sourceType === "practice_sat"
-            ? ["application/pdf"]
-            : ["text/markdown", "text/plain", "application/octet-stream"],
+        type: acceptedTypesFor(sourceType),
         multiple: true,
         copyToCacheDirectory: true
       });
@@ -119,11 +142,11 @@ export function StudyResourcesPanel({ subjects, selectedSubjectId, onSelectSubje
         </View>
 
         <View style={styles.buttons}>
-          {(["textbook", "exam", "exam_report", "practice_sac", "practice_sat", "obsidian"] as SourceType[]).map((sourceType) => (
+          {(["textbook", "notes", "exam", "exam_report", "practice_sac", "practice_sat", "obsidian"] as SourceType[]).map((sourceType) => (
             <Button
               key={sourceType}
               mode={sourceType === "textbook" ? "contained" : "outlined"}
-              icon={sourceType === "obsidian" ? "folder-upload" : "file-pdf-box"}
+              icon={iconFor(sourceType)}
               loading={uploading === sourceType}
               disabled={!!uploading}
               onPress={() => pickFiles(sourceType)}
