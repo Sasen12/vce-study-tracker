@@ -22,16 +22,6 @@ import { asyncHandler, HttpError } from "../utils/http.js";
 export const coachRouter = Router();
 coachRouter.use(requireAuth);
 
-const defaultLimits = {
-  maxSubjects: 4,
-  aiActionsPerDay: 20,
-  maxResources: 10,
-  maxUploadsPerBatch: 3,
-  maxScreenshotsPerAsk: 2,
-  maxPlanHorizonDays: 90,
-  classNotetaker: true
-};
-
 type SubjectForPlan = {
   subjectName: string;
 };
@@ -471,18 +461,6 @@ coachRouter.post(
     const files = (req.files ?? []) as Express.Multer.File[];
     if (!files.length) throw new HttpError(400, "Upload at least one PDF, Word, Markdown or text file");
 
-    const limits = defaultLimits;
-    if (files.length > limits.maxUploadsPerBatch) {
-      throw new HttpError(400, `Can upload up to ${limits.maxUploadsPerBatch} files at once.`);
-    }
-    const existingResourceCount = await prisma.studyResource.count({ where: { userId: authReq.user.id } });
-    if (existingResourceCount + files.length > limits.maxResources) {
-      throw new HttpError(
-        400,
-        `Can store up to ${limits.maxResources} study files. Remove files before uploading more.`
-      );
-    }
-
     const subjectId = typeof req.body.subjectId === "string" && req.body.subjectId ? req.body.subjectId : null;
     const sourceType =
       typeof req.body.sourceType === "string" &&
@@ -532,10 +510,6 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerChunkSchema.parse(req.body);
-    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
-    if (!limits.classNotetaker) {
-      throw new HttpError(402, "Class notetaker is included in Max.");
-    }
     if (!payload.consentAcknowledged) {
       throw new HttpError(400, "Only record when your teacher and class allow it.");
     }
@@ -602,10 +576,6 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = notetakerSchema.parse(req.body);
-    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
-    if (!limits.classNotetaker) {
-      throw new HttpError(402, "Class notetaker is included in Max.");
-    }
     if (!payload.consentAcknowledged) {
       throw new HttpError(400, "Only record when your teacher and class allow it.");
     }
@@ -716,10 +686,6 @@ coachRouter.post(
     const payload = askSchema.parse(req.body);
     const subject = await ensureSubject(authReq.user.id, payload.subjectId);
     const files = ((req.files ?? []) as Express.Multer.File[]).filter(Boolean);
-    const limits = await getPlanLimitsForUser(authReq.user.id, authReq.user.email);
-    if (files.length > limits.maxScreenshotsPerAsk) {
-      throw new HttpError(400, `Can attach up to ${limits.maxScreenshotsPerAsk} screenshot(s) per question.`);
-    }
 
     for (const file of files) {
       if (!supportedScreenshotTypes.has(file.mimetype)) {
@@ -821,8 +787,7 @@ coachRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = planSchema.parse(req.body);
     const today = dateOnly(payload.planDate);
-    const limits = defaultLimits;
-    const horizonDays = Math.min(payload.horizonDays, limits.maxPlanHorizonDays);
+    const horizonDays = payload.horizonDays;
 
     const horizonEnd = addDays(today, horizonDays);
     const [subjects, reflections, events, sessions, notes, resources] = await Promise.all([

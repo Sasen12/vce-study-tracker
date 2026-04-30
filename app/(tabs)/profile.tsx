@@ -31,6 +31,7 @@ const scaleAdjustments: Record<string, number> = {
 
 const clampScore = (score: number) => Math.max(0, Math.min(55, score));
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const maxSubjects = 8;
 
 const startOfWeek = () => {
   const date = new Date();
@@ -410,8 +411,7 @@ export default function ProfileScreen() {
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [deletingSubject, setDeletingSubject] = useState<UserSubject | null>(null);
   const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
-  const subjectLimit = 4;
-  const resourceLimit = 10;
+  const subjectLimit = maxSubjects;
 
   useFocusEffect(
     useCallback(() => {
@@ -708,35 +708,6 @@ const styles = StyleSheet.create({
   muted: {
     color: palette.muted,
     lineHeight: 20
-  },
-  flexText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4
-  },
-  billingCard: {
-    gap: 12
-  },
-  billingTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12
-  },
-  billingLimits: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  billingLimit: {
-    color: palette.text,
-    fontSize: 12,
-    fontFamily: "Outfit_700Bold",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    overflow: "hidden"
   },
   atarCard: {
     gap: 10

@@ -13,6 +13,8 @@ import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const authRouter = Router();
 
+const MAX_SUBJECTS = 8;
+
 const subjectSchema = z.object({
   subjectName: z.string().min(2),
   unit: z.enum(["1/2", "3/4"]).default("3/4"),
@@ -24,7 +26,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   displayName: z.string().min(2),
-  subjects: z.array(subjectSchema)
+  subjects: z.array(subjectSchema).max(MAX_SUBJECTS, `Choose up to ${MAX_SUBJECTS} subjects.`).default([])
 });
 
 const loginSchema = z.object({

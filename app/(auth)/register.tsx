@@ -6,7 +6,6 @@ import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { palette, subjectColors } from "@/constants/theme";
-import { freePlan } from "@/constants/pricing";
 import { useAuthStore } from "@/store/authStore";
 
 type SelectedSubject = {
@@ -16,7 +15,7 @@ type SelectedSubject = {
   targetScore?: number | null;
 };
 
-const maxSubjects = freePlan.limits.maxSubjects;
+const maxSubjects = 8;
 
 export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState("");
@@ -95,9 +94,7 @@ export default function RegisterScreen() {
           <Text variant="headlineLarge" style={styles.title}>
             Build your VCE stack
           </Text>
-          <Text style={styles.subtitle}>
-            Pick up to {maxSubjects} subjects on Free. You can unlock the full 8-subject VCE stack after upgrading.
-          </Text>
+          <Text style={styles.subtitle}>Pick up to 8 Unit 1/2 or Unit 3/4 subjects and optional target study scores.</Text>
         </View>
 
         <AppCard style={styles.form}>
