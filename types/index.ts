@@ -104,6 +104,10 @@ export type UserFeedback = {
   message: string;
   status: string;
   createdAt: string;
+  user?: {
+    displayName: string;
+    email: string;
+  };
 };
 
 export type CommunityChatMessage = {

@@ -19,6 +19,51 @@ const chatSchema = z.object({
 const BASE_CHAT_MINUTES = 3;
 const STUDY_MINUTES_PER_CHAT_MINUTE = 5;
 const MAX_DAILY_CHAT_MINUTES = 60;
+const DEFAULT_ADMIN_EMAILS = ["sasenb@gmail.com"];
+const ADMIN_EMAILS = new Set(
+  [...DEFAULT_ADMIN_EMAILS, ...(process.env.ADMIN_EMAILS ?? "").split(",")]
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+const isAdminEmail = (email: string) => ADMIN_EMAILS.has(email.trim().toLowerCase());
+
+const requireAdmin = (user: AuthenticatedRequest["user"]) => {
+  if (!isAdminEmail(user.email)) {
+    throw new HttpError(403, "Admin only");
+  }
+};
+
+const serialiseFeedback = (
+  item: {
+    id: string;
+    userId: string;
+    category: string;
+    message: string;
+    status: string;
+    createdAt: Date;
+    user?: {
+      displayName: string;
+      email: string;
+    };
+  },
+  isAdmin: boolean
+) => ({
+  id: item.id,
+  userId: item.userId,
+  category: item.category,
+  message: item.message,
+  status: item.status,
+  createdAt: item.createdAt,
+  ...(isAdmin && item.user
+    ? {
+        user: {
+          displayName: item.user.displayName,
+          email: item.user.email
+        }
+      }
+    : {})
+});
 
 const todayRange = () => {
   const today = new Date();
@@ -75,12 +120,21 @@ const chatAllowanceFor = async (userId: string) => {
   };
 };
 
-const communityPayload = async (userId: string) => {
+const communityPayload = async (user: AuthenticatedRequest["user"]) => {
+  const isAdmin = isAdminEmail(user.email);
   const [feedback, chatDesc, allowance] = await Promise.all([
     prisma.userFeedback.findMany({
-      where: { userId },
+      where: isAdmin ? {} : { userId: user.id },
       orderBy: { createdAt: "desc" },
-      take: 20
+      take: isAdmin ? 100 : 20,
+      include: {
+        user: {
+          select: {
+            displayName: true,
+            email: true
+          }
+        }
+      }
     }),
     prisma.communityChatMessage.findMany({
       orderBy: { createdAt: "desc" },
@@ -91,7 +145,7 @@ const communityPayload = async (userId: string) => {
         }
       }
     }),
-    chatAllowanceFor(userId)
+    chatAllowanceFor(user.id)
   ]);
 
   const chat = chatDesc.reverse().map((message) => ({
@@ -100,17 +154,17 @@ const communityPayload = async (userId: string) => {
     message: message.message,
     createdAt: message.createdAt,
     user: publicUser(message.user),
-    isCurrentUser: message.userId === userId
+    isCurrentUser: message.userId === user.id
   }));
 
-  return { feedback, chat, allowance };
+  return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance };
 };
 
 communityRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
-    const payload = await communityPayload(authReq.user.id);
+    const payload = await communityPayload(authReq.user);
     res.json(payload);
   })
 );
@@ -125,9 +179,17 @@ communityRouter.post(
         userId: authReq.user.id,
         category: payload.category,
         message: payload.message
+      },
+      include: {
+        user: {
+          select: {
+            displayName: true,
+            email: true
+          }
+        }
       }
     });
-    res.status(201).json({ feedback });
+    res.status(201).json({ feedback: serialiseFeedback(feedback, isAdminEmail(authReq.user.email)) });
   })
 );
 
@@ -169,5 +231,22 @@ communityRouter.post(
       },
       allowance: nextAllowance
     });
+  })
+);
+
+communityRouter.delete(
+  "/chat/:id",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const id = z.string().uuid().parse(req.params.id);
+    const existing = await prisma.communityChatMessage.findUnique({ where: { id } });
+    if (!existing) {
+      throw new HttpError(404, "Chat message not found");
+    }
+
+    await prisma.communityChatMessage.delete({ where: { id } });
+    res.status(204).send();
   })
 );

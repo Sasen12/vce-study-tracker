@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, IconButton, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -39,25 +39,66 @@ const formatWeekRange = (start?: string, end?: string) => {
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 };
 
-function ChatBubble({ item }: { item: CommunityChatMessage }) {
+function ChatBubble({
+  item,
+  canDelete,
+  deleting,
+  onDelete
+}: {
+  item: CommunityChatMessage;
+  canDelete?: boolean;
+  deleting?: boolean;
+  onDelete?: (id: string) => void;
+}) {
   return (
     <View style={[styles.chatBubble, item.isCurrentUser && styles.chatBubbleMine]}>
       <View style={styles.chatMeta}>
-        <Text style={styles.chatName}>{item.user.displayName}</Text>
-        <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+        <Text style={styles.chatName} numberOfLines={1}>
+          {item.user.displayName}
+        </Text>
+        <View style={styles.chatMetaRight}>
+          <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+          {canDelete ? (
+            <IconButton
+              icon="delete-outline"
+              size={18}
+              iconColor={palette.secondary}
+              accessibilityLabel="Delete chat message"
+              disabled={deleting}
+              onPress={() => onDelete?.(item.id)}
+              style={styles.deleteIconButton}
+            />
+          ) : null}
+        </View>
       </View>
       <Text style={styles.chatText}>{item.message}</Text>
     </View>
   );
 }
 
-function FeedbackItem({ item }: { item: UserFeedback }) {
+function FeedbackItem({ item, showSender }: { item: UserFeedback; showSender?: boolean }) {
   return (
     <View style={styles.feedbackItem}>
       <View style={styles.feedbackHeader}>
-        <Text style={styles.feedbackCategory}>{categoryCopy[item.category]}</Text>
+        <View style={styles.feedbackMeta}>
+          <Text style={styles.feedbackCategory}>{categoryCopy[item.category]}</Text>
+          <Text style={styles.feedbackStatus}>{item.status}</Text>
+        </View>
         <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
       </View>
+      {showSender ? (
+        <View style={styles.senderRow}>
+          <MaterialCommunityIcons name="account-circle-outline" color={palette.info} size={18} />
+          <View style={styles.flexText}>
+            <Text style={styles.feedbackSender} numberOfLines={1}>
+              {item.user?.displayName ?? "Unknown student"}
+            </Text>
+            <Text style={styles.mutedSmall} numberOfLines={1}>
+              {item.user?.email ?? "No email attached"}
+            </Text>
+          </View>
+        </View>
+      ) : null}
       <Text style={styles.feedbackMessage}>{item.message}</Text>
     </View>
   );
@@ -86,8 +127,10 @@ export default function CommunityScreen() {
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [category, setCategory] = useState<FeedbackCategory>("feature");
@@ -103,6 +146,7 @@ export default function CommunityScreen() {
       setFeedback(data.feedback);
       setChat(data.chat);
       setAllowance(data.allowance);
+      setIsAdmin(data.isAdmin);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load feedback");
     } finally {
@@ -132,11 +176,26 @@ export default function CommunityScreen() {
       const data = await studyApi.sendFeedback({ category, message: feedbackMessage.trim() });
       setFeedback((current) => [data.feedback, ...current]);
       setFeedbackMessage("");
-      setNotice("Sent. I will see this in the database.");
+      setNotice("Sent. It is in the admin feedback inbox.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not send feedback");
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteChatMessage = async (id: string) => {
+    setDeletingChatId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.deleteCommunityChat(id);
+      setChat((current) => current.filter((item) => item.id !== id));
+      setNotice("Chat message deleted.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not delete chat message");
+    } finally {
+      setDeletingChatId(null);
     }
   };
 
@@ -201,7 +260,7 @@ export default function CommunityScreen() {
         buttons={[
           { value: "chat", label: "Student chat", icon: "chat-outline" },
           { value: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
-          { value: "feedback", label: "Direct feedback", icon: "inbox-arrow-up" }
+          { value: "feedback", label: isAdmin ? "Feedback inbox" : "Direct feedback", icon: "inbox-arrow-up" }
         ]}
       />
 
@@ -270,47 +329,65 @@ export default function CommunityScreen() {
           </AppCard>
         </>
       ) : mode === "feedback" ? (
-        <>
-          <AppCard style={styles.formCard}>
-            <Text style={styles.cardTitle}>Send something in</Text>
-            <SegmentedButtons
-              value={category}
-              onValueChange={(value) => setCategory(value as FeedbackCategory)}
-              buttons={[
-                { value: "feature", label: "Feature" },
-                { value: "bug", label: "Bug" },
-                { value: "content", label: "Content" },
-                { value: "other", label: "Other" }
-              ]}
-            />
-            <TextInput
-              mode="outlined"
-              label="Message"
-              value={feedbackMessage}
-              onChangeText={setFeedbackMessage}
-              multiline
-              numberOfLines={5}
-              maxLength={1200}
-              style={styles.input}
-            />
-            <Button mode="contained" icon="send" disabled={!feedbackMessage.trim() || sending} loading={sending} onPress={sendFeedback}>
-              Send feedback
-            </Button>
-          </AppCard>
-
+        isAdmin ? (
           <AppCard style={styles.listCard}>
-            <Text style={styles.cardTitle}>Your sent feedback</Text>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.cardTitle}>Feedback inbox</Text>
+              <Text style={styles.muted}>{feedback.length} received</Text>
+            </View>
             {feedback.length ? (
               <View style={styles.list}>
                 {feedback.map((item) => (
-                  <FeedbackItem key={item.id} item={item} />
+                  <FeedbackItem key={item.id} item={item} showSender />
                 ))}
               </View>
             ) : (
-              <EmptyState title="No feedback yet" body="Feature requests, bugs, content issues, confusing bits, all of it can go here." />
+              <EmptyState title="Inbox empty" body="When students send feedback, it will land here with their name and email." />
             )}
           </AppCard>
-        </>
+        ) : (
+          <>
+            <AppCard style={styles.formCard}>
+              <Text style={styles.cardTitle}>Send feedback to admin</Text>
+              <SegmentedButtons
+                value={category}
+                onValueChange={(value) => setCategory(value as FeedbackCategory)}
+                buttons={[
+                  { value: "feature", label: "Feature" },
+                  { value: "bug", label: "Bug" },
+                  { value: "content", label: "Content" },
+                  { value: "other", label: "Other" }
+                ]}
+              />
+              <TextInput
+                mode="outlined"
+                label="Message"
+                value={feedbackMessage}
+                onChangeText={setFeedbackMessage}
+                multiline
+                numberOfLines={5}
+                maxLength={1200}
+                style={styles.input}
+              />
+              <Button mode="contained" icon="send" disabled={!feedbackMessage.trim() || sending} loading={sending} onPress={sendFeedback}>
+                Send feedback
+              </Button>
+            </AppCard>
+
+            <AppCard style={styles.listCard}>
+              <Text style={styles.cardTitle}>Your sent feedback</Text>
+              {feedback.length ? (
+                <View style={styles.list}>
+                  {feedback.map((item) => (
+                    <FeedbackItem key={item.id} item={item} />
+                  ))}
+                </View>
+              ) : (
+                <EmptyState title="No feedback yet" body="Feature requests, bugs, content issues, confusing bits, all of it can go here." />
+              )}
+            </AppCard>
+          </>
+        )
       ) : (
         <>
           <AppCard style={styles.allowanceCard}>
@@ -333,7 +410,13 @@ export default function CommunityScreen() {
             {chat.length ? (
               <View style={styles.chatList}>
                 {chat.map((item) => (
-                  <ChatBubble key={item.id} item={item} />
+                  <ChatBubble
+                    key={item.id}
+                    item={item}
+                    canDelete={isAdmin}
+                    deleting={deletingChatId === item.id}
+                    onDelete={deleteChatMessage}
+                  />
                 ))}
               </View>
             ) : (
@@ -488,10 +571,40 @@ const styles = StyleSheet.create({
   feedbackHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
     gap: 12
+  },
+  feedbackMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    gap: 8
   },
   feedbackCategory: {
     color: palette.primary,
+    fontFamily: "Outfit_700Bold"
+  },
+  feedbackStatus: {
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(74,222,128,0.12)",
+    overflow: "hidden",
+    textTransform: "uppercase"
+  },
+  senderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(96,165,250,0.1)"
+  },
+  feedbackSender: {
+    color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
   feedbackMessage: {
@@ -552,11 +665,24 @@ const styles = StyleSheet.create({
   chatMeta: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     gap: 10
+  },
+  chatMetaRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4
   },
   chatName: {
     color: palette.text,
-    fontFamily: "Outfit_700Bold"
+    fontFamily: "Outfit_700Bold",
+    flex: 1,
+    minWidth: 0
+  },
+  deleteIconButton: {
+    width: 28,
+    height: 28,
+    margin: 0
   },
   chatText: {
     color: palette.text,

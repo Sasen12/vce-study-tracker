@@ -160,6 +160,7 @@ export const studyApi = {
   gamification: () => apiFetch<{ gamification: Gamification }>("/gamification"),
   community: () =>
     apiFetch<{
+      isAdmin: boolean;
       feedback: UserFeedback[];
       chat: CommunityChatMessage[];
       allowance: ChatAllowance;
@@ -171,6 +172,7 @@ export const studyApi = {
       method: "POST",
       body
     }),
+  deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>
