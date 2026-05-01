@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
+import { grantThemeToUser } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const communityRouter = Router();
@@ -15,6 +16,11 @@ const feedbackSchema = z.object({
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(280)
+});
+
+const giftThemeSchema = z.object({
+  themeId: z.string().trim().min(1),
+  equip: z.boolean().default(true)
 });
 
 const BASE_CHAT_MINUTES = 3;
@@ -67,46 +73,87 @@ const publicUser = (user: { displayName: string }) => ({
   displayName: user.displayName
 });
 
+const adminUserSelect = {
+  id: true,
+  email: true,
+  displayName: true,
+  createdAt: true,
+  gamification: {
+    select: {
+      totalXp: true,
+      xpBalance: true,
+      level: true,
+      leaderboardOptIn: true,
+      unlockedCosmetics: true,
+      activeTheme: true
+    }
+  },
+  _count: {
+    select: {
+      subjects: true,
+      sessions: true,
+      feedbackItems: true,
+      chatMessages: true
+    }
+  }
+} as const;
+
+const cosmeticsAsArray = (cosmetics: unknown) =>
+  Array.isArray(cosmetics) ? cosmetics.filter((cosmetic): cosmetic is string => typeof cosmetic === "string") : [];
+
+const serialiseAdminUser = (user: {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: Date;
+  gamification: {
+    totalXp: number;
+    xpBalance: number;
+    level: number;
+    leaderboardOptIn: boolean;
+    unlockedCosmetics: unknown;
+    activeTheme: string;
+  } | null;
+  _count: {
+    subjects: number;
+    sessions: number;
+    feedbackItems: number;
+    chatMessages: number;
+  };
+}) => ({
+  id: user.id,
+  email: user.email,
+  displayName: user.displayName,
+  createdAt: user.createdAt,
+  level: user.gamification?.level ?? 1,
+  totalXp: user.gamification?.totalXp ?? 0,
+  xpBalance: user.gamification?.xpBalance ?? 0,
+  leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,
+  unlockedCosmetics: cosmeticsAsArray(user.gamification?.unlockedCosmetics),
+  activeTheme: user.gamification?.activeTheme ?? "midnight",
+  subjectCount: user._count.subjects,
+  sessionCount: user._count.sessions,
+  feedbackCount: user._count.feedbackItems,
+  chatMessageCount: user._count.chatMessages
+});
+
 const adminUsers = async () => {
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
-    select: {
-      id: true,
-      email: true,
-      displayName: true,
-      createdAt: true,
-      gamification: {
-        select: {
-          totalXp: true,
-          level: true,
-          leaderboardOptIn: true
-        }
-      },
-      _count: {
-        select: {
-          subjects: true,
-          sessions: true,
-          feedbackItems: true,
-          chatMessages: true
-        }
-      }
-    }
+    select: adminUserSelect
   });
 
-  return users.map((user) => ({
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    createdAt: user.createdAt,
-    level: user.gamification?.level ?? 1,
-    totalXp: user.gamification?.totalXp ?? 0,
-    leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,
-    subjectCount: user._count.subjects,
-    sessionCount: user._count.sessions,
-    feedbackCount: user._count.feedbackItems,
-    chatMessageCount: user._count.chatMessages
-  }));
+  return users.map(serialiseAdminUser);
+};
+
+const adminUserById = async (id: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: adminUserSelect
+  });
+
+  return user ? serialiseAdminUser(user) : null;
 };
 
 const chatAllowanceFor = async (userId: string) => {
@@ -278,5 +325,29 @@ communityRouter.delete(
 
     await prisma.communityChatMessage.delete({ where: { id } });
     res.status(204).send();
+  })
+);
+
+communityRouter.post(
+  "/users/:id/gifts/theme",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const userId = z.string().uuid().parse(req.params.id);
+    const payload = giftThemeSchema.parse(req.body);
+    const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!existing) {
+      throw new HttpError(404, "User not found");
+    }
+
+    try {
+      await grantThemeToUser(userId, payload.themeId, payload.equip);
+    } catch (error) {
+      throw new HttpError(error instanceof Error && error.message === "Theme not found" ? 404 : 400, error instanceof Error ? error.message : "Could not gift theme");
+    }
+
+    const user = await adminUserById(userId);
+    res.json({ user });
   })
 );

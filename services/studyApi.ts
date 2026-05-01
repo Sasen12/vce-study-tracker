@@ -175,6 +175,11 @@ export const studyApi = {
       body
     }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
+  giftTheme: (userId: string, body: { themeId: string; equip?: boolean }) =>
+    apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/theme`, {
+      method: "POST",
+      body
+    }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>

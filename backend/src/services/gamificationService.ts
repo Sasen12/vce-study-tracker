@@ -307,6 +307,22 @@ export const applyTheme = async (userId: string, themeId: string) => {
   });
 };
 
+export const grantThemeToUser = async (userId: string, themeId: string, equip = true) => {
+  const theme = themeById(themeId);
+  if (!theme) throw new Error("Theme not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlockedCosmetics = mergeCosmetics(gamification.unlockedCosmetics, [theme.id]);
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      unlockedCosmetics,
+      activeTheme: equip ? theme.id : gamification.activeTheme
+    }
+  });
+};
+
 export const awardGoalBadges = async (userId: string) => {
   const [subjectsCount, goalsCount, gamification] = await Promise.all([
     prisma.userSubject.count({ where: { userId } }),

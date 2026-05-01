@@ -139,7 +139,10 @@ export type CommunityUserSummary = {
   createdAt: string;
   level: number;
   totalXp: number;
+  xpBalance: number;
   leaderboardOptIn: boolean;
+  unlockedCosmetics: string[];
+  activeTheme: string;
   subjectCount: number;
   sessionCount: number;
   feedbackCount: number;

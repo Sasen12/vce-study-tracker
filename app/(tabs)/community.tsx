@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Button, IconButton, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
-import { palette } from "@/constants/theme";
+import { palette, themeShopItems } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
 import type { ChatAllowance, CommunityChatMessage, CommunityUserSummary, LeaderboardEntry, UserFeedback } from "@/types";
@@ -38,6 +38,15 @@ const formatWeekRange = (start?: string, end?: string) => {
   endDate.setDate(endDate.getDate() - 1);
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 };
+
+const themeNameById = (themeId?: string | null) =>
+  themeShopItems.find((theme) => theme.id === themeId)?.name ?? "Midnight Focus";
+
+const firstGiftThemeFor = (user: CommunityUserSummary) =>
+  themeShopItems.find((theme) => theme.id === "cherry_blossom" && !user.unlockedCosmetics.includes(theme.id))?.id ??
+  themeShopItems.find((theme) => theme.price > 0 && !user.unlockedCosmetics.includes(theme.id))?.id ??
+  user.activeTheme ??
+  "midnight";
 
 function ChatBubble({
   item,
@@ -122,10 +131,14 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
 }
 
 function UserRow({
-  item
+  item,
+  onGiftTheme
 }: {
   item: CommunityUserSummary;
+  onGiftTheme: (user: CommunityUserSummary) => void;
 }) {
+  const unlockedThemeCount = themeShopItems.filter((theme) => item.unlockedCosmetics.includes(theme.id)).length;
+
   return (
     <View style={styles.userItem}>
       <View style={styles.userTop}>
@@ -140,6 +153,19 @@ function UserRow({
         <View style={[styles.optInPill, item.leaderboardOptIn ? styles.optInPillActive : styles.optInPillMuted]}>
           <Text style={styles.optInText}>{item.leaderboardOptIn ? "Opted in" : "Opted out"}</Text>
         </View>
+      </View>
+      <View style={styles.giftRow}>
+        <View style={styles.flexText}>
+          <Text style={styles.userThemeText} numberOfLines={1}>
+            Active theme: {themeNameById(item.activeTheme)}
+          </Text>
+          <Text style={styles.mutedSmall}>
+            {unlockedThemeCount}/{themeShopItems.length} themes unlocked
+          </Text>
+        </View>
+        <Button mode="outlined" compact icon="gift-outline" onPress={() => onGiftTheme(item)}>
+          Gift theme
+        </Button>
       </View>
       <View style={styles.userStats}>
         <Text style={styles.userStat}>Level {item.level}</Text>
@@ -171,6 +197,9 @@ export default function CommunityScreen() {
   const [chatMessage, setChatMessage] = useState("");
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [giftUser, setGiftUser] = useState<CommunityUserSummary | null>(null);
+  const [giftThemeId, setGiftThemeId] = useState("cherry_blossom");
+  const [gifting, setGifting] = useState(false);
 
   const loadCommunity = useCallback(async () => {
     setError(null);
@@ -262,6 +291,30 @@ export default function CommunityScreen() {
     }
   };
 
+  const openGiftTheme = (user: CommunityUserSummary) => {
+    setError(null);
+    setNotice(null);
+    setGiftUser(user);
+    setGiftThemeId(firstGiftThemeFor(user));
+  };
+
+  const sendThemeGift = async () => {
+    if (!giftUser) return;
+    setGifting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.giftTheme(giftUser.id, { themeId: giftThemeId, equip: true });
+      setUsers((current) => current.map((user) => (user.id === data.user.id ? data.user : user)));
+      setGiftUser(data.user);
+      setNotice(`Gifted ${themeNameById(giftThemeId)} to ${data.user.displayName}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not gift theme");
+    } finally {
+      setGifting(false);
+    }
+  };
+
   const leaderboardEntries = leaderboard?.entries ?? [];
   const topThree = leaderboardEntries.slice(0, 3);
   const viewerRank = leaderboard?.viewer?.rank;
@@ -311,7 +364,7 @@ export default function CommunityScreen() {
           {users.length ? (
             <View style={styles.list}>
               {users.map((item) => (
-                <UserRow key={item.id} item={item} />
+                <UserRow key={item.id} item={item} onGiftTheme={openGiftTheme} />
               ))}
             </View>
           ) : (
@@ -498,6 +551,52 @@ export default function CommunityScreen() {
           </AppCard>
         </>
       )}
+      <Portal>
+        <Dialog visible={Boolean(giftUser)} onDismiss={() => setGiftUser(null)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Gift theme</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.muted}>
+              {giftUser ? `Grant and equip a free theme for ${giftUser.displayName}. No coins will be deducted.` : ""}
+            </Text>
+            <ScrollView style={styles.themePicker} contentContainerStyle={styles.themePickerContent}>
+              {themeShopItems.map((theme) => {
+                const selected = giftThemeId === theme.id;
+                const unlocked = Boolean(giftUser?.unlockedCosmetics.includes(theme.id));
+                const active = giftUser?.activeTheme === theme.id;
+                return (
+                  <Pressable
+                    key={theme.id}
+                    onPress={() => setGiftThemeId(theme.id)}
+                    style={[styles.themeOption, selected && styles.themeOptionSelected]}
+                  >
+                    <View style={[styles.themeSwatch, { backgroundColor: theme.colors.background }]}>
+                      <View style={[styles.themeSwatchLine, { backgroundColor: theme.colors.primary }]} />
+                      <View style={[styles.themeSwatchLineShort, { backgroundColor: theme.colors.secondary }]} />
+                    </View>
+                    <View style={styles.flexText}>
+                      <Text style={styles.themeOptionName} numberOfLines={1}>
+                        {theme.name}
+                      </Text>
+                      <Text style={styles.themeOptionMeta} numberOfLines={1}>
+                        {active ? "Active now" : unlocked ? "Already unlocked" : `${theme.price} coins in shop`}
+                      </Text>
+                    </View>
+                    {selected ? <MaterialCommunityIcons name="check-circle" color={palette.primary} size={20} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={gifting} onPress={() => setGiftUser(null)}>
+              Close
+            </Button>
+            <Button mode="contained" icon="gift-outline" loading={gifting} disabled={gifting || !giftUser} onPress={sendThemeGift}>
+              Gift + equip
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }
@@ -530,6 +629,17 @@ const styles = StyleSheet.create({
   },
   notice: {
     color: palette.success
+  },
+  dialog: {
+    backgroundColor: palette.surface,
+    borderRadius: 8
+  },
+  dialogTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  dialogContent: {
+    gap: 12
   },
   formCard: {
     gap: 12
@@ -642,6 +752,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
+  },
+  giftRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 8
+  },
+  userThemeText: {
+    color: palette.text,
+    lineHeight: 20
   },
   userStat: {
     color: palette.text,
@@ -808,5 +931,53 @@ const styles = StyleSheet.create({
   chatText: {
     color: palette.text,
     lineHeight: 20
+  },
+  themePicker: {
+    maxHeight: 380
+  },
+  themePickerContent: {
+    gap: 8,
+    paddingRight: 4
+  },
+  themeOption: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10
+  },
+  themeOptionSelected: {
+    borderColor: palette.primary,
+    backgroundColor: `${palette.primary}16`
+  },
+  themeSwatch: {
+    width: 44,
+    height: 38,
+    borderRadius: 8,
+    justifyContent: "flex-end",
+    gap: 4,
+    padding: 7
+  },
+  themeSwatchLine: {
+    width: "78%",
+    height: 4,
+    borderRadius: 4
+  },
+  themeSwatchLineShort: {
+    width: "48%",
+    height: 4,
+    borderRadius: 4
+  },
+  themeOptionName: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  themeOptionMeta: {
+    color: palette.muted,
+    fontSize: 12
   }
 });
