@@ -18,7 +18,7 @@ import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { studyApi } from "@/services/studyApi";
-import type { DailyInspiration, StudyEvent, UserSubject } from "@/types";
+import type { DailyInspiration, StudyEvent, UserGiftMessage, UserSubject } from "@/types";
 import { isStudyTimeEvent } from "@/utils/studyEvents";
 
 const dateKey = (value: string | Date) => (typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10));
@@ -82,6 +82,7 @@ export default function DashboardScreen() {
   } = useAppStore();
   const [quickSubjectId, setQuickSubjectId] = useState<string | null>(null);
   const [dailyInspiration, setDailyInspiration] = useState<DailyInspiration>(fallbackDailyInspiration);
+  const [giftMessages, setGiftMessages] = useState<UserGiftMessage[]>([]);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
@@ -93,6 +94,12 @@ export default function DashboardScreen() {
         .dailyInspiration()
         .then(({ inspiration }) => {
           if (active) setDailyInspiration(inspiration);
+        })
+        .catch(() => undefined);
+      studyApi
+        .giftMessages()
+        .then(({ gifts }) => {
+          if (active) setGiftMessages(gifts.filter((gift) => !gift.readAt));
         })
         .catch(() => undefined);
 
@@ -247,6 +254,15 @@ export default function DashboardScreen() {
     }
   };
 
+  const dismissGiftMessage = async (id: string) => {
+    setGiftMessages((current) => current.filter((gift) => gift.id !== id));
+    try {
+      await studyApi.markGiftMessageRead(id);
+    } catch {
+      // The message can safely stay dismissed locally; it will retry on next login if the server update failed.
+    }
+  };
+
   if (loading && !stats) {
     return (
       <Screen>
@@ -268,6 +284,23 @@ export default function DashboardScreen() {
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {giftMessages.map((gift) => (
+        <Animated.View key={gift.id} entering={motion.card(16)}>
+          <AppCard style={styles.giftCard}>
+            <View style={styles.giftIcon}>
+              <MaterialCommunityIcons name="gift-outline" color={palette.warning} size={22} />
+            </View>
+            <View style={styles.giftText}>
+              <Text style={styles.giftTitle}>{gift.title}</Text>
+              <Text style={styles.giftBody}>{gift.message}</Text>
+            </View>
+            <Button mode="outlined" compact onPress={() => dismissGiftMessage(gift.id)}>
+              Nice
+            </Button>
+          </AppCard>
+        </Animated.View>
+      ))}
 
       {showThemeRequestThankYou ? (
         <Animated.View entering={motion.card(18)}>
@@ -497,6 +530,35 @@ const styles = StyleSheet.create({
   },
   error: {
     color: palette.secondary
+  },
+  giftCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderColor: "rgba(245,158,11,0.24)",
+    backgroundColor: "rgba(245,158,11,0.08)"
+  },
+  giftIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,158,11,0.14)"
+  },
+  giftText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4
+  },
+  giftTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  giftBody: {
+    color: palette.text,
+    lineHeight: 20
   },
   thankYouCard: {
     flexDirection: "row",

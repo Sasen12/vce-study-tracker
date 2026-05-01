@@ -3,7 +3,18 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
-import { applyTheme, ensureGamification, syncAllBadges, THEME_SHOP_ITEMS, unlockTheme } from "../services/gamificationService.js";
+import {
+  applyTheme,
+  applyTitle,
+  BADGE_SHOP_ITEMS,
+  ensureGamification,
+  syncAllBadges,
+  THEME_SHOP_ITEMS,
+  TITLE_SHOP_ITEMS,
+  unlockBadge,
+  unlockTheme,
+  unlockTitle
+} from "../services/gamificationService.js";
 
 export const gamificationRouter = Router();
 gamificationRouter.use(requireAuth);
@@ -36,7 +47,8 @@ const buildWeeklyLeaderboard = async (viewerUserId: string) => {
       gamification: {
         select: {
           totalXp: true,
-          level: true
+          level: true,
+          activeTitle: true
         }
       },
       sessions: {
@@ -63,6 +75,7 @@ const buildWeeklyLeaderboard = async (viewerUserId: string) => {
         displayName: participant.displayName,
         totalXp: participant.gamification?.totalXp ?? 0,
         level: participant.gamification?.level ?? 1,
+        activeTitle: participant.gamification?.activeTitle ?? "year_12_rookie",
         weekXp,
         weekMinutes: Math.round(weekSeconds / 60),
         sessionCount: participant.sessions.length,
@@ -134,7 +147,7 @@ gamificationRouter.post(
 gamificationRouter.get(
   "/shop",
   asyncHandler(async (_req, res) => {
-    res.json({ items: THEME_SHOP_ITEMS });
+    res.json({ items: THEME_SHOP_ITEMS, themes: THEME_SHOP_ITEMS, titles: TITLE_SHOP_ITEMS, badges: BADGE_SHOP_ITEMS });
   })
 );
 
@@ -160,6 +173,45 @@ gamificationRouter.post(
       res.json({ gamification });
     } catch (error) {
       throw new HttpError(error instanceof Error && error.message === "Theme not found" ? 404 : 400, error instanceof Error ? error.message : "Could not apply theme");
+    }
+  })
+);
+
+gamificationRouter.post(
+  "/titles/:titleId/unlock",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const gamification = await unlockTitle(authReq.user.id, req.params.titleId);
+      res.json({ gamification });
+    } catch (error) {
+      throw new HttpError(error instanceof Error && error.message === "Title not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock title");
+    }
+  })
+);
+
+gamificationRouter.post(
+  "/titles/:titleId/apply",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const gamification = await applyTitle(authReq.user.id, req.params.titleId);
+      res.json({ gamification });
+    } catch (error) {
+      throw new HttpError(error instanceof Error && error.message === "Title not found" ? 404 : 400, error instanceof Error ? error.message : "Could not apply title");
+    }
+  })
+);
+
+gamificationRouter.post(
+  "/badges/:badgeId/unlock",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const gamification = await unlockBadge(authReq.user.id, req.params.badgeId);
+      res.json({ gamification });
+    } catch (error) {
+      throw new HttpError(error instanceof Error && error.message === "Badge not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock badge");
     }
   })
 );

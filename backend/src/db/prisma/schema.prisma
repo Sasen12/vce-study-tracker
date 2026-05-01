@@ -27,6 +27,7 @@ model User {
   plans          AdaptiveStudyPlan[]
   feedbackItems  UserFeedback[]
   chatMessages   CommunityChatMessage[]
+  giftMessages   UserGiftMessage[]
 
   @@map("users")
 }
@@ -117,6 +118,7 @@ model UserGamification {
   badges            Json      @default("[]")
   unlockedCosmetics Json      @default("[\"midnight\"]") @map("unlocked_cosmetics")
   activeTheme       String    @default("midnight") @map("active_theme")
+  activeTitle       String    @default("year_12_rookie") @map("active_title")
   leaderboardOptIn  Boolean   @default(false) @map("leaderboard_opt_in")
   leaderboardPromptedAt DateTime? @map("leaderboard_prompted_at") @db.Timestamptz(6)
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -238,4 +240,20 @@ model CommunityChatMessage {
   @@index([createdAt])
   @@index([userId, createdAt])
   @@map("community_chat_messages")
+}
+
+model UserGiftMessage {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  title     String
+  message   String
+  giftType  String    @map("gift_type")
+  giftId    String    @map("gift_id")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("user_gift_messages")
 }

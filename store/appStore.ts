@@ -134,6 +134,9 @@ type AppState = {
   setLeaderboardPreference: (optIn: boolean) => Promise<void>;
   unlockTheme: (themeId: string) => Promise<void>;
   applyTheme: (themeId: string) => Promise<void>;
+  unlockTitle: (titleId: string) => Promise<void>;
+  applyTitle: (titleId: string) => Promise<void>;
+  unlockBadge: (badgeId: string) => Promise<void>;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -342,6 +345,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   applyTheme: async (themeId) => {
     const data = await studyApi.applyTheme(themeId);
+    set({ gamification: data.gamification });
+  },
+  unlockTitle: async (titleId) => {
+    const data = await studyApi.unlockTitle(titleId);
+    set({ gamification: data.gamification });
+  },
+  applyTitle: async (titleId) => {
+    const data = await studyApi.applyTitle(titleId);
+    set({ gamification: data.gamification });
+  },
+  unlockBadge: async (badgeId) => {
+    const data = await studyApi.unlockBadge(badgeId);
     set({ gamification: data.gamification });
   }
 }));

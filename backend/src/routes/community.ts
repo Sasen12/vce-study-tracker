@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
-import { grantThemeToUser } from "../services/gamificationService.js";
+import { grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const communityRouter = Router();
@@ -85,7 +85,8 @@ const adminUserSelect = {
       level: true,
       leaderboardOptIn: true,
       unlockedCosmetics: true,
-      activeTheme: true
+      activeTheme: true,
+      activeTitle: true
     }
   },
   _count: {
@@ -113,6 +114,7 @@ const serialiseAdminUser = (user: {
     leaderboardOptIn: boolean;
     unlockedCosmetics: unknown;
     activeTheme: string;
+    activeTitle: string;
   } | null;
   _count: {
     subjects: number;
@@ -131,6 +133,7 @@ const serialiseAdminUser = (user: {
   leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,
   unlockedCosmetics: cosmeticsAsArray(user.gamification?.unlockedCosmetics),
   activeTheme: user.gamification?.activeTheme ?? "midnight",
+  activeTitle: user.gamification?.activeTitle ?? "year_12_rookie",
   subjectCount: user._count.subjects,
   sessionCount: user._count.sessions,
   feedbackCount: user._count.feedbackItems,
@@ -237,6 +240,24 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
   return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance, users };
 };
 
+const serialiseGiftMessage = (gift: {
+  id: string;
+  title: string;
+  message: string;
+  giftType: string;
+  giftId: string;
+  readAt: Date | null;
+  createdAt: Date;
+}) => ({
+  id: gift.id,
+  title: gift.title,
+  message: gift.message,
+  giftType: gift.giftType,
+  giftId: gift.giftId,
+  readAt: gift.readAt,
+  createdAt: gift.createdAt
+});
+
 communityRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -267,6 +288,38 @@ communityRouter.post(
       }
     });
     res.status(201).json({ feedback: serialiseFeedback(feedback, isAdminEmail(authReq.user.email)) });
+  })
+);
+
+communityRouter.get(
+  "/gifts",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const gifts = await prisma.userGiftMessage.findMany({
+      where: { userId: authReq.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    });
+
+    res.json({ gifts: gifts.map(serialiseGiftMessage) });
+  })
+);
+
+communityRouter.patch(
+  "/gifts/:id/read",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const id = z.string().uuid().parse(req.params.id);
+    const gift = await prisma.userGiftMessage.findFirst({ where: { id, userId: authReq.user.id } });
+    if (!gift) {
+      throw new HttpError(404, "Gift message not found");
+    }
+
+    const updated = await prisma.userGiftMessage.update({
+      where: { id },
+      data: { readAt: new Date() }
+    });
+    res.json({ gift: serialiseGiftMessage(updated) });
   })
 );
 
@@ -346,6 +399,17 @@ communityRouter.post(
     } catch (error) {
       throw new HttpError(error instanceof Error && error.message === "Theme not found" ? 404 : 400, error instanceof Error ? error.message : "Could not gift theme");
     }
+
+    const theme = THEME_SHOP_ITEMS.find((item) => item.id === payload.themeId);
+    await prisma.userGiftMessage.create({
+      data: {
+        userId,
+        title: "You received a theme gift",
+        message: `Sasen gifted you ${theme?.name ?? "a new theme"}. It has been unlocked${payload.equip ? " and equipped" : ""} for free.`,
+        giftType: "theme",
+        giftId: payload.themeId
+      }
+    });
 
     const user = await adminUserById(userId);
     res.json({ user });

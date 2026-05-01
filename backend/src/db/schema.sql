@@ -69,6 +69,7 @@ CREATE TABLE user_gamification (
   badges JSONB DEFAULT '[]',
   unlocked_cosmetics JSONB DEFAULT '["midnight"]',
   active_theme TEXT DEFAULT 'midnight',
+  active_title TEXT DEFAULT 'year_12_rookie',
   leaderboard_opt_in BOOLEAN DEFAULT FALSE,
   leaderboard_prompted_at TIMESTAMPTZ
 );
@@ -162,3 +163,17 @@ CREATE INDEX user_feedback_user_created_idx ON user_feedback(user_id, created_at
 CREATE INDEX user_feedback_created_idx ON user_feedback(created_at);
 CREATE INDEX community_chat_messages_created_idx ON community_chat_messages(created_at);
 CREATE INDEX community_chat_messages_user_created_idx ON community_chat_messages(user_id, created_at);
+
+CREATE TABLE user_gift_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  gift_type TEXT NOT NULL,
+  gift_id TEXT NOT NULL,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX user_gift_messages_user_created_idx ON user_gift_messages(user_id, created_at);
+CREATE INDEX user_gift_messages_user_read_idx ON user_gift_messages(user_id, read_at);

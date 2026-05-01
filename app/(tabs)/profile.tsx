@@ -9,6 +9,7 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { XPBar } from "@/components/gamification/XPBar";
 import { BadgeGrid } from "@/components/gamification/BadgeGrid";
+import { titleLabelById } from "@/constants/gamification";
 import { subjectColors, palette } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { useAppStore } from "@/store/appStore";
@@ -538,6 +539,7 @@ export default function ProfileScreen() {
           <Text variant="headlineLarge" style={styles.title}>
             {user?.displayName ?? "Student"}
           </Text>
+          <Text style={styles.activeTitle}>{titleLabelById(gamification?.activeTitle)}</Text>
         </View>
         <Button mode="outlined" icon="logout" onPress={signOut}>
           Log out
@@ -700,6 +702,11 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  activeTitle: {
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold",
+    marginTop: 4
   },
   cardTitle: {
     color: palette.text,

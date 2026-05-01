@@ -1,18 +1,22 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Button, Text } from "react-native-paper";
+import { Button, SegmentedButtons, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
+import { BADGE_SHOP_ITEMS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 
+type ShopMode = "themes" | "titles" | "badges";
+
 export default function ShopScreen() {
-  const { gamification, loading, fetchAll, unlockTheme, applyTheme } = useAppStore();
+  const { gamification, loading, fetchAll, unlockTheme, applyTheme, unlockTitle, applyTitle, unlockBadge } = useAppStore();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shopError, setShopError] = useState<string | null>(null);
+  const [mode, setMode] = useState<ShopMode>("themes");
 
   useFocusEffect(
     useCallback(() => {
@@ -22,11 +26,15 @@ export default function ShopScreen() {
 
   const xpBalance = gamification?.xpBalance ?? 0;
   const activeTheme = gamification?.activeTheme ?? "midnight";
+  const activeTitle = gamification?.activeTitle ?? "year_12_rookie";
   const unlocked = useMemo(
-    () => new Set(["midnight", ...(gamification?.unlockedCosmetics ?? [])]),
+    () => new Set(["midnight", "title:year_12_rookie", ...(gamification?.unlockedCosmetics ?? [])]),
     [gamification?.unlockedCosmetics]
   );
+  const badges = useMemo(() => new Set(gamification?.badges ?? []), [gamification?.badges]);
   const unlockedCount = themeShopItems.filter((theme) => unlocked.has(theme.id)).length;
+  const titleCount = TITLE_SHOP_ITEMS.filter((title) => unlocked.has(`title:${title.id}`)).length;
+  const badgeCount = BADGE_SHOP_ITEMS.filter((badge) => badges.has(badge.id)).length;
 
   const chooseTheme = async (themeId: string, isUnlocked: boolean) => {
     setBusyId(themeId);
@@ -39,6 +47,34 @@ export default function ShopScreen() {
       }
     } catch (error) {
       setShopError(error instanceof Error ? error.message : "Could not update theme");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const chooseTitle = async (titleId: string, isUnlocked: boolean) => {
+    setBusyId(`title:${titleId}`);
+    setShopError(null);
+    try {
+      if (isUnlocked) {
+        await applyTitle(titleId);
+      } else {
+        await unlockTitle(titleId);
+      }
+    } catch (error) {
+      setShopError(error instanceof Error ? error.message : "Could not update title");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const chooseBadge = async (badgeId: string) => {
+    setBusyId(`badge:${badgeId}`);
+    setShopError(null);
+    try {
+      await unlockBadge(badgeId);
+    } catch (error) {
+      setShopError(error instanceof Error ? error.message : "Could not unlock badge");
     } finally {
       setBusyId(null);
     }
@@ -70,18 +106,39 @@ export default function ShopScreen() {
       <AppCard style={styles.summaryCard}>
         <View style={styles.summaryTop}>
           <View style={styles.summaryIcon}>
-            <MaterialCommunityIcons name="palette-swatch-outline" color={palette.primary} size={24} />
+            <MaterialCommunityIcons
+              name={mode === "themes" ? "palette-swatch-outline" : mode === "titles" ? "tag-text-outline" : "medal-outline"}
+              color={palette.primary}
+              size={24}
+            />
           </View>
           <View style={styles.flexText}>
-            <Text style={styles.cardTitle}>Theme unlocks</Text>
+            <Text style={styles.cardTitle}>
+              {mode === "themes" ? "Theme unlocks" : mode === "titles" ? "Profile titles" : "Collectible badges"}
+            </Text>
             <Text style={styles.muted}>
-              {unlockedCount}/{themeShopItems.length} unlocked
+              {mode === "themes"
+                ? `${unlockedCount}/${themeShopItems.length} unlocked`
+                : mode === "titles"
+                  ? `${titleCount}/${TITLE_SHOP_ITEMS.length} unlocked`
+                  : `${badgeCount}/${BADGE_SHOP_ITEMS.length} collected`}
             </Text>
           </View>
         </View>
       </AppCard>
 
-      <View style={styles.themeGrid}>
+      <SegmentedButtons
+        value={mode}
+        onValueChange={(value) => setMode(value as ShopMode)}
+        buttons={[
+          { value: "themes", label: "Themes", icon: "palette-outline" },
+          { value: "titles", label: "Titles", icon: "tag-text-outline" },
+          { value: "badges", label: "Badges", icon: "medal-outline" }
+        ]}
+      />
+
+      {mode === "themes" ? (
+        <View style={styles.themeGrid}>
         {themeShopItems.map((theme) => {
           const isUnlocked = unlocked.has(theme.id);
           const isActive = activeTheme === theme.id;
@@ -138,7 +195,87 @@ export default function ShopScreen() {
             </View>
           );
         })}
-      </View>
+        </View>
+      ) : null}
+
+      {mode === "titles" ? (
+        <View style={styles.itemList}>
+          {TITLE_SHOP_ITEMS.map((title) => {
+            const isUnlocked = unlocked.has(`title:${title.id}`);
+            const isActive = activeTitle === title.id;
+            const canAfford = xpBalance >= title.price;
+            const loadingTitle = busyId === `title:${title.id}`;
+            const actionLabel = isActive
+              ? "Equipped"
+              : isUnlocked
+                ? "Use"
+                : canAfford
+                  ? "Unlock"
+                  : `${title.price - xpBalance} more`;
+
+            return (
+              <AppCard key={title.id} style={[styles.shopItemCard, isActive && styles.shopItemCardActive]}>
+                <View style={styles.shopItemTop}>
+                  <View style={styles.shopItemIcon}>
+                    <MaterialCommunityIcons name="tag-text-outline" color={palette.primary} size={22} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.shopItemTitle}>{title.label}</Text>
+                    <Text style={styles.muted}>{title.description}</Text>
+                    <Text style={styles.themePrice}>{title.price ? `${title.price} coins` : "Starter"}</Text>
+                  </View>
+                </View>
+                <Button
+                  mode={isActive ? "outlined" : "contained"}
+                  compact
+                  loading={loadingTitle}
+                  disabled={loadingTitle || isActive || (!isUnlocked && !canAfford)}
+                  icon={isUnlocked ? "tag-outline" : "lock-open-outline"}
+                  onPress={() => chooseTitle(title.id, isUnlocked)}
+                >
+                  {actionLabel}
+                </Button>
+              </AppCard>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {mode === "badges" ? (
+        <View style={styles.itemList}>
+          {BADGE_SHOP_ITEMS.map((badge) => {
+            const isUnlocked = badges.has(badge.id);
+            const canAfford = xpBalance >= badge.price;
+            const loadingBadge = busyId === `badge:${badge.id}`;
+            const actionLabel = isUnlocked ? "Collected" : canAfford ? "Unlock" : `${badge.price - xpBalance} more`;
+
+            return (
+              <AppCard key={badge.id} style={[styles.shopItemCard, isUnlocked && styles.shopItemCardActive]}>
+                <View style={styles.shopItemTop}>
+                  <View style={styles.shopItemIcon}>
+                    <MaterialCommunityIcons name={isUnlocked ? "medal" : "medal-outline"} color={palette.warning} size={22} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.shopItemTitle}>{badge.label}</Text>
+                    <Text style={styles.muted}>{badge.description}</Text>
+                    <Text style={styles.themePrice}>{badge.price} coins</Text>
+                  </View>
+                </View>
+                <Button
+                  mode={isUnlocked ? "outlined" : "contained"}
+                  compact
+                  loading={loadingBadge}
+                  disabled={loadingBadge || isUnlocked || !canAfford}
+                  icon={isUnlocked ? "check" : "lock-open-outline"}
+                  onPress={() => chooseBadge(badge.id)}
+                >
+                  {actionLabel}
+                </Button>
+              </AppCard>
+            );
+          })}
+        </View>
+      ) : null}
 
       {shopError ? <Text style={styles.errorText}>{shopError}</Text> : null}
     </Screen>
@@ -259,7 +396,36 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   themePrice: {
+    color: palette.muted,
     fontSize: 12
+  },
+  itemList: {
+    gap: 10
+  },
+  shopItemCard: {
+    gap: 12
+  },
+  shopItemCardActive: {
+    borderColor: `${palette.primary}66`,
+    backgroundColor: `${palette.primary}10`
+  },
+  shopItemTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  shopItemIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.primary}18`
+  },
+  shopItemTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
   },
   errorText: {
     color: palette.secondary,

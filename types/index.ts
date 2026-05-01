@@ -72,6 +72,7 @@ export type Gamification = {
   badges: string[];
   unlockedCosmetics: string[];
   activeTheme: string;
+  activeTitle: string;
   leaderboardOptIn: boolean;
   leaderboardPromptedAt?: string | null;
 };
@@ -82,6 +83,7 @@ export type LeaderboardEntry = {
   displayName: string;
   totalXp: number;
   level: number;
+  activeTitle: string;
   weekXp: number;
   weekMinutes: number;
   sessionCount: number;
@@ -143,10 +145,21 @@ export type CommunityUserSummary = {
   leaderboardOptIn: boolean;
   unlockedCosmetics: string[];
   activeTheme: string;
+  activeTitle: string;
   subjectCount: number;
   sessionCount: number;
   feedbackCount: number;
   chatMessageCount: number;
+};
+
+export type UserGiftMessage = {
+  id: string;
+  title: string;
+  message: string;
+  giftType: string;
+  giftId: string;
+  readAt?: string | null;
+  createdAt: string;
 };
 
 export type ThemeShopItem = {
@@ -159,6 +172,20 @@ export type ThemeShopItem = {
     background: string;
     surface: string;
   };
+};
+
+export type TitleShopItem = {
+  id: string;
+  label: string;
+  price: number;
+  description: string;
+};
+
+export type BadgeShopItem = {
+  id: string;
+  label: string;
+  price: number;
+  description: string;
 };
 
 export type GeneratedQuestion = {

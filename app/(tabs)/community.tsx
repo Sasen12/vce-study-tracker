@@ -7,6 +7,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
+import { titleLabelById } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
@@ -122,7 +123,7 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
           {entry.displayName}
         </Text>
         <Text style={styles.muted} numberOfLines={1}>
-          {entry.weekMinutes} min - {entry.sessionCount} sessions - level {entry.level}
+          {titleLabelById(entry.activeTitle)} - {entry.weekMinutes} min - {entry.sessionCount} sessions
         </Text>
       </View>
       <Text style={styles.leaderboardXp}>{entry.weekXp} XP</Text>
@@ -169,6 +170,7 @@ function UserRow({
       </View>
       <View style={styles.userStats}>
         <Text style={styles.userStat}>Level {item.level}</Text>
+        <Text style={styles.userStat}>{titleLabelById(item.activeTitle)}</Text>
         <Text style={styles.userStat}>{item.totalXp} XP</Text>
         <Text style={styles.userStat}>{item.sessionCount} sessions</Text>
         <Text style={styles.userStat}>{item.subjectCount} subjects</Text>
@@ -410,7 +412,7 @@ export default function CommunityScreen() {
                     {entry.displayName}
                   </Text>
                   <Text style={styles.podiumXp}>{entry.weekXp} XP</Text>
-                  <Text style={styles.muted}>{entry.weekMinutes} min</Text>
+                  <Text style={styles.muted}>{titleLabelById(entry.activeTitle)}</Text>
                 </View>
               ))}
             </View>

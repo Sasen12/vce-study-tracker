@@ -21,8 +21,11 @@ import type {
   StudyResource,
   StudySession,
   ThemeShopItem,
+  TitleShopItem,
+  BadgeShopItem,
   EventRecurrence,
   EventType,
+  UserGiftMessage,
   UserSubject
 } from "@/types";
 
@@ -167,6 +170,9 @@ export const studyApi = {
       allowance: ChatAllowance;
       users: CommunityUserSummary[];
     }>("/community"),
+  giftMessages: () => apiFetch<{ gifts: UserGiftMessage[] }>("/community/gifts"),
+  markGiftMessageRead: (id: string) =>
+    apiFetch<{ gift: UserGiftMessage }>(`/community/gifts/${id}/read`, { method: "PATCH" }),
   sendFeedback: (body: { category: UserFeedback["category"]; message: string }) =>
     apiFetch<{ feedback: UserFeedback }>("/community/feedback", { method: "POST", body }),
   sendCommunityChat: (body: { message: string }) =>
@@ -187,9 +193,18 @@ export const studyApi = {
       method: "POST",
       body: { optIn }
     }),
-  themeShop: () => apiFetch<{ items: ThemeShopItem[] }>("/gamification/shop"),
+  themeShop: () =>
+    apiFetch<{ items: ThemeShopItem[]; themes: ThemeShopItem[]; titles: TitleShopItem[]; badges: BadgeShopItem[] }>(
+      "/gamification/shop"
+    ),
   unlockTheme: (themeId: string) =>
     apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/unlock`, { method: "POST" }),
   applyTheme: (themeId: string) =>
-    apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/apply`, { method: "POST" })
+    apiFetch<{ gamification: Gamification }>(`/gamification/themes/${themeId}/apply`, { method: "POST" }),
+  unlockTitle: (titleId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/titles/${titleId}/unlock`, { method: "POST" }),
+  applyTitle: (titleId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/titles/${titleId}/apply`, { method: "POST" }),
+  unlockBadge: (badgeId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/badges/${badgeId}/unlock`, { method: "POST" })
 };

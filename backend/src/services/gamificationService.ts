@@ -13,6 +13,7 @@ export const LEVELS = [
 ];
 
 export const DEFAULT_THEME_ID = "midnight";
+export const DEFAULT_TITLE_ID = "year_12_rookie";
 
 export const THEME_SHOP_ITEMS = [
   {
@@ -143,6 +144,78 @@ export const THEME_SHOP_ITEMS = [
   }
 ] as const;
 
+export const TITLE_SHOP_ITEMS = [
+  {
+    id: DEFAULT_TITLE_ID,
+    label: "Year 12 Rookie",
+    price: 0,
+    description: "Starter profile title."
+  },
+  {
+    id: "academic_comeback",
+    label: "Academic Comeback",
+    price: 260,
+    description: "For rebuilding momentum one block at a time."
+  },
+  {
+    id: "deadline_defender",
+    label: "Deadline Defender",
+    price: 360,
+    description: "For students who live by the calendar."
+  },
+  {
+    id: "past_paper_pro",
+    label: "Past Paper Pro",
+    price: 460,
+    description: "For exam-style practice enjoyers."
+  },
+  {
+    id: "focus_keeper",
+    label: "Focus Keeper",
+    price: 560,
+    description: "A quiet flex for consistent study."
+  },
+  {
+    id: "sac_ready",
+    label: "SAC Ready",
+    price: 640,
+    description: "For going into assessment week prepared."
+  }
+] as const;
+
+export const BADGE_SHOP_ITEMS = [
+  {
+    id: "badge_calm_under_pressure",
+    label: "Calm Under Pressure",
+    price: 220,
+    description: "A collectible badge for steady exam-week energy."
+  },
+  {
+    id: "badge_deadline_defender",
+    label: "Deadline Defender",
+    price: 300,
+    description: "A collectible badge for calendar protectors."
+  },
+  {
+    id: "badge_past_paper_pro",
+    label: "Past Paper Pro",
+    price: 380,
+    description: "A collectible badge for practice exam grinders."
+  },
+  {
+    id: "badge_focus_keeper",
+    label: "Focus Keeper",
+    price: 460,
+    description: "A collectible badge for deep-work sessions."
+  },
+  {
+    id: "badge_comeback_energy",
+    label: "Comeback Energy",
+    price: 540,
+    description: "A collectible badge for turning the term around."
+  }
+] as const;
+
 export type ThemeShopItem = (typeof THEME_SHOP_ITEMS)[number];
 
 export const calculateSessionXp = (durationSeconds: number) => {
@@ -170,7 +243,12 @@ export const ensureGamification = async (userId: string) => {
   const gamification = await prisma.userGamification.upsert({
     where: { userId },
     update: {},
-    create: { userId, unlockedCosmetics: [DEFAULT_THEME_ID], activeTheme: DEFAULT_THEME_ID }
+    create: {
+      userId,
+      unlockedCosmetics: [DEFAULT_THEME_ID, `title:${DEFAULT_TITLE_ID}`],
+      activeTheme: DEFAULT_THEME_ID,
+      activeTitle: DEFAULT_TITLE_ID
+    }
   });
 
   const unlocked = cosmeticsAsArray(gamification.unlockedCosmetics);
@@ -260,6 +338,9 @@ export const recordStudySessionEffects = async (input: {
 };
 
 const themeById = (themeId: string) => THEME_SHOP_ITEMS.find((item) => item.id === themeId);
+const titleById = (titleId: string) => TITLE_SHOP_ITEMS.find((item) => item.id === titleId);
+const badgeById = (badgeId: string) => BADGE_SHOP_ITEMS.find((item) => item.id === badgeId);
+const titleCosmeticId = (titleId: string) => `title:${titleId}`;
 
 export const unlockTheme = async (userId: string, themeId: string) => {
   const theme = themeById(themeId);
@@ -319,6 +400,78 @@ export const grantThemeToUser = async (userId: string, themeId: string, equip = 
     data: {
       unlockedCosmetics,
       activeTheme: equip ? theme.id : gamification.activeTheme
+    }
+  });
+};
+
+export const unlockTitle = async (userId: string, titleId: string) => {
+  const title = titleById(titleId);
+  if (!title) throw new Error("Title not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlocked = mergeCosmetics(gamification.unlockedCosmetics, [titleCosmeticId(DEFAULT_TITLE_ID)]);
+  const cosmeticId = titleCosmeticId(title.id);
+
+  if (unlocked.includes(cosmeticId)) {
+    return prisma.userGamification.update({
+      where: { userId },
+      data: { activeTitle: title.id, unlockedCosmetics: unlocked }
+    });
+  }
+
+  if (gamification.xpBalance < title.price) {
+    throw new Error("Not enough XP coins");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      xpBalance: { decrement: title.price },
+      unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [titleCosmeticId(DEFAULT_TITLE_ID), cosmeticId]),
+      activeTitle: title.id
+    }
+  });
+};
+
+export const applyTitle = async (userId: string, titleId: string) => {
+  const title = titleById(titleId);
+  if (!title) throw new Error("Title not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlocked = mergeCosmetics(gamification.unlockedCosmetics, [titleCosmeticId(DEFAULT_TITLE_ID)]);
+  const cosmeticId = titleCosmeticId(title.id);
+  if (!unlocked.includes(cosmeticId)) {
+    throw new Error("Unlock this title first");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      unlockedCosmetics: unlocked,
+      activeTitle: title.id
+    }
+  });
+};
+
+export const unlockBadge = async (userId: string, badgeId: string) => {
+  const badge = badgeById(badgeId);
+  if (!badge) throw new Error("Badge not found");
+
+  const gamification = await ensureGamification(userId);
+  const badges = mergeBadges(gamification.badges, []);
+  if (badges.includes(badge.id)) {
+    return gamification;
+  }
+
+  if (gamification.xpBalance < badge.price) {
+    throw new Error("Not enough XP coins");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      xpBalance: { decrement: badge.price },
+      badges: mergeBadges(gamification.badges, [badge.id])
     }
   });
 };
