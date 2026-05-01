@@ -18,7 +18,7 @@ import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { studyApi } from "@/services/studyApi";
-import type { DailyInspiration, StudyEvent } from "@/types";
+import type { DailyInspiration, StudyEvent, UserSubject } from "@/types";
 import { isStudyTimeEvent } from "@/utils/studyEvents";
 
 const dateKey = (value: string | Date) => (typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10));
@@ -43,6 +43,18 @@ const eventIconName = (event: StudyEvent): keyof typeof MaterialCommunityIcons.g
   if (event.eventType === "SAC" || event.eventType === "PRACTICE_SAC") return "file-document-edit";
   if (event.eventType === "SAT" || event.eventType === "PRACTICE_SAT") return "clipboard-text-clock";
   return "checkbox-marked-circle-outline";
+};
+
+const normaliseLabel = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const subjectForDeadline = (event: StudyEvent, subjects: UserSubject[]) => {
+  const title = normaliseLabel(event.title);
+  const titleMatch = subjects.find((subject) => {
+    const subjectName = normaliseLabel(subject.subjectName);
+    return Boolean(subjectName) && title.includes(subjectName);
+  });
+
+  return titleMatch ?? event.subject ?? null;
 };
 
 const fallbackDailyInspiration: DailyInspiration = {
@@ -162,6 +174,7 @@ export default function DashboardScreen() {
     Boolean(gamification?.unlockedCosmetics.includes(themeRequestThankYouThemeId));
   const nextBestMove = useMemo(() => {
     const urgentEvent = upcomingEvents.find((event) => daysUntil(event.eventDate) <= 7);
+    const urgentSubject = urgentEvent ? subjectForDeadline(urgentEvent, subjects) : null;
     const weakestSubject = subjects
       .map((subject) => {
         const goal = goals.find((item) => item.subjectId === subject.id);
@@ -182,11 +195,11 @@ export default function DashboardScreen() {
         icon: "calendar-alert",
         title: "Protect the next deadline",
         body: `${urgentEvent.title} is ${countdownLabel(urgentEvent)}. Start with one focused block for ${
-          urgentEvent.subject?.subjectName ?? "that subject"
+          urgentSubject?.subjectName ?? "that deadline"
         }.`,
         action: "Study it",
         route: "study" as const,
-        subjectId: urgentEvent.subjectId ?? quickSubject?.id
+        subjectId: urgentSubject?.id
       };
     }
 
@@ -421,7 +434,7 @@ export default function DashboardScreen() {
                   <Text style={styles.muted} numberOfLines={1}>
                     {isStudyTimeEvent(event)
                       ? `${event.subject?.subjectName ?? "Flexible"} - ${event.startTime}-${event.endTime}`
-                      : `${event.subject?.subjectName ?? "Deleted subject"} - ${countdownLabel(event)}`}
+                      : `${subjectForDeadline(event, subjects)?.subjectName ?? "Deleted subject"} - ${countdownLabel(event)}`}
                   </Text>
                 </View>
               </Pressable>
