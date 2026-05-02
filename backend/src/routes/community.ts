@@ -23,6 +23,9 @@ const giftThemeSchema = z.object({
   equip: z.boolean().default(true)
 });
 
+const LEADERBOARD_INVITE_TITLE = "Weekly leaderboard invite";
+const LEADERBOARD_INVITE_MESSAGE =
+  "Sasen reopened the weekly leaderboard invite. Join from the pop-up or Community > Leaderboard if you want your weekly XP to count.";
 const BASE_CHAT_MINUTES = 3;
 const STUDY_MINUTES_PER_CHAT_MINUTE = 5;
 const MAX_DAILY_CHAT_MINUTES = 60;
@@ -157,6 +160,52 @@ const adminUserById = async (id: string) => {
   });
 
   return user ? serialiseAdminUser(user) : null;
+};
+
+const resendLeaderboardInvite = async () => {
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      email: true,
+      gamification: {
+        select: {
+          leaderboardOptIn: true
+        }
+      }
+    }
+  });
+
+  const targetUserIds = users
+    .filter((user) => !isAdminEmail(user.email) && !user.gamification?.leaderboardOptIn)
+    .map((user) => user.id);
+
+  if (!targetUserIds.length) {
+    return 0;
+  }
+
+  const giftId = `leaderboard_invite_${Date.now()}`;
+  await prisma.$transaction([
+    prisma.userGamification.updateMany({
+      where: {
+        userId: { in: targetUserIds },
+        leaderboardOptIn: false
+      },
+      data: {
+        leaderboardPromptedAt: null
+      }
+    }),
+    prisma.userGiftMessage.createMany({
+      data: targetUserIds.map((userId) => ({
+        userId,
+        title: LEADERBOARD_INVITE_TITLE,
+        message: LEADERBOARD_INVITE_MESSAGE,
+        giftType: "leaderboard",
+        giftId
+      }))
+    })
+  ]);
+
+  return targetUserIds.length;
 };
 
 const chatAllowanceFor = async (userId: string) => {
@@ -320,6 +369,17 @@ communityRouter.patch(
       data: { readAt: new Date() }
     });
     res.json({ gift: serialiseGiftMessage(updated) });
+  })
+);
+
+communityRouter.post(
+  "/leaderboard/resend-invite",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const resentCount = await resendLeaderboardInvite();
+    res.json({ resentCount });
   })
 );
 

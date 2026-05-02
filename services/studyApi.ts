@@ -173,6 +173,8 @@ export const studyApi = {
   giftMessages: () => apiFetch<{ gifts: UserGiftMessage[] }>("/community/gifts"),
   markGiftMessageRead: (id: string) =>
     apiFetch<{ gift: UserGiftMessage }>(`/community/gifts/${id}/read`, { method: "PATCH" }),
+  resendLeaderboardInvite: () =>
+    apiFetch<{ resentCount: number }>("/community/leaderboard/resend-invite", { method: "POST" }),
   sendFeedback: (body: { category: UserFeedback["category"]; message: string }) =>
     apiFetch<{ feedback: UserFeedback }>("/community/feedback", { method: "POST", body }),
   sendCommunityChat: (body: { message: string }) =>

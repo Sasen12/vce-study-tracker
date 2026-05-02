@@ -199,6 +199,7 @@ export default function CommunityScreen() {
   const [chatMessage, setChatMessage] = useState("");
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [resendingLeaderboardInvite, setResendingLeaderboardInvite] = useState(false);
   const [giftUser, setGiftUser] = useState<CommunityUserSummary | null>(null);
   const [giftThemeId, setGiftThemeId] = useState("cherry_blossom");
   const [gifting, setGifting] = useState(false);
@@ -290,6 +291,25 @@ export default function CommunityScreen() {
       setLeaderboardError(error instanceof Error ? error.message : "Could not update leaderboard choice");
     } finally {
       setLeaderboardSaving(false);
+    }
+  };
+
+  const resendLeaderboardInvite = async () => {
+    setResendingLeaderboardInvite(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.resendLeaderboardInvite();
+      setNotice(
+        data.resentCount
+          ? `Leaderboard invite resent to ${data.resentCount} opted-out student${data.resentCount === 1 ? "" : "s"}.`
+          : "Everyone is already opted in."
+      );
+      await loadCommunity();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not resend leaderboard invite");
+    } finally {
+      setResendingLeaderboardInvite(false);
     }
   };
 
@@ -388,14 +408,28 @@ export default function CommunityScreen() {
                     : "Join when you want your weekly XP to count against other opted-in students."}
                 </Text>
               </View>
-              <Button
-                mode={gamification?.leaderboardOptIn ? "outlined" : "contained"}
-                disabled={leaderboardSaving}
-                loading={leaderboardSaving}
-                onPress={() => chooseLeaderboard(!gamification?.leaderboardOptIn)}
-              >
-                {gamification?.leaderboardOptIn ? "Opt out" : "Join"}
-              </Button>
+              <View style={styles.leaderboardActions}>
+                <Button
+                  mode={gamification?.leaderboardOptIn ? "outlined" : "contained"}
+                  disabled={leaderboardSaving}
+                  loading={leaderboardSaving}
+                  onPress={() => chooseLeaderboard(!gamification?.leaderboardOptIn)}
+                >
+                  {gamification?.leaderboardOptIn ? "Opt out" : "Join"}
+                </Button>
+                {isAdmin ? (
+                  <Button
+                    mode="outlined"
+                    icon="send"
+                    compact
+                    disabled={resendingLeaderboardInvite}
+                    loading={resendingLeaderboardInvite}
+                    onPress={resendLeaderboardInvite}
+                  >
+                    Resend invite
+                  </Button>
+                ) : null}
+              </View>
             </View>
             <Text style={styles.muted}>
               {formatWeekRange(leaderboard?.weekStart, leaderboard?.weekEnd)} - shows display name, weekly XP, weekly
@@ -648,6 +682,10 @@ const styles = StyleSheet.create({
   },
   leaderboardStatusCard: {
     gap: 12
+  },
+  leaderboardActions: {
+    alignItems: "flex-end",
+    gap: 8
   },
   flexText: {
     flex: 1,

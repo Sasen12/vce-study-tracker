@@ -66,6 +66,13 @@ const fallbackDailyInspiration: DailyInspiration = {
 const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
 const themeRequestThankYouThemeId = "cherry_blossom";
 
+const messageIconFor = (giftType: string): keyof typeof MaterialCommunityIcons.glyphMap =>
+  giftType === "leaderboard" ? "trophy-outline" : "gift-outline";
+
+const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? palette.warning : palette.warning);
+
+const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : "Nice");
+
 export default function DashboardScreen() {
   const user = useAuthStore((state) => state.user);
   const {
@@ -175,7 +182,9 @@ export default function DashboardScreen() {
   );
 
   const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
-  const leaderboardPromptVisible = Boolean(gamification && gamification.leaderboardPromptedAt == null);
+  const leaderboardPromptVisible = Boolean(
+    gamification && !gamification.leaderboardOptIn && gamification.leaderboardPromptedAt == null
+  );
   const showThemeRequestThankYou =
     user?.email?.trim().toLowerCase() === themeRequestThankYouEmail &&
     Boolean(gamification?.unlockedCosmetics.includes(themeRequestThankYouThemeId));
@@ -289,14 +298,14 @@ export default function DashboardScreen() {
         <Animated.View key={gift.id} entering={motion.card(16)}>
           <AppCard style={styles.giftCard}>
             <View style={styles.giftIcon}>
-              <MaterialCommunityIcons name="gift-outline" color={palette.warning} size={22} />
+              <MaterialCommunityIcons name={messageIconFor(gift.giftType)} color={messageIconColorFor(gift.giftType)} size={22} />
             </View>
             <View style={styles.giftText}>
               <Text style={styles.giftTitle}>{gift.title}</Text>
               <Text style={styles.giftBody}>{gift.message}</Text>
             </View>
             <Button mode="outlined" compact onPress={() => dismissGiftMessage(gift.id)}>
-              Nice
+              {messageActionFor(gift.giftType)}
             </Button>
           </AppCard>
         </Animated.View>
