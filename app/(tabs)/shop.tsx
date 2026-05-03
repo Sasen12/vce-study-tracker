@@ -9,10 +9,12 @@ import { SkeletonStack } from "@/components/ui/Skeleton";
 import { BADGE_SHOP_ITEMS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 
 type ShopMode = "themes" | "titles" | "badges";
 
 export default function ShopScreen() {
+  useTrackScreen("shop");
   const { gamification, loading, fetchAll, unlockTheme, applyTheme, unlockTitle, applyTitle, unlockBadge } = useAppStore();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shopError, setShopError] = useState<string | null>(null);

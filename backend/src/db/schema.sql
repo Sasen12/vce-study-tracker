@@ -177,3 +177,15 @@ CREATE TABLE user_gift_messages (
 
 CREATE INDEX user_gift_messages_user_created_idx ON user_gift_messages(user_id, created_at);
 CREATE INDEX user_gift_messages_user_read_idx ON user_gift_messages(user_id, read_at);
+
+CREATE TABLE user_usage_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  screen TEXT NOT NULL,
+  action TEXT NOT NULL DEFAULT 'view',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX user_usage_events_created_idx ON user_usage_events(created_at);
+CREATE INDEX user_usage_events_screen_created_idx ON user_usage_events(screen, created_at);
+CREATE INDEX user_usage_events_user_created_idx ON user_usage_events(user_id, created_at);

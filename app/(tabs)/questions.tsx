@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { AnswerFeedback, GeneratedAnswerOption, GeneratedQuestion, SavedQuestion } from "@/types";
 
 const width = Dimensions.get("window").width;
@@ -152,6 +153,7 @@ function SavedQuestionCard({ item }: { item: SavedQuestion }) {
 }
 
 export default function QuestionsScreen() {
+  useTrackScreen("questions");
   const { subjects, generatedQuestions, savedQuestions, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer } =
     useAppStore();
   const [mode, setMode] = useState("generate");

@@ -11,9 +11,18 @@ import { titleLabelById } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
 import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
-import type { ChatAllowance, CommunityChatMessage, CommunityUserSummary, LeaderboardEntry, UserFeedback } from "@/types";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
+import type {
+  AdminUsageAnalytics,
+  ChatAllowance,
+  CommunityChatMessage,
+  CommunityUserSummary,
+  LeaderboardEntry,
+  UsageScreen,
+  UserFeedback
+} from "@/types";
 
-type Mode = "chat" | "leaderboard" | "feedback" | "users";
+type Mode = "chat" | "leaderboard" | "feedback" | "users" | "analytics";
 type FeedbackCategory = UserFeedback["category"];
 
 const categoryCopy: Record<FeedbackCategory, string> = {
@@ -31,6 +40,22 @@ const formatTime = (value: string) =>
     minute: "2-digit"
   }).format(new Date(value));
 
+const formatHour = (value: string) =>
+  new Intl.DateTimeFormat("en-AU", {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
+
+const formatRelativeTime = (value?: string | null) => {
+  if (!value) return "No visits yet";
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
+};
+
 const formatWeekRange = (start?: string, end?: string) => {
   if (!start || !end) return "This week";
   const formatter = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" });
@@ -42,6 +67,19 @@ const formatWeekRange = (start?: string, end?: string) => {
 
 const themeNameById = (themeId?: string | null) =>
   themeShopItems.find((theme) => theme.id === themeId)?.name ?? "Midnight Focus";
+
+const usageScreenLabels: Record<UsageScreen, string> = {
+  home: "Home",
+  study: "Study",
+  calendar: "Calendar",
+  questions: "Questions",
+  community: "Community",
+  shop: "Shop",
+  profile: "Profile"
+};
+
+const usageScreenLabel = (screen?: string | null) =>
+  screen && screen in usageScreenLabels ? usageScreenLabels[screen as UsageScreen] : screen ?? "Unknown";
 
 const firstGiftThemeFor = (user: CommunityUserSummary) =>
   themeShopItems.find((theme) => theme.id === "cherry_blossom" && !user.unlockedCosmetics.includes(theme.id))?.id ??
@@ -181,15 +219,204 @@ function UserRow({
   );
 }
 
+function MetricTile({
+  label,
+  value,
+  detail,
+  icon
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+}) {
+  return (
+    <View style={styles.metricTile}>
+      <View style={styles.metricIcon}>
+        <MaterialCommunityIcons name={icon} color={palette.primary} size={18} />
+      </View>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.mutedSmall}>{detail}</Text>
+    </View>
+  );
+}
+
+function AnalyticsPanel({
+  analytics,
+  loading,
+  onRefresh
+}: {
+  analytics: AdminUsageAnalytics | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const maxHourlyEvents = Math.max(1, ...(analytics?.hourly.map((item) => item.eventCount) ?? [0]));
+  const maxScreenEvents = Math.max(1, ...(analytics?.screens.map((item) => item.eventCount) ?? [0]));
+
+  if (loading && !analytics) {
+    return <SkeletonStack />;
+  }
+
+  if (!analytics) {
+    return (
+      <AppCard style={styles.listCard}>
+        <EmptyState title="No analytics yet" body="Usage data will appear after students open the updated app." />
+        <Button mode="contained" icon="refresh" loading={loading} disabled={loading} onPress={onRefresh}>
+          Refresh
+        </Button>
+      </AppCard>
+    );
+  }
+
+  return (
+    <>
+      <AppCard style={styles.listCard}>
+        <View style={styles.feedbackHeader}>
+          <View style={styles.flexText}>
+            <Text style={styles.cardTitle}>Usage analytics</Text>
+            <Text style={styles.muted}>Last updated {formatRelativeTime(analytics.generatedAt)}</Text>
+          </View>
+          <Button mode="outlined" compact icon="refresh" loading={loading} disabled={loading} onPress={onRefresh}>
+            Refresh
+          </Button>
+        </View>
+        <View style={styles.metricGrid}>
+          <MetricTile label="Active now" value={analytics.totals.activeNow} detail="Last 10 min" icon="account-clock-outline" />
+          <MetricTile label="Active today" value={analytics.totals.activeToday} detail="Last 24h" icon="account-group-outline" />
+          <MetricTile label="Active week" value={analytics.totals.active7Days} detail="Last 7 days" icon="calendar-weekend-outline" />
+          <MetricTile label="Visits today" value={analytics.totals.trackedEvents24h} detail="Tab views" icon="gesture-tap" />
+        </View>
+        <View style={styles.metricGrid}>
+          <MetricTile label="Study minutes" value={analytics.totals.studyMinutes7d} detail="Last 7 days" icon="timer-outline" />
+          <MetricTile label="Chat posts" value={analytics.totals.chatMessages7d} detail="Last 7 days" icon="chat-outline" />
+          <MetricTile label="Feedback" value={analytics.totals.feedback7d} detail="Last 7 days" icon="inbox-arrow-down-outline" />
+        </View>
+      </AppCard>
+
+      <AppCard style={styles.listCard}>
+        <View style={styles.feedbackHeader}>
+          <Text style={styles.cardTitle}>Times people use it</Text>
+          <Text style={styles.muted}>Last 24h</Text>
+        </View>
+        <View style={styles.list}>
+          {analytics.hourly.map((hour) => (
+            <View key={hour.hourStart} style={styles.hourRow}>
+              <Text style={styles.hourLabel}>{formatHour(hour.hourStart)}</Text>
+              <View style={styles.hourTrack}>
+                <View style={[styles.hourFill, { width: `${Math.max(3, (hour.eventCount / maxHourlyEvents) * 100)}%` }]} />
+              </View>
+              <Text style={styles.hourCount}>
+                {hour.eventCount} / {hour.uniqueUsers}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.mutedSmall}>Each row shows tab visits / unique students for that hour.</Text>
+      </AppCard>
+
+      <AppCard style={styles.listCard}>
+        <View style={styles.feedbackHeader}>
+          <Text style={styles.cardTitle}>Most used areas</Text>
+          <Text style={styles.muted}>Last 7 days</Text>
+        </View>
+        <View style={styles.list}>
+          {analytics.screens.map((screen) => (
+            <View key={screen.screen} style={styles.screenUsageRow}>
+              <View style={styles.flexText}>
+                <Text style={styles.userName}>{screen.label}</Text>
+                <Text style={styles.mutedSmall}>Last used {formatRelativeTime(screen.lastSeenAt)}</Text>
+                <View style={styles.screenBarTrack}>
+                  <View style={[styles.screenBarFill, { width: `${Math.max(3, (screen.eventCount / maxScreenEvents) * 100)}%` }]} />
+                </View>
+              </View>
+              <Text style={styles.leaderboardXp}>
+                {screen.eventCount} / {screen.uniqueUsers}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </AppCard>
+
+      <AppCard style={styles.listCard}>
+        <View style={styles.feedbackHeader}>
+          <Text style={styles.cardTitle}>Student activity</Text>
+          <Text style={styles.muted}>{analytics.users.length} students</Text>
+        </View>
+        {analytics.users.length ? (
+          <View style={styles.list}>
+            {analytics.users.map((user) => (
+              <View key={user.userId} style={styles.userItem}>
+                <View style={styles.userTop}>
+                  <View style={styles.flexText}>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {user.displayName}
+                    </Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>
+                      {user.email}
+                    </Text>
+                  </View>
+                  <Text style={styles.mutedSmall}>{formatRelativeTime(user.lastSeenAt)}</Text>
+                </View>
+                <Text style={styles.userThemeText}>
+                  Last seen in {usageScreenLabel(user.lastScreen)} - {user.events24h} visits today
+                </Text>
+                <View style={styles.userStats}>
+                  <Text style={styles.userStat}>{user.events7d} visits</Text>
+                  <Text style={styles.userStat}>{user.studyMinutes7d} study min</Text>
+                  <Text style={styles.userStat}>{user.chatMessages7d} chats</Text>
+                  <Text style={styles.userStat}>{user.feedback7d} feedback</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyState title="No students yet" body="Registered student activity will appear here." />
+        )}
+      </AppCard>
+
+      <AppCard style={styles.listCard}>
+        <View style={styles.feedbackHeader}>
+          <Text style={styles.cardTitle}>Recent tab visits</Text>
+          <Text style={styles.muted}>{analytics.recent.length} latest</Text>
+        </View>
+        {analytics.recent.length ? (
+          <View style={styles.list}>
+            {analytics.recent.map((event) => (
+              <View key={event.id} style={styles.recentEventRow}>
+                <View style={styles.flexText}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {event.displayName}
+                  </Text>
+                  <Text style={styles.mutedSmall} numberOfLines={1}>
+                    {event.email}
+                  </Text>
+                </View>
+                <Text style={styles.recentScreen}>{event.label}</Text>
+                <Text style={styles.mutedSmall}>{formatTime(event.createdAt)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyState title="No tracked visits yet" body="This starts filling as students move through the updated app." />
+        )}
+      </AppCard>
+    </>
+  );
+}
+
 export default function CommunityScreen() {
+  useTrackScreen("community");
   const { gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
   const [mode, setMode] = useState<Mode>("chat");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
   const [users, setUsers] = useState<CommunityUserSummary[]>([]);
+  const [analytics, setAnalytics] = useState<AdminUsageAnalytics | null>(null);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -220,12 +447,28 @@ export default function CommunityScreen() {
     }
   }, []);
 
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    setError(null);
+    try {
+      const data = await studyApi.usageAnalytics();
+      setAnalytics(data.analytics);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not load analytics");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       loadCommunity();
       fetchAll();
-    }, [fetchAll, loadCommunity])
+      if (mode === "analytics") {
+        loadAnalytics();
+      }
+    }, [fetchAll, loadAnalytics, loadCommunity, mode])
   );
 
   const allowanceLabel = useMemo(() => {
@@ -340,6 +583,13 @@ export default function CommunityScreen() {
   const leaderboardEntries = leaderboard?.entries ?? [];
   const topThree = leaderboardEntries.slice(0, 3);
   const viewerRank = leaderboard?.viewer?.rank;
+  const chooseMode = (value: string) => {
+    const nextMode = value as Mode;
+    setMode(nextMode);
+    if (nextMode === "analytics") {
+      loadAnalytics();
+    }
+  };
 
   if (loading) {
     return (
@@ -365,12 +615,13 @@ export default function CommunityScreen() {
 
       <SegmentedButtons
         value={mode}
-        onValueChange={(value) => setMode(value as Mode)}
+        onValueChange={chooseMode}
         buttons={[
-          { value: "chat", label: "Student chat", icon: "chat-outline" },
-          { value: "leaderboard", label: "Leaderboard", icon: "trophy-outline" },
-          { value: "feedback", label: isAdmin ? "Feedback inbox" : "Direct feedback", icon: "inbox-arrow-up" },
-          ...(isAdmin ? [{ value: "users", label: "Users", icon: "account-group-outline" }] : [])
+          { value: "chat", label: "Chat", icon: "chat-outline" },
+          { value: "leaderboard", label: "Board", icon: "trophy-outline" },
+          { value: "feedback", label: isAdmin ? "Inbox" : "Feedback", icon: "inbox-arrow-up" },
+          ...(isAdmin ? [{ value: "users", label: "Users", icon: "account-group-outline" }] : []),
+          ...(isAdmin ? [{ value: "analytics", label: "Analytics", icon: "chart-line" }] : [])
         ]}
       />
 
@@ -393,6 +644,8 @@ export default function CommunityScreen() {
             <EmptyState title="No users yet" body="Registered students will appear here." />
           )}
         </AppCard>
+      ) : mode === "analytics" && isAdmin ? (
+        <AnalyticsPanel analytics={analytics} loading={analyticsLoading} onRefresh={loadAnalytics} />
       ) : mode === "leaderboard" ? (
         <>
           {leaderboardError ? <Text style={styles.error}>{leaderboardError}</Text> : null}
@@ -687,6 +940,40 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 8
   },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  metricTile: {
+    flexGrow: 1,
+    flexBasis: 160,
+    minHeight: 108,
+    gap: 5,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  metricIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.primary}18`
+  },
+  metricValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 24
+  },
+  metricLabel: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 13
+  },
   flexText: {
     flex: 1,
     minWidth: 0,
@@ -748,6 +1035,56 @@ const styles = StyleSheet.create({
   leaderboardXp: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  hourRow: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  hourLabel: {
+    width: 76,
+    color: palette.muted,
+    fontSize: 12
+  },
+  hourTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  hourFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: palette.primary
+  },
+  hourCount: {
+    width: 58,
+    textAlign: "right",
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  screenUsageRow: {
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  screenBarTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  screenBarFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: palette.info
   },
   userItem: {
     gap: 8,
@@ -894,6 +1231,20 @@ const styles = StyleSheet.create({
   feedbackMessage: {
     color: palette.text,
     lineHeight: 20
+  },
+  recentEventRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  recentScreen: {
+    minWidth: 86,
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold"
   },
   allowanceCard: {
     gap: 10

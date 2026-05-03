@@ -18,6 +18,7 @@ import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { studyApi } from "@/services/studyApi";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { DailyInspiration, StudyEvent, UserGiftMessage, UserSubject } from "@/types";
 import { isStudyTimeEvent } from "@/utils/studyEvents";
 
@@ -74,6 +75,7 @@ const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? 
 const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : "Nice");
 
 export default function DashboardScreen() {
+  useTrackScreen("home");
   const user = useAuthStore((state) => state.user);
   const {
     subjects,

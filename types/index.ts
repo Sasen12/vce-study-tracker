@@ -162,6 +162,63 @@ export type UserGiftMessage = {
   createdAt: string;
 };
 
+export type UsageScreen = "home" | "study" | "calendar" | "questions" | "community" | "shop" | "profile";
+
+export type UsageHourlyBucket = {
+  hourStart: string;
+  eventCount: number;
+  uniqueUsers: number;
+};
+
+export type UsageScreenSummary = {
+  screen: UsageScreen;
+  label: string;
+  eventCount: number;
+  uniqueUsers: number;
+  lastSeenAt?: string | null;
+};
+
+export type UsageUserSummary = {
+  userId: string;
+  displayName: string;
+  email: string;
+  lastSeenAt?: string | null;
+  lastScreen?: UsageScreen | string | null;
+  events24h: number;
+  events7d: number;
+  studyMinutes7d: number;
+  chatMessages7d: number;
+  feedback7d: number;
+};
+
+export type UsageRecentEvent = {
+  id: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  screen: UsageScreen | string;
+  label: string;
+  action: string;
+  createdAt: string;
+};
+
+export type AdminUsageAnalytics = {
+  generatedAt: string;
+  totals: {
+    activeNow: number;
+    activeToday: number;
+    active7Days: number;
+    trackedEvents24h: number;
+    studyMinutes7d: number;
+    chatMessages7d: number;
+    feedback7d: number;
+  };
+  hourly: UsageHourlyBucket[];
+  screens: UsageScreenSummary[];
+  users: UsageUserSummary[];
+  recent: UsageRecentEvent[];
+};
+
 export type ThemeShopItem = {
   id: string;
   name: string;

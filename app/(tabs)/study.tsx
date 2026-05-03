@@ -17,6 +17,7 @@ import { StudyResourcesPanel } from "@/components/session/StudyResourcesPanel";
 import { palette } from "@/constants/theme";
 import { MOTIVATION_MESSAGES } from "@/constants/gamification";
 import { useAppStore } from "@/store/appStore";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
 
 const formatElapsed = (seconds: number) => {
@@ -48,6 +49,7 @@ const optionsFor = (question: GeneratedQuestion): GeneratedAnswerOption[] => {
 };
 
 export default function StudyScreen() {
+  useTrackScreen("study");
   const params = useLocalSearchParams<{ subjectId?: string }>();
   const { subjects, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);

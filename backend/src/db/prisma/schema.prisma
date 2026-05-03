@@ -28,6 +28,7 @@ model User {
   feedbackItems  UserFeedback[]
   chatMessages   CommunityChatMessage[]
   giftMessages   UserGiftMessage[]
+  usageEvents    UserUsageEvent[]
 
   @@map("users")
 }
@@ -256,4 +257,18 @@ model UserGiftMessage {
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@map("user_gift_messages")
+}
+
+model UserUsageEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  screen    String
+  action    String   @default("view")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([screen, createdAt])
+  @@index([userId, createdAt])
+  @@map("user_usage_events")
 }

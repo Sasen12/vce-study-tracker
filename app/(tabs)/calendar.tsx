@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/theme";
 import { enableStudyReminders, remindersAreEnabled, remindersSupported } from "@/hooks/useStudyReminders";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 import { useAppStore } from "@/store/appStore";
 import type { EventRecurrence, EventType, StudyEvent } from "@/types";
 import {
@@ -108,6 +109,7 @@ function EventRow({
 }
 
 export default function CalendarScreen() {
+  useTrackScreen("calendar");
   const { subjects, events, loading, fetchAll, createEvent, updateEvent, deleteEvent } = useAppStore();
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [sheetOpen, setSheetOpen] = useState(false);

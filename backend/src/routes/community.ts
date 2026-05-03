@@ -23,12 +23,31 @@ const giftThemeSchema = z.object({
   equip: z.boolean().default(true)
 });
 
+const trackedScreens = ["home", "study", "calendar", "questions", "community", "shop", "profile"] as const;
+type TrackedScreen = (typeof trackedScreens)[number];
+
+const usageEventSchema = z.object({
+  screen: z.enum(trackedScreens),
+  action: z.literal("view").default("view")
+});
+
+const screenLabels: Record<TrackedScreen, string> = {
+  home: "Home",
+  study: "Study",
+  calendar: "Calendar",
+  questions: "Questions",
+  community: "Community",
+  shop: "Shop",
+  profile: "Profile"
+};
+
 const LEADERBOARD_INVITE_TITLE = "Weekly leaderboard invite";
 const LEADERBOARD_INVITE_MESSAGE =
   "Sasen reopened the weekly leaderboard invite. Join from the pop-up or Community > Leaderboard if you want your weekly XP to count.";
 const BASE_CHAT_MINUTES = 3;
 const STUDY_MINUTES_PER_CHAT_MINUTE = 5;
 const MAX_DAILY_CHAT_MINUTES = 60;
+const USAGE_EVENT_THROTTLE_MS = 60_000;
 
 const serialiseFeedback = (
   item: {
@@ -307,6 +326,179 @@ const serialiseGiftMessage = (gift: {
   createdAt: gift.createdAt
 });
 
+const startOfHour = (date: Date) => {
+  const start = new Date(date);
+  start.setMinutes(0, 0, 0);
+  return start;
+};
+
+const uniqueCount = (values: string[]) => new Set(values).size;
+
+const buildUsageAnalytics = async () => {
+  const now = new Date();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [usageEvents, sessions, chatMessages, feedbackItems, users] = await Promise.all([
+    prisma.userUsageEvent.findMany({
+      where: { createdAt: { gte: weekAgo } },
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    }),
+    prisma.studySession.findMany({
+      where: { createdAt: { gte: weekAgo } },
+      select: {
+        userId: true,
+        durationSeconds: true,
+        createdAt: true
+      }
+    }),
+    prisma.communityChatMessage.findMany({
+      where: { createdAt: { gte: weekAgo } },
+      select: {
+        userId: true,
+        createdAt: true
+      }
+    }),
+    prisma.userFeedback.findMany({
+      where: { createdAt: { gte: weekAgo } },
+      select: {
+        userId: true,
+        createdAt: true
+      }
+    }),
+    prisma.user.findMany({
+      select: {
+        id: true,
+        displayName: true,
+        email: true
+      }
+    })
+  ]);
+
+  const studentUsers = users.filter((user) => !isAdminEmail(user.email));
+  const studentIds = new Set(studentUsers.map((user) => user.id));
+  const studentUsageEvents = usageEvents.filter((event) => studentIds.has(event.userId));
+  const usage24h = studentUsageEvents.filter((event) => event.createdAt >= dayAgo);
+  const usage10m = studentUsageEvents.filter((event) => event.createdAt >= tenMinutesAgo);
+  const studentSessions = sessions.filter((session) => studentIds.has(session.userId));
+  const studentChats = chatMessages.filter((message) => studentIds.has(message.userId));
+  const studentFeedback = feedbackItems.filter((item) => studentIds.has(item.userId));
+
+  const userRows = new Map(
+    studentUsers.map((user) => [
+      user.id,
+      {
+        userId: user.id,
+        displayName: user.displayName,
+        email: user.email,
+        lastSeenAt: null as Date | null,
+        lastScreen: null as string | null,
+        events24h: 0,
+        events7d: 0,
+        studyMinutes7d: 0,
+        chatMessages7d: 0,
+        feedback7d: 0
+      }
+    ])
+  );
+
+  for (const event of studentUsageEvents) {
+    const row = userRows.get(event.userId);
+    if (!row) continue;
+    row.events7d += 1;
+    if (event.createdAt >= dayAgo) row.events24h += 1;
+    if (!row.lastSeenAt || event.createdAt > row.lastSeenAt) {
+      row.lastSeenAt = event.createdAt;
+      row.lastScreen = event.screen;
+    }
+  }
+
+  for (const session of studentSessions) {
+    const row = userRows.get(session.userId);
+    if (row) row.studyMinutes7d += Math.round(session.durationSeconds / 60);
+  }
+
+  for (const chat of studentChats) {
+    const row = userRows.get(chat.userId);
+    if (row) row.chatMessages7d += 1;
+  }
+
+  for (const feedback of studentFeedback) {
+    const row = userRows.get(feedback.userId);
+    if (row) row.feedback7d += 1;
+  }
+
+  const currentHour = startOfHour(now);
+  const hourBuckets = Array.from({ length: 24 }, (_, index) => {
+    const hourStart = new Date(currentHour);
+    hourStart.setHours(currentHour.getHours() - (23 - index));
+    return hourStart;
+  });
+
+  const hourly = hourBuckets.map((hourStart) => {
+    const hourEnd = new Date(hourStart);
+    hourEnd.setHours(hourStart.getHours() + 1);
+    const events = usage24h.filter((event) => event.createdAt >= hourStart && event.createdAt < hourEnd);
+    return {
+      hourStart,
+      eventCount: events.length,
+      uniqueUsers: uniqueCount(events.map((event) => event.userId))
+    };
+  });
+
+  const screens = trackedScreens.map((screen) => {
+    const events = studentUsageEvents.filter((event) => event.screen === screen);
+    return {
+      screen,
+      label: screenLabels[screen],
+      eventCount: events.length,
+      uniqueUsers: uniqueCount(events.map((event) => event.userId)),
+      lastSeenAt: events[0]?.createdAt ?? null
+    };
+  });
+
+  return {
+    generatedAt: now,
+    totals: {
+      activeNow: uniqueCount(usage10m.map((event) => event.userId)),
+      activeToday: uniqueCount(usage24h.map((event) => event.userId)),
+      active7Days: uniqueCount(studentUsageEvents.map((event) => event.userId)),
+      trackedEvents24h: usage24h.length,
+      studyMinutes7d: studentSessions.reduce((sum, session) => sum + Math.round(session.durationSeconds / 60), 0),
+      chatMessages7d: studentChats.length,
+      feedback7d: studentFeedback.length
+    },
+    hourly,
+    screens,
+    users: Array.from(userRows.values()).sort((a, b) => {
+      const aTime = a.lastSeenAt?.getTime() ?? 0;
+      const bTime = b.lastSeenAt?.getTime() ?? 0;
+      return bTime - aTime || b.events7d - a.events7d || a.displayName.localeCompare(b.displayName);
+    }),
+    recent: studentUsageEvents.slice(0, 80).map((event) => ({
+      id: event.id,
+      userId: event.userId,
+      displayName: event.user.displayName,
+      email: event.user.email,
+      screen: event.screen,
+      label: screenLabels[event.screen as TrackedScreen] ?? event.screen,
+      action: event.action,
+      createdAt: event.createdAt
+    }))
+  };
+};
+
 communityRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -369,6 +561,50 @@ communityRouter.patch(
       data: { readAt: new Date() }
     });
     res.json({ gift: serialiseGiftMessage(updated) });
+  })
+);
+
+communityRouter.post(
+  "/usage-events",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const payload = usageEventSchema.parse(req.body);
+    const recentCutoff = new Date(Date.now() - USAGE_EVENT_THROTTLE_MS);
+    const recent = await prisma.userUsageEvent.findFirst({
+      where: {
+        userId: authReq.user.id,
+        screen: payload.screen,
+        action: payload.action,
+        createdAt: { gte: recentCutoff }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (recent) {
+      res.json({ usageEvent: recent, throttled: true });
+      return;
+    }
+
+    const usageEvent = await prisma.userUsageEvent.create({
+      data: {
+        userId: authReq.user.id,
+        screen: payload.screen,
+        action: payload.action
+      }
+    });
+
+    res.status(201).json({ usageEvent, throttled: false });
+  })
+);
+
+communityRouter.get(
+  "/analytics",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const analytics = await buildUsageAnalytics();
+    res.json({ analytics });
   })
 );
 

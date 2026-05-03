@@ -14,6 +14,7 @@ import { subjectColors, palette } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
+import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
 
 const scaleAdjustments: Record<string, number> = {
@@ -393,6 +394,7 @@ function AddSubjectDialog({
 }
 
 export default function ProfileScreen() {
+  useTrackScreen("profile");
   const {
     subjects,
     sessions,

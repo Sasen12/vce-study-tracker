@@ -1,6 +1,7 @@
 import { apiFetch, apiUpload } from "./api";
 import type {
   AdaptiveStudyPlan,
+  AdminUsageAnalytics,
   AnswerFeedback,
   ClassNoteChunk,
   ClassNoteDraft,
@@ -26,6 +27,7 @@ import type {
   EventRecurrence,
   EventType,
   UserGiftMessage,
+  UsageScreen,
   UserSubject
 } from "@/types";
 
@@ -175,6 +177,12 @@ export const studyApi = {
     apiFetch<{ gift: UserGiftMessage }>(`/community/gifts/${id}/read`, { method: "PATCH" }),
   resendLeaderboardInvite: () =>
     apiFetch<{ resentCount: number }>("/community/leaderboard/resend-invite", { method: "POST" }),
+  trackUsage: (screen: UsageScreen) =>
+    apiFetch<{ throttled: boolean }>("/community/usage-events", {
+      method: "POST",
+      body: { screen, action: "view" }
+    }),
+  usageAnalytics: () => apiFetch<{ analytics: AdminUsageAnalytics }>("/community/analytics"),
   sendFeedback: (body: { category: UserFeedback["category"]; message: string }) =>
     apiFetch<{ feedback: UserFeedback }>("/community/feedback", { method: "POST", body }),
   sendCommunityChat: (body: { message: string }) =>
