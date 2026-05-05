@@ -116,11 +116,19 @@ export type CommunityChatMessage = {
   id: string;
   userId: string;
   message: string;
+  subjectRoomId?: string | null;
   createdAt: string;
   user: {
     displayName: string;
   };
   isCurrentUser: boolean;
+};
+
+export type CommunitySubjectRoom = {
+  id: string;
+  subjectName: string;
+  unit: string;
+  color: string;
 };
 
 export type ChatAllowance = {

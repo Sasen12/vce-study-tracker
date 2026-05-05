@@ -3,7 +3,30 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - Year 11 starter title support
+Most recent edit: 2026-05-05 - Optional subject chat rooms
+
+Summary:
+- Added optional subject-specific chat rooms inside Community > Chat while keeping the existing all-school chat.
+- Added an All school / Subject rooms switch so the main Community tab does not get cluttered.
+- Subject rooms are generated from the subjects a student has added to their profile.
+- Students can join and leave subject rooms locally; joined rooms are remembered on the device.
+- Added separate room message loading and sending through new community API endpoints.
+- Subject-room messages are stored in the existing community chat table with an internal room marker, so no database migration is required.
+- Main chat now filters out subject-room messages so the current community chat stays clean.
+- Admin delete still removes messages from both all-school and subject-room views.
+- Added a one-time heads-up pop-up explaining subject rooms when Community opens after the update.
+- Daily chat minutes apply across both all-school chat and subject rooms.
+
+Validation run:
+- npm run lint
+- npm run build --prefix backend
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-05 - Year 11 starter title support
 
 Summary:
 - Replaced the hardcoded Year 12 starter default with a neutral VCE Rookie default.

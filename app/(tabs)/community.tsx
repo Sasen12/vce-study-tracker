@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
@@ -16,14 +17,20 @@ import type {
   AdminUsageAnalytics,
   ChatAllowance,
   CommunityChatMessage,
+  CommunitySubjectRoom,
   CommunityUserSummary,
   LeaderboardEntry,
   UsageScreen,
+  UserSubject,
   UserFeedback
 } from "@/types";
 
 type Mode = "chat" | "leaderboard" | "feedback" | "users" | "analytics";
+type ChatScope = "school" | "subject";
 type FeedbackCategory = UserFeedback["category"];
+
+const SUBJECT_ROOM_INTRO_KEY = "vce_subject_rooms_intro_seen_v1";
+const JOINED_SUBJECT_ROOMS_KEY = "vce_joined_subject_rooms_v1";
 
 const categoryCopy: Record<FeedbackCategory, string> = {
   bug: "Bug",
@@ -86,6 +93,29 @@ const firstGiftThemeFor = (user: CommunityUserSummary) =>
   themeShopItems.find((theme) => theme.price > 0 && !user.unlockedCosmetics.includes(theme.id))?.id ??
   user.activeTheme ??
   "midnight";
+
+const roomIdForSubject = (subjectName: string) =>
+  subjectName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72) || "subject";
+
+const roomsFromSubjects = (subjects: UserSubject[]): CommunitySubjectRoom[] => {
+  const rooms = new Map<string, CommunitySubjectRoom>();
+  subjects.forEach((subject) => {
+    const id = roomIdForSubject(subject.subjectName);
+    if (!rooms.has(id)) {
+      rooms.set(id, {
+        id,
+        subjectName: subject.subjectName,
+        unit: subject.unit,
+        color: subject.color
+      });
+    }
+  });
+  return Array.from(rooms.values()).sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+};
 
 function ChatBubble({
   item,
@@ -407,16 +437,21 @@ function AnalyticsPanel({
 
 export default function CommunityScreen() {
   useTrackScreen("community");
-  const { gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
+  const { subjects, gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
   const [mode, setMode] = useState<Mode>("chat");
+  const [chatScope, setChatScope] = useState<ChatScope>("school");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
+  const [roomChat, setRoomChat] = useState<Record<string, CommunityChatMessage[]>>({});
+  const [joinedRoomIds, setJoinedRoomIds] = useState<string[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [users, setUsers] = useState<CommunityUserSummary[]>([]);
   const [analytics, setAnalytics] = useState<AdminUsageAnalytics | null>(null);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [roomLoading, setRoomLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -424,6 +459,8 @@ export default function CommunityScreen() {
   const [category, setCategory] = useState<FeedbackCategory>("feature");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [chatMessage, setChatMessage] = useState("");
+  const [roomMessage, setRoomMessage] = useState("");
+  const [roomIntroOpen, setRoomIntroOpen] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [resendingLeaderboardInvite, setResendingLeaderboardInvite] = useState(false);
@@ -459,6 +496,74 @@ export default function CommunityScreen() {
       setAnalyticsLoading(false);
     }
   }, []);
+
+  const subjectRooms = useMemo(() => roomsFromSubjects(subjects), [subjects]);
+  const joinedRooms = useMemo(
+    () => subjectRooms.filter((room) => joinedRoomIds.includes(room.id)),
+    [joinedRoomIds, subjectRooms]
+  );
+  const availableRooms = useMemo(
+    () => subjectRooms.filter((room) => !joinedRoomIds.includes(room.id)),
+    [joinedRoomIds, subjectRooms]
+  );
+  const selectedRoom = joinedRooms.find((room) => room.id === selectedRoomId) ?? joinedRooms[0] ?? null;
+  const selectedRoomMessages = selectedRoom ? roomChat[selectedRoom.id] ?? [] : [];
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(JOINED_SUBJECT_ROOMS_KEY)
+      .then((value) => {
+        if (!active || !value) return;
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed)) {
+          setJoinedRoomIds(parsed.filter((item): item is string => typeof item === "string"));
+        }
+      })
+      .catch(() => undefined);
+
+    AsyncStorage.getItem(SUBJECT_ROOM_INTRO_KEY)
+      .then((value) => {
+        if (active && !value) setRoomIntroOpen(true);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!joinedRooms.length) {
+      setSelectedRoomId(null);
+      return;
+    }
+    if (!selectedRoomId || !joinedRooms.some((room) => room.id === selectedRoomId)) {
+      setSelectedRoomId(joinedRooms[0].id);
+    }
+  }, [joinedRooms, selectedRoomId]);
+
+  const persistJoinedRooms = async (roomIds: string[]) => {
+    setJoinedRoomIds(roomIds);
+    await AsyncStorage.setItem(JOINED_SUBJECT_ROOMS_KEY, JSON.stringify(roomIds));
+  };
+
+  const loadSubjectRoom = useCallback(async (roomId: string) => {
+    setRoomLoading(true);
+    setError(null);
+    try {
+      const data = await studyApi.subjectRoomChat(roomId);
+      setRoomChat((current) => ({ ...current, [roomId]: data.chat }));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not load subject room");
+    } finally {
+      setRoomLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (chatScope !== "subject" || !selectedRoom) return;
+    loadSubjectRoom(selectedRoom.id);
+  }, [chatScope, loadSubjectRoom, selectedRoom]);
 
   useFocusEffect(
     useCallback(() => {
@@ -500,6 +605,9 @@ export default function CommunityScreen() {
     try {
       await studyApi.deleteCommunityChat(id);
       setChat((current) => current.filter((item) => item.id !== id));
+      setRoomChat((current) =>
+        Object.fromEntries(Object.entries(current).map(([roomId, messages]) => [roomId, messages.filter((item) => item.id !== id)]))
+      );
       setNotice("Chat message deleted.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not delete chat message");
@@ -523,6 +631,52 @@ export default function CommunityScreen() {
     } finally {
       setSending(false);
     }
+  };
+
+  const joinRoom = async (room: CommunitySubjectRoom) => {
+    const nextRoomIds = Array.from(new Set([...joinedRoomIds, room.id]));
+    await persistJoinedRooms(nextRoomIds);
+    setChatScope("subject");
+    setSelectedRoomId(room.id);
+    await loadSubjectRoom(room.id);
+  };
+
+  const leaveRoom = async (roomId: string) => {
+    const nextRoomIds = joinedRoomIds.filter((id) => id !== roomId);
+    await persistJoinedRooms(nextRoomIds);
+    setRoomChat((current) => {
+      const next = { ...current };
+      delete next[roomId];
+      return next;
+    });
+    if (selectedRoomId === roomId) {
+      setSelectedRoomId(nextRoomIds[0] ?? null);
+    }
+  };
+
+  const sendRoomChat = async () => {
+    if (!selectedRoom || !roomMessage.trim()) return;
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.sendSubjectRoomChat(selectedRoom.id, { message: roomMessage.trim() });
+      setRoomChat((current) => ({
+        ...current,
+        [selectedRoom.id]: [...(current[selectedRoom.id] ?? []), data.chatMessage].slice(-80)
+      }));
+      setAllowance(data.allowance);
+      setRoomMessage("");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not send room message");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const dismissRoomIntro = async () => {
+    setRoomIntroOpen(false);
+    await AsyncStorage.setItem(SUBJECT_ROOM_INTRO_KEY, "seen");
   };
 
   const chooseLeaderboard = async (optIn: boolean) => {
@@ -816,48 +970,203 @@ export default function CommunityScreen() {
             </Text>
           </AppCard>
 
-          <AppCard style={styles.chatCard}>
-            {chat.length ? (
-              <View style={styles.chatList}>
-                {chat.map((item) => (
-                  <ChatBubble
-                    key={item.id}
-                    item={item}
-                    canDelete={isAdmin}
-                    deleting={deletingChatId === item.id}
-                    onDelete={deleteChatMessage}
-                  />
-                ))}
-              </View>
-            ) : (
-              <EmptyState title="No chat yet" body="The public chat will appear here once someone sends the first message." />
-            )}
+          <AppCard style={styles.chatSwitchCard}>
+            <SegmentedButtons
+              value={chatScope}
+              onValueChange={(value) => setChatScope(value as ChatScope)}
+              buttons={[
+                { value: "school", label: "All school", icon: "account-group-outline" },
+                { value: "subject", label: "Subject rooms", icon: "book-open-variant" }
+              ]}
+            />
+            <Text style={styles.muted}>
+              {chatScope === "school"
+                ? "The main chat is shared by everyone."
+                : "Join only the subject rooms you want. Room messages stay out of the main chat."}
+            </Text>
           </AppCard>
 
-          <AppCard style={styles.formCard}>
-            <TextInput
-              mode="outlined"
-              label="Chat message"
-              value={chatMessage}
-              onChangeText={setChatMessage}
-              multiline
-              numberOfLines={3}
-              maxLength={280}
-              style={styles.input}
-            />
-            <Button
-              mode="contained"
-              icon="send"
-              disabled={!chatMessage.trim() || sending || !allowance?.remainingMinutes}
-              loading={sending}
-              onPress={sendChat}
-            >
-              Send chat
-            </Button>
-          </AppCard>
+          {chatScope === "school" ? (
+            <>
+              <AppCard style={styles.chatCard}>
+                {chat.length ? (
+                  <View style={styles.chatList}>
+                    {chat.map((item) => (
+                      <ChatBubble
+                        key={item.id}
+                        item={item}
+                        canDelete={isAdmin}
+                        deleting={deletingChatId === item.id}
+                        onDelete={deleteChatMessage}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <EmptyState title="No chat yet" body="The public chat will appear here once someone sends the first message." />
+                )}
+              </AppCard>
+
+              <AppCard style={styles.formCard}>
+                <TextInput
+                  mode="outlined"
+                  label="Chat message"
+                  value={chatMessage}
+                  onChangeText={setChatMessage}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={280}
+                  style={styles.input}
+                />
+                <Button
+                  mode="contained"
+                  icon="send"
+                  disabled={!chatMessage.trim() || sending || !allowance?.remainingMinutes}
+                  loading={sending}
+                  onPress={sendChat}
+                >
+                  Send chat
+                </Button>
+              </AppCard>
+            </>
+          ) : (
+            <>
+              <AppCard style={styles.roomHubCard}>
+                <View style={styles.roomHubHeader}>
+                  <View style={styles.roomHubIcon}>
+                    <MaterialCommunityIcons name="book-open-page-variant-outline" color={palette.info} size={22} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.cardTitle}>Subject rooms</Text>
+                    <Text style={styles.muted}>Optional spaces for classmates studying the same subject.</Text>
+                  </View>
+                </View>
+
+                {joinedRooms.length ? (
+                  <View style={styles.roomTabs}>
+                    {joinedRooms.map((room) => {
+                      const selected = selectedRoom?.id === room.id;
+                      return (
+                        <Pressable
+                          key={room.id}
+                          style={[styles.roomTab, selected && styles.roomTabActive, { borderColor: selected ? room.color : palette.border }]}
+                          onPress={() => setSelectedRoomId(room.id)}
+                        >
+                          <View style={[styles.roomDot, { backgroundColor: room.color }]} />
+                          <Text style={styles.roomTabText} numberOfLines={1}>
+                            {room.subjectName}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {availableRooms.length ? (
+                  <View style={styles.availableRooms}>
+                    <Text style={styles.roomSectionLabel}>Available to join</Text>
+                    {availableRooms.map((room) => (
+                      <View key={room.id} style={styles.availableRoomRow}>
+                        <View style={[styles.roomDot, { backgroundColor: room.color }]} />
+                        <View style={styles.flexText}>
+                          <Text style={styles.availableRoomName}>{room.subjectName}</Text>
+                          <Text style={styles.mutedSmall}>{room.unit}</Text>
+                        </View>
+                        <Button mode="outlined" compact icon="plus" onPress={() => joinRoom(room)}>
+                          Join
+                        </Button>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {!subjectRooms.length ? (
+                  <EmptyState title="No subjects yet" body="Add subjects from Profile, then their rooms will appear here." />
+                ) : !joinedRooms.length ? (
+                  <EmptyState title="No joined rooms" body="Join a subject room above when you want a quieter space for that class." />
+                ) : null}
+              </AppCard>
+
+              {selectedRoom ? (
+                <>
+                  <AppCard style={styles.roomStatusCard}>
+                    <View style={styles.roomHeader}>
+                      <View style={[styles.roomIcon, { backgroundColor: `${selectedRoom.color}22` }]}>
+                        <MaterialCommunityIcons name="book-open-outline" color={selectedRoom.color} size={22} />
+                      </View>
+                      <View style={styles.flexText}>
+                        <Text style={styles.cardTitle}>{selectedRoom.subjectName}</Text>
+                        <Text style={styles.muted}>{selectedRoom.unit} room</Text>
+                      </View>
+                      <Button mode="outlined" compact icon="exit-to-app" onPress={() => leaveRoom(selectedRoom.id)}>
+                        Leave
+                      </Button>
+                    </View>
+                  </AppCard>
+
+                  <AppCard style={styles.chatCard}>
+                    {roomLoading ? (
+                      <Text style={styles.muted}>Loading room messages...</Text>
+                    ) : selectedRoomMessages.length ? (
+                      <View style={styles.chatList}>
+                        {selectedRoomMessages.map((item) => (
+                          <ChatBubble
+                            key={item.id}
+                            item={item}
+                            canDelete={isAdmin}
+                            deleting={deletingChatId === item.id}
+                            onDelete={deleteChatMessage}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <EmptyState title="Room is quiet" body="Start with a question, a resource, or a quick study win." />
+                    )}
+                  </AppCard>
+
+                  <AppCard style={styles.formCard}>
+                    <TextInput
+                      mode="outlined"
+                      label={`${selectedRoom.subjectName} room message`}
+                      value={roomMessage}
+                      onChangeText={setRoomMessage}
+                      multiline
+                      numberOfLines={3}
+                      maxLength={280}
+                      style={styles.input}
+                    />
+                    <Button
+                      mode="contained"
+                      icon="send"
+                      disabled={!roomMessage.trim() || sending || !allowance?.remainingMinutes}
+                      loading={sending}
+                      onPress={sendRoomChat}
+                    >
+                      Send to room
+                    </Button>
+                  </AppCard>
+                </>
+              ) : null}
+            </>
+          )}
         </>
       )}
       <Portal>
+        <Dialog visible={roomIntroOpen} onDismiss={dismissRoomIntro} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Subject rooms are here</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.muted}>
+              The main Community chat is still there. You can now optionally join rooms for your subjects inside
+              Community Chat, and those room messages stay separate from the all-school chat.
+            </Text>
+            <Text style={styles.muted}>Your daily chat minutes apply across both main chat and subject rooms.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button mode="contained" onPress={dismissRoomIntro}>
+              Got it
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
         <Dialog visible={Boolean(giftUser)} onDismiss={() => setGiftUser(null)} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>Gift theme</Dialog.Title>
           <Dialog.Content style={styles.dialogContent}>
@@ -1317,6 +1626,98 @@ const styles = StyleSheet.create({
   mutedSmall: {
     color: palette.muted,
     fontSize: 12
+  },
+  chatSwitchCard: {
+    gap: 12
+  },
+  roomHubCard: {
+    gap: 14
+  },
+  roomHubHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  roomHubIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(96,165,250,0.14)"
+  },
+  roomTabs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  roomTab: {
+    minHeight: 40,
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  roomTabActive: {
+    backgroundColor: "rgba(124,110,255,0.12)"
+  },
+  roomDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5
+  },
+  roomTabText: {
+    maxWidth: 220,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  availableRooms: {
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 12
+  },
+  roomSectionLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  availableRoomRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10
+  },
+  availableRoomName: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  roomStatusCard: {
+    gap: 12,
+    borderColor: "rgba(96,165,250,0.22)",
+    backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  roomHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  roomIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
   },
   chatCard: {
     gap: 12

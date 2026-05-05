@@ -18,6 +18,8 @@ const chatSchema = z.object({
   message: z.string().trim().min(1).max(280)
 });
 
+const subjectRoomIdSchema = z.string().trim().min(1).max(80).regex(/^[a-z0-9-]+$/);
+
 const giftThemeSchema = z.object({
   themeId: z.string().trim().min(1),
   equip: z.boolean().default(true)
@@ -48,6 +50,8 @@ const BASE_CHAT_MINUTES = 3;
 const STUDY_MINUTES_PER_CHAT_MINUTE = 5;
 const MAX_DAILY_CHAT_MINUTES = 60;
 const USAGE_EVENT_THROTTLE_MS = 60_000;
+const SUBJECT_ROOM_PREFIX = "[[subject-room:";
+const SUBJECT_ROOM_MESSAGE_PATTERN = /^\[\[subject-room:([a-z0-9-]+)\]\]\s*([\s\S]*)$/;
 
 const serialiseFeedback = (
   item: {
@@ -94,6 +98,81 @@ const todayRange = () => {
 const publicUser = (user: { displayName: string }) => ({
   displayName: user.displayName
 });
+
+const subjectRoomIdFor = (subjectName: string) => {
+  const slug = subjectName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+  return slug || "subject";
+};
+
+const subjectRoomMarkerFor = (roomId: string) => `${SUBJECT_ROOM_PREFIX}${roomId}]]`;
+
+const parseSubjectRoomMessage = (message: string) => {
+  const match = SUBJECT_ROOM_MESSAGE_PATTERN.exec(message);
+  return match ? { roomId: match[1], message: match[2].trim() } : null;
+};
+
+const serialiseChatMessage = (
+  item: {
+    id: string;
+    userId: string;
+    message: string;
+    createdAt: Date;
+    user: { displayName: string };
+  },
+  viewerUserId: string
+) => {
+  const roomMessage = parseSubjectRoomMessage(item.message);
+  return {
+    id: item.id,
+    userId: item.userId,
+    message: roomMessage?.message ?? item.message,
+    subjectRoomId: roomMessage?.roomId ?? null,
+    createdAt: item.createdAt,
+    user: publicUser(item.user),
+    isCurrentUser: item.userId === viewerUserId
+  };
+};
+
+const subjectRoomsForUser = async (userId: string) => {
+  const subjects = await prisma.userSubject.findMany({
+    where: { userId },
+    orderBy: [{ subjectName: "asc" }, { unit: "asc" }],
+    select: {
+      id: true,
+      subjectName: true,
+      unit: true,
+      color: true
+    }
+  });
+
+  const rooms = new Map<string, { id: string; subjectName: string; unit: string; color: string }>();
+  for (const subject of subjects) {
+    const id = subjectRoomIdFor(subject.subjectName);
+    if (!rooms.has(id)) {
+      rooms.set(id, {
+        id,
+        subjectName: subject.subjectName,
+        unit: subject.unit,
+        color: subject.color
+      });
+    }
+  }
+
+  return Array.from(rooms.values());
+};
+
+const requireSubjectRoomForUser = async (userId: string, roomId: string) => {
+  const rooms = await subjectRoomsForUser(userId);
+  const room = rooms.find((item) => item.id === roomId);
+  if (!room) {
+    throw new HttpError(403, "Add this subject before joining its room.");
+  }
+  return room;
+};
 
 const adminUserSelect = {
   id: true,
@@ -285,7 +364,7 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     }),
     prisma.communityChatMessage.findMany({
       orderBy: { createdAt: "desc" },
-      take: 80,
+      take: 200,
       include: {
         user: {
           select: { displayName: true }
@@ -296,14 +375,11 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     isAdmin ? adminUsers() : Promise.resolve([])
   ]);
 
-  const chat = chatDesc.reverse().map((message) => ({
-    id: message.id,
-    userId: message.userId,
-    message: message.message,
-    createdAt: message.createdAt,
-    user: publicUser(message.user),
-    isCurrentUser: message.userId === user.id
-  }));
+  const chat = chatDesc
+    .filter((message) => !parseSubjectRoomMessage(message.message))
+    .slice(0, 80)
+    .reverse()
+    .map((message) => serialiseChatMessage(message, user.id));
 
   return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance, users };
 };
@@ -619,6 +695,78 @@ communityRouter.post(
   })
 );
 
+communityRouter.get(
+  "/subject-rooms",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const rooms = await subjectRoomsForUser(authReq.user.id);
+    res.json({ rooms });
+  })
+);
+
+communityRouter.get(
+  "/subject-rooms/:roomId/chat",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const roomId = subjectRoomIdSchema.parse(req.params.roomId);
+    const room = await requireSubjectRoomForUser(authReq.user.id, roomId);
+    const chatDesc = await prisma.communityChatMessage.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 240,
+      include: {
+        user: {
+          select: { displayName: true }
+        }
+      }
+    });
+
+    const chat = chatDesc
+      .filter((message) => parseSubjectRoomMessage(message.message)?.roomId === room.id)
+      .slice(0, 80)
+      .reverse()
+      .map((message) => serialiseChatMessage(message, authReq.user.id));
+
+    res.json({ room, chat });
+  })
+);
+
+communityRouter.post(
+  "/subject-rooms/:roomId/chat",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const roomId = subjectRoomIdSchema.parse(req.params.roomId);
+    const room = await requireSubjectRoomForUser(authReq.user.id, roomId);
+    const payload = chatSchema.parse(req.body);
+    const allowance = await chatAllowanceFor(authReq.user.id);
+
+    if (allowance.remainingMinutes <= 0) {
+      throw new HttpError(
+        429,
+        `You are out of chat minutes for today. Study ${STUDY_MINUTES_PER_CHAT_MINUTE} more minutes to earn another chat minute.`
+      );
+    }
+
+    const chatMessage = await prisma.communityChatMessage.create({
+      data: {
+        userId: authReq.user.id,
+        message: `${subjectRoomMarkerFor(room.id)} ${payload.message}`
+      },
+      include: {
+        user: {
+          select: { displayName: true }
+        }
+      }
+    });
+
+    const nextAllowance = await chatAllowanceFor(authReq.user.id);
+    res.status(201).json({
+      room,
+      chatMessage: serialiseChatMessage(chatMessage, authReq.user.id),
+      allowance: nextAllowance
+    });
+  })
+);
+
 communityRouter.post(
   "/chat",
   asyncHandler(async (req, res) => {
@@ -636,7 +784,7 @@ communityRouter.post(
     const chatMessage = await prisma.communityChatMessage.create({
       data: {
         userId: authReq.user.id,
-        message: payload.message
+        message: payload.message.replace(SUBJECT_ROOM_PREFIX, "")
       },
       include: {
         user: {
@@ -647,14 +795,7 @@ communityRouter.post(
 
     const nextAllowance = await chatAllowanceFor(authReq.user.id);
     res.status(201).json({
-      chatMessage: {
-        id: chatMessage.id,
-        userId: chatMessage.userId,
-        message: chatMessage.message,
-        createdAt: chatMessage.createdAt,
-        user: publicUser(chatMessage.user),
-        isCurrentUser: true
-      },
+      chatMessage: serialiseChatMessage(chatMessage, authReq.user.id),
       allowance: nextAllowance
     });
   })

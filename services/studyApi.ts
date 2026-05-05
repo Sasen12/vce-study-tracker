@@ -7,6 +7,7 @@ import type {
   ClassNoteDraft,
   ChatAllowance,
   CommunityChatMessage,
+  CommunitySubjectRoom,
   CommunityUserSummary,
   DailyInspiration,
   Gamification,
@@ -191,6 +192,17 @@ export const studyApi = {
       method: "POST",
       body
     }),
+  subjectRooms: () => apiFetch<{ rooms: CommunitySubjectRoom[] }>("/community/subject-rooms"),
+  subjectRoomChat: (roomId: string) =>
+    apiFetch<{ room: CommunitySubjectRoom; chat: CommunityChatMessage[] }>(`/community/subject-rooms/${roomId}/chat`),
+  sendSubjectRoomChat: (roomId: string, body: { message: string }) =>
+    apiFetch<{ room: CommunitySubjectRoom; chatMessage: CommunityChatMessage; allowance: ChatAllowance }>(
+      `/community/subject-rooms/${roomId}/chat`,
+      {
+        method: "POST",
+        body
+      }
+    ),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
   giftTheme: (userId: string, body: { themeId: string; equip?: boolean }) =>
     apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/theme`, {
