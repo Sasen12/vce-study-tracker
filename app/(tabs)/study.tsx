@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Button, Dialog, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import * as Haptics from "expo-haptics";
@@ -48,6 +48,29 @@ const optionsFor = (question: GeneratedQuestion): GeneratedAnswerOption[] => {
   return options.slice(0, 4);
 };
 
+const browserFullscreenSupported = () =>
+  Platform.OS === "web" &&
+  typeof document !== "undefined" &&
+  typeof document.documentElement.requestFullscreen === "function";
+
+const enterBrowserFullscreen = async () => {
+  if (Platform.OS !== "web" || typeof document === "undefined") return "unsupported";
+  if (document.fullscreenElement) return "active";
+  if (!browserFullscreenSupported()) return "unsupported";
+
+  try {
+    await document.documentElement.requestFullscreen();
+    return "active";
+  } catch {
+    return "blocked";
+  }
+};
+
+const exitBrowserFullscreen = async () => {
+  if (Platform.OS !== "web" || typeof document === "undefined" || !document.fullscreenElement) return;
+  await document.exitFullscreen().catch(() => undefined);
+};
+
 export default function StudyScreen() {
   useTrackScreen("study");
   const params = useLocalSearchParams<{ subjectId?: string }>();
@@ -73,6 +96,14 @@ export default function StudyScreen() {
   const [mode, setMode] = useState("coach");
   const scale = useSharedValue(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intentionalFullscreenExitRef = useRef(false);
+
+  const releaseFocusLock = useCallback(() => {
+    intentionalFullscreenExitRef.current = true;
+    void exitBrowserFullscreen().finally(() => {
+      intentionalFullscreenExitRef.current = false;
+    });
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +137,50 @@ export default function StudyScreen() {
       cancelAnimation(scale);
     };
   }, [running, scale]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return undefined;
+
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) return;
+      if (intentionalFullscreenExitRef.current) {
+        intentionalFullscreenExitRef.current = false;
+        return;
+      }
+      if (running) {
+        setRunning(false);
+        setMessage("Focus lock paused because fullscreen was exited. Press Start to lock back in.");
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden" || !running) return;
+      setRunning(false);
+      setMessage("Focus lock paused because the tab lost focus. Press Start to lock back in.");
+      releaseFocusLock();
+    };
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!running) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [releaseFocusLock, running]);
+
+  useEffect(() => {
+    return () => {
+      releaseFocusLock();
+    };
+  }, [releaseFocusLock]);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -152,22 +227,42 @@ export default function StudyScreen() {
     askCheckpoint();
   }, [askCheckpoint, checkpointGenerating, checkpointOpen, elapsed, nextCheckpointAt, running]);
 
-  const start = () => {
+  const changeMode = (value: string) => {
+    if (running && value !== "timer") {
+      setMessage("Pause or stop the timer before leaving focus mode.");
+      return;
+    }
+    setMode(value);
+  };
+
+  const start = async () => {
     if (!selectedSubject) return;
     if (!studyTopic.trim()) {
       setMessage("Add the topic before starting so timer check-ins know what to ask.");
+      return;
+    }
+    const fullscreenResult = await enterBrowserFullscreen();
+    if (fullscreenResult === "blocked") {
+      setMessage("Your browser blocked fullscreen. Press Start again and allow fullscreen to begin deep work.");
       return;
     }
     if (elapsed === 0) {
       setTimerBonusXp(0);
       setNextCheckpointAt(checkpointIntervalSeconds);
     }
-    setMessage(null);
+    setMode("timer");
+    setMessage(fullscreenResult === "unsupported" ? "This browser cannot use fullscreen focus lock, but the timer is running." : null);
     setRunning(true);
+  };
+
+  const pause = () => {
+    setRunning(false);
+    releaseFocusLock();
   };
 
   const stop = () => {
     setRunning(false);
+    releaseFocusLock();
     if (elapsed >= 60) {
       setSummaryError(null);
       setSummaryOpen(true);
@@ -298,7 +393,7 @@ export default function StudyScreen() {
 
       <SegmentedButtons
         value={mode}
-        onValueChange={setMode}
+        onValueChange={changeMode}
         buttons={[
           { value: "timer", label: "Timer" },
           { value: "coach", label: "Coach" },
@@ -390,7 +485,7 @@ export default function StudyScreen() {
                   Start
                 </Button>
               ) : (
-                <Button mode="contained-tonal" icon="pause" onPress={() => setRunning(false)}>
+                <Button mode="contained-tonal" icon="pause" onPress={pause}>
                   Pause
                 </Button>
               )}
