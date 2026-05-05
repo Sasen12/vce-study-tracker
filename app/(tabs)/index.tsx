@@ -8,11 +8,8 @@ import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ProgressRing } from "@/components/ui/ProgressRing";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
-import { XPBar } from "@/components/gamification/XPBar";
 import { StreakWidget } from "@/components/gamification/StreakWidget";
-import { WeeklyChart } from "@/components/charts/WeeklyChart";
 import { motion } from "@/constants/motion";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
@@ -24,15 +21,9 @@ import { isStudyTimeEvent } from "@/utils/studyEvents";
 import {
   buildSacPanicPlan,
   buildWeaknessSummary,
-  buildWeeklyReport,
   globalStudySearch,
-  isFlashcardNote,
-  isMistakeNote,
-  isSacPanicNote,
   sacPanicTag
 } from "@/utils/vceCoach";
-
-const dateKey = (value: string | Date) => (typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10));
 
 const daysUntil = (eventDate: string) => {
   const today = new Date();
@@ -103,7 +94,6 @@ export default function DashboardScreen() {
     createNote,
     setLeaderboardPreference
   } = useAppStore();
-  const [quickSubjectId, setQuickSubjectId] = useState<string | null>(null);
   const [dailyInspiration, setDailyInspiration] = useState<DailyInspiration>(fallbackDailyInspiration);
   const [giftMessages, setGiftMessages] = useState<UserGiftMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,19 +141,6 @@ export default function DashboardScreen() {
     []
   );
 
-  const todayMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
-  const subjectNamesToday = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return Array.from(
-      new Set(
-        sessions
-          .filter((session) => dateKey(session.createdAt) === today)
-          .map((session) => session.subject?.subjectName)
-          .filter(Boolean)
-      )
-    ) as string[];
-  }, [sessions]);
-
   const upcomingEvents = useMemo(
     () =>
       events
@@ -173,167 +150,28 @@ export default function DashboardScreen() {
     [events]
   );
 
-  const dailyTargetMinutes = useMemo(() => {
-    const weeklyHours = goals.reduce((sum, goal) => sum + Number(goal.weeklyHoursTarget ?? 0), 0);
-    return weeklyHours ? Math.round((weeklyHours * 60) / 7) : 120;
-  }, [goals]);
-
-  const weekStart = useMemo(() => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    const day = date.getDay();
-    date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day));
-    return date;
-  }, []);
-
-  const weeklySecondsBySubject = useMemo(
-    () =>
-      sessions.reduce<Record<string, number>>((acc, session) => {
-        if (!session.subjectId || new Date(session.createdAt) < weekStart) return acc;
-        acc[session.subjectId] = (acc[session.subjectId] ?? 0) + session.durationSeconds;
-        return acc;
-      }, {}),
-    [sessions, weekStart]
-  );
-
-  const chartData = useMemo(
-    () =>
-      Object.values(stats?.perSubject ?? {}).map((item) => ({
-        label: item.subjectName,
-        value: item.seconds / 3600,
-        color: item.color
-      })),
-    [stats?.perSubject]
-  );
-
-  const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
-  const panicSubject = subjects.find((subject) => subject.id === panicSubjectId) ?? quickSubject ?? subjects[0] ?? null;
+  const defaultSubject = subjects[0] ?? null;
+  const panicSubject = subjects.find((subject) => subject.id === panicSubjectId) ?? defaultSubject;
+  const nextDeadline = upcomingEvents[0] ?? null;
+  const nextDeadlineSubject = nextDeadline ? subjectForDeadline(nextDeadline, subjects) : null;
   const leaderboardPromptVisible = Boolean(
     gamification && !gamification.leaderboardOptIn && gamification.leaderboardPromptedAt == null
   );
   const showThemeRequestThankYou =
     user?.email?.trim().toLowerCase() === themeRequestThankYouEmail &&
     Boolean(gamification?.unlockedCosmetics.includes(themeRequestThankYouThemeId));
-  const nextBestMove = useMemo(() => {
-    const urgentEvent = upcomingEvents.find((event) => daysUntil(event.eventDate) <= 7);
-    const urgentSubject = urgentEvent ? subjectForDeadline(urgentEvent, subjects) : null;
-    const weakestSubject = subjects
-      .map((subject) => {
-        const goal = goals.find((item) => item.subjectId === subject.id);
-        const targetMinutes = Number(goal?.weeklyHoursTarget ?? 0) * 60;
-        const weekMinutes = Math.round((weeklySecondsBySubject[subject.id] ?? 0) / 60);
-        return {
-          subject,
-          targetMinutes,
-          weekMinutes,
-          ratio: targetMinutes ? weekMinutes / targetMinutes : 1
-        };
-      })
-      .filter((item) => item.targetMinutes > 0)
-      .sort((a, b) => a.ratio - b.ratio)[0];
-
-    if (urgentEvent) {
-      return {
-        icon: "calendar-alert",
-        title: "Protect the next deadline",
-        body: `${urgentEvent.title} is ${countdownLabel(urgentEvent)}. Start with one focused block for ${
-          urgentSubject?.subjectName ?? "that deadline"
-        }.`,
-        action: "Study it",
-        route: "study" as const,
-        subjectId: urgentSubject?.id
-      };
-    }
-
-    if (weakestSubject && weakestSubject.ratio < 0.75) {
-      return {
-        icon: "scale-balance",
-        title: "Balance the week",
-        body: `${weakestSubject.subject.subjectName} is at ${weakestSubject.weekMinutes}/${weakestSubject.targetMinutes} target minutes.`,
-        action: "Start block",
-        route: "study" as const,
-        subjectId: weakestSubject.subject.id
-      };
-    }
-
-    if (todayMinutes < dailyTargetMinutes) {
-      return {
-        icon: "timer-play-outline",
-        title: "Hit today's floor",
-        body: `${Math.max(0, dailyTargetMinutes - todayMinutes)} minutes gets you to today's target.`,
-        action: "Start timer",
-        route: "study" as const,
-        subjectId: quickSubject?.id
-      };
-    }
-
-    return {
-      icon: "cards-outline",
-      title: "Bank retrieval practice",
-      body: "You are on pace. A short question drill will keep recall sharp without adding clutter.",
-      action: "Practice",
-      route: "questions" as const,
-      subjectId: undefined
-    };
-  }, [dailyTargetMinutes, goals, quickSubject?.id, subjects, todayMinutes, upcomingEvents, weeklySecondsBySubject]);
   const weaknessSummary = useMemo(
     () => buildWeaknessSummary({ subjects, sessions, goals, notes, savedQuestions, events }),
     [events, goals, notes, savedQuestions, sessions, subjects]
-  );
-  const weeklyReport = useMemo(
-    () => buildWeeklyReport({ subjects, sessions, goals, notes, savedQuestions, gamification }),
-    [gamification, goals, notes, savedQuestions, sessions, subjects]
   );
   const searchResults = useMemo(
     () => globalStudySearch({ query: searchQuery, notes, savedQuestions, events, resources }),
     [events, notes, resources, savedQuestions, searchQuery]
   );
-  const latestMistake = useMemo(
-    () => notes.filter(isMistakeNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
-    [notes]
-  );
-  const latestFlashcard = useMemo(
-    () => notes.filter(isFlashcardNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
-    [notes]
-  );
-  const latestPanicPlan = useMemo(
-    () => notes.filter(isSacPanicNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
-    [notes]
-  );
-  const continueItems = useMemo(
-    () =>
-      [
-        latestPanicPlan
-          ? {
-              icon: "calendar-alert",
-              title: "Resume SAC plan",
-              body: latestPanicPlan.title.replace(/^SAC Panic:\s*/, ""),
-              route: "/(tabs)/study" as const
-            }
-          : null,
-        latestMistake
-          ? {
-              icon: "alert-circle-check-outline",
-              title: "Review latest mistake",
-              body: latestMistake.title.replace(/^Mistake:\s*/, ""),
-              route: "/(tabs)/questions" as const
-            }
-          : null,
-        latestFlashcard
-          ? {
-              icon: "cards-outline",
-              title: "Flip flashcards",
-              body: latestFlashcard.title.replace(/^Flashcard:\s*/, ""),
-              route: "/(tabs)/questions" as const
-            }
-          : null
-      ].filter(Boolean) as { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; body: string; route: "/(tabs)/study" | "/(tabs)/questions" }[],
-    [latestFlashcard, latestMistake, latestPanicPlan]
-  );
 
   const openPanicForEvent = (event?: StudyEvent) => {
-    const eventSubject = event ? subjectForDeadline(event, subjects) : quickSubject;
-    setPanicSubjectId(eventSubject?.id ?? quickSubject?.id ?? subjects[0]?.id ?? null);
+    const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
+    setPanicSubjectId(eventSubject?.id ?? defaultSubject?.id ?? null);
     setPanicTopic(event?.description?.trim() || event?.title || "");
     setPanicDate(event?.eventDate?.slice(0, 10) || new Date().toISOString().slice(0, 10));
     setPanicConfidenceBefore("2");
@@ -422,39 +260,52 @@ export default function DashboardScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {giftMessages.map((gift) => (
-        <Animated.View key={gift.id} entering={motion.card(16)}>
-          <AppCard style={styles.giftCard}>
-            <View style={styles.giftIcon}>
-              <MaterialCommunityIcons name={messageIconFor(gift.giftType)} color={messageIconColorFor(gift.giftType)} size={22} />
+      <Animated.View entering={motion.card(14)}>
+        <AppCard style={styles.searchCard}>
+          <View style={styles.browserSearchRow}>
+            <MaterialCommunityIcons name="magnify" color={palette.muted} size={22} />
+            <TextInput
+              mode="flat"
+              dense
+              placeholder="Search notes, questions, files, events"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              style={styles.browserSearchInput}
+              contentStyle={styles.browserSearchContent}
+            />
+            <Pressable style={styles.levelChip} onPress={() => router.push("/(tabs)/insights")}>
+              <MaterialCommunityIcons name="chart-box-outline" color={palette.warning} size={18} />
+              <View style={styles.levelChipText}>
+                <Text style={styles.levelChipTitle}>Lvl {gamification?.level ?? 1}</Text>
+                <Text style={styles.levelChipSub} numberOfLines={1}>
+                  Insights
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+          {searchResults.length ? (
+            <View style={styles.searchResults}>
+              {searchResults.map((result) => (
+                <Pressable key={`${result.type}-${result.id}`} style={styles.searchResultRow} onPress={() => router.push(result.route)}>
+                  <Text style={styles.searchType}>{result.type}</Text>
+                  <View style={styles.searchResultText}>
+                    <Text style={styles.searchTitle} numberOfLines={1}>
+                      {result.title}
+                    </Text>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {result.detail}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
             </View>
-            <View style={styles.giftText}>
-              <Text style={styles.giftTitle}>{gift.title}</Text>
-              <Text style={styles.giftBody}>{gift.message}</Text>
-            </View>
-            <Button mode="outlined" compact onPress={() => dismissGiftMessage(gift.id)}>
-              {messageActionFor(gift.giftType)}
-            </Button>
-          </AppCard>
-        </Animated.View>
-      ))}
-
-      {showThemeRequestThankYou ? (
-        <Animated.View entering={motion.card(18)}>
-          <AppCard style={styles.thankYouCard}>
-            <View style={styles.thankYouIcon}>
-              <MaterialCommunityIcons name="flower-tulip-outline" color="#F9A8D4" size={22} />
-            </View>
-            <View style={styles.thankYouText}>
-              <Text style={styles.thankYouTitle}>Thank you, Lakeesha</Text>
-              <Text style={styles.thankYouBody}>
-                Your seasonal theme idea helped shape the new cute theme drop, so Cherry Blossom has been unlocked for
-                you as a thank-you.
-              </Text>
-            </View>
-          </AppCard>
-        </Animated.View>
-      ) : null}
+          ) : searchQuery.trim().length > 1 ? (
+            <Text style={styles.muted}>No match yet. Try a subject, topic, file name, or command term.</Text>
+          ) : null}
+        </AppCard>
+      </Animated.View>
 
       <Animated.View entering={motion.card(25)}>
         <AppCard style={styles.inspirationCard}>
@@ -474,88 +325,22 @@ export default function DashboardScreen() {
       </Animated.View>
 
       <Animated.View entering={motion.card(40)}>
-        <AppCard style={styles.summary}>
-          <View style={styles.summaryText}>
-            <Text style={styles.label}>Today</Text>
-            <Text variant="displaySmall" style={styles.minutes}>
-              {todayMinutes}
-            </Text>
-            <Text style={styles.muted}>
-              minutes studied{subjectNamesToday.length ? ` across ${subjectNamesToday.join(", ")}` : ""}
-            </Text>
-          </View>
-          <ProgressRing
-            progress={todayMinutes / dailyTargetMinutes}
-            label={`${Math.min(100, Math.round((todayMinutes / dailyTargetMinutes) * 100))}%`}
-            sublabel="daily"
-            color={palette.success}
-          />
-        </AppCard>
-      </Animated.View>
-
-      <Animated.View entering={motion.card(65)}>
-        <AppCard style={styles.nextMoveCard}>
-          <View style={styles.nextMoveTop}>
-            <View style={styles.nextMoveIcon}>
-              <MaterialCommunityIcons
-                name={nextBestMove.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                color={palette.primary}
-                size={22}
-              />
-            </View>
-            <View style={styles.nextMoveText}>
+        <AppCard style={styles.panicCard}>
+          <View style={styles.rowBetween}>
+            <View style={styles.flexText}>
               <Text variant="titleMedium" style={styles.cardTitle}>
-                {nextBestMove.title}
+                SAC Panic Mode
               </Text>
-              <Text style={styles.muted}>{nextBestMove.body}</Text>
+              <Text style={styles.muted}>Build a survival plan from your notes, mistakes, questions and date pressure.</Text>
             </View>
+            <Button mode="contained" icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(nextDeadline ?? undefined)}>
+              Start
+            </Button>
           </View>
-          <Button
-            mode="contained"
-            icon={nextBestMove.route === "questions" ? "cards-outline" : "play"}
-            onPress={() =>
-              nextBestMove.route === "questions"
-                ? router.push("/(tabs)/questions")
-                : router.push({
-                    pathname: "/(tabs)/study",
-                    params: nextBestMove.subjectId ? { subjectId: nextBestMove.subjectId } : {}
-                  })
-            }
-          >
-            {nextBestMove.action}
-          </Button>
-        </AppCard>
-      </Animated.View>
-
-      <Animated.View entering={motion.card(76)}>
-        <AppCard style={styles.searchCard}>
-          <TextInput
-            mode="outlined"
-            dense
-            label="Search notes, questions, files, events"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            left={<TextInput.Icon icon="magnify" />}
-            style={styles.searchInput}
-          />
-          {searchResults.length ? (
-            <View style={styles.searchResults}>
-              {searchResults.map((result) => (
-                <Pressable key={`${result.type}-${result.id}`} style={styles.searchResultRow} onPress={() => router.push(result.route)}>
-                  <Text style={styles.searchType}>{result.type}</Text>
-                  <View style={styles.searchResultText}>
-                    <Text style={styles.searchTitle} numberOfLines={1}>
-                      {result.title}
-                    </Text>
-                    <Text style={styles.muted} numberOfLines={1}>
-                      {result.detail}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : searchQuery.trim().length > 1 ? (
-            <Text style={styles.muted}>No match yet. Try a subject, topic, file name, or command term.</Text>
+          {nextDeadline ? (
+            <Text style={styles.panicHint}>
+              Fast pick: {nextDeadline.title} is {countdownLabel(nextDeadline)}.
+            </Text>
           ) : null}
         </AppCard>
       </Animated.View>
@@ -596,94 +381,46 @@ export default function DashboardScreen() {
       </Animated.View>
 
       <Animated.View entering={motion.card(96)}>
-        <AppCard style={styles.panicCard}>
-          <View style={styles.rowBetween}>
-            <View style={styles.flexText}>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                SAC Panic Mode
-              </Text>
-              <Text style={styles.muted}>Build a survival plan from your notes, mistakes, questions and date pressure.</Text>
+        <AppCard style={styles.deadlineCard}>
+          <View style={styles.nextMoveTop}>
+            <View style={styles.nextMoveIcon}>
+              <MaterialCommunityIcons name="calendar-alert" color={palette.primary} size={22} />
             </View>
-            <Button mode="contained" icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(upcomingEvents[0])}>
-              Start
-            </Button>
+            <View style={styles.nextMoveText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Protect the next deadline
+              </Text>
+              <Text style={styles.muted}>
+                {nextDeadline
+                  ? `${nextDeadline.title} is ${countdownLabel(nextDeadline)}. Start with one focused block for ${
+                      nextDeadlineSubject?.subjectName ?? "that deadline"
+                    }.`
+                  : "No assessment deadlines are logged yet. Add SACs, SATs, exams or tasks so Home can protect the nearest one."}
+              </Text>
+            </View>
           </View>
-          {upcomingEvents[0] ? (
-            <Text style={styles.panicHint}>
-              Fast pick: {upcomingEvents[0].title} is {countdownLabel(upcomingEvents[0])}.
-            </Text>
-          ) : null}
-        </AppCard>
-      </Animated.View>
-
-      {continueItems.length ? (
-        <Animated.View entering={motion.card(118)}>
-          <AppCard style={styles.section}>
-            <Text variant="titleMedium" style={styles.cardTitle}>
-              Continue where you left off
-            </Text>
-            {continueItems.map((item) => (
-              <Pressable key={item.title} style={styles.continueRow} onPress={() => router.push(item.route)}>
-                <View style={styles.continueIcon}>
-                  <MaterialCommunityIcons name={item.icon} color={palette.info} size={18} />
-                </View>
-                <View style={styles.eventText}>
-                  <Text style={styles.eventTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.muted} numberOfLines={1}>
-                    {item.body}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </AppCard>
-        </Animated.View>
-      ) : null}
-
-      <Animated.View entering={motion.card(90)}>
-        <AppCard>
-          <XPBar gamification={gamification} />
-        </AppCard>
-      </Animated.View>
-
-      <Animated.View entering={motion.card(140)}>
-        <AppCard style={styles.quickStart}>
-          <View style={styles.rowBetween}>
-            <View>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Quick start
-              </Text>
-              <Text style={styles.muted}>Jump straight into focused minutes.</Text>
-            </View>
+          <View style={styles.actionRow}>
             <Button
               mode="contained"
               icon="play"
-              disabled={!quickSubject}
+              disabled={!nextDeadline}
               onPress={() =>
-                quickSubject &&
                 router.push({
                   pathname: "/(tabs)/study",
-                  params: { subjectId: quickSubject.id }
+                  params: nextDeadlineSubject?.id ? { subjectId: nextDeadlineSubject.id } : {}
                 })
               }
             >
-              Start
+              Study it
+            </Button>
+            <Button mode="outlined" icon="calendar-month" onPress={() => router.push("/(tabs)/calendar")}>
+              Calendar
             </Button>
           </View>
-          {subjects.length ? (
-            <SubjectSelector
-              subjects={subjects}
-              selectedId={quickSubject?.id}
-              onSelect={(subject) => setQuickSubjectId(subject.id)}
-            />
-          ) : (
-            <EmptyState title="No subjects yet" body="Add a subject from Profile, then jump back here to start studying." />
-          )}
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(190)}>
+      <Animated.View entering={motion.card(118)}>
         <AppCard style={styles.section}>
           <Text variant="titleMedium" style={styles.cardTitle}>
             Upcoming
@@ -729,40 +466,39 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(240)}>
-        <AppCard>
-          <View style={styles.rowBetween}>
-            <Text variant="titleMedium" style={styles.cardTitle}>
-              Subject mix
-            </Text>
-            <Text style={styles.muted}>{Math.round((stats?.weekSeconds ?? 0) / 3600)}h this week</Text>
-          </View>
-          <WeeklyChart data={chartData} />
-        </AppCard>
-      </Animated.View>
+      {giftMessages.map((gift) => (
+        <Animated.View key={gift.id} entering={motion.card(140)}>
+          <AppCard style={styles.giftCard}>
+            <View style={styles.giftIcon}>
+              <MaterialCommunityIcons name={messageIconFor(gift.giftType)} color={messageIconColorFor(gift.giftType)} size={22} />
+            </View>
+            <View style={styles.giftText}>
+              <Text style={styles.giftTitle}>{gift.title}</Text>
+              <Text style={styles.giftBody}>{gift.message}</Text>
+            </View>
+            <Button mode="outlined" compact onPress={() => dismissGiftMessage(gift.id)}>
+              {messageActionFor(gift.giftType)}
+            </Button>
+          </AppCard>
+        </Animated.View>
+      ))}
 
-      <Animated.View entering={motion.card(270)}>
-        <AppCard style={styles.reportCard}>
-          <View style={styles.rowBetween}>
-            <View>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Weekly study report
+      {showThemeRequestThankYou ? (
+        <Animated.View entering={motion.card(150)}>
+          <AppCard style={styles.thankYouCard}>
+            <View style={styles.thankYouIcon}>
+              <MaterialCommunityIcons name="flower-tulip-outline" color="#F9A8D4" size={22} />
+            </View>
+            <View style={styles.thankYouText}>
+              <Text style={styles.thankYouTitle}>Thank you, Lakeesha</Text>
+              <Text style={styles.thankYouBody}>
+                Your seasonal theme idea helped shape the new cute theme drop, so Cherry Blossom has been unlocked for
+                you as a thank-you.
               </Text>
-              <Text style={styles.muted}>A quick read on what the week is saying.</Text>
             </View>
-            <View style={styles.reportBadge}>
-              <Text style={styles.reportBadgeValue}>{weeklyReport.totalMinutes}</Text>
-              <Text style={styles.reportBadgeLabel}>min</Text>
-            </View>
-          </View>
-          {weeklyReport.lines.map((line) => (
-            <Text key={line} style={styles.reportLine}>
-              - {line}
-            </Text>
-          ))}
-          <Text style={styles.nextActionText}>{weeklyReport.nextMove}</Text>
-        </AppCard>
-      </Animated.View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       <Portal>
         <Dialog visible={panicOpen} onDismiss={() => setPanicOpen(false)} style={styles.dialog}>
@@ -996,10 +732,52 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   searchCard: {
+    gap: 10,
+    paddingVertical: 10,
+    borderColor: "rgba(148,163,184,0.2)",
+    backgroundColor: "rgba(255,255,255,0.045)"
+  },
+  browserSearchRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10
   },
-  searchInput: {
-    backgroundColor: palette.surface
+  browserSearchInput: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: "transparent"
+  },
+  browserSearchContent: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  levelChip: {
+    width: 108,
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.34)",
+    backgroundColor: "rgba(245,158,11,0.1)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 8
+  },
+  levelChipText: {
+    flex: 1,
+    minWidth: 0
+  },
+  levelChipTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  levelChipSub: {
+    color: palette.warning,
+    fontSize: 10,
+    fontFamily: "Outfit_700Bold"
   },
   searchResults: {
     gap: 8
@@ -1064,6 +842,11 @@ const styles = StyleSheet.create({
   panicHint: {
     color: palette.warning,
     fontFamily: "Outfit_700Bold"
+  },
+  deadlineCard: {
+    gap: 14,
+    borderColor: "rgba(124,110,255,0.22)",
+    backgroundColor: "rgba(124,110,255,0.08)"
   },
   continueRow: {
     flexDirection: "row",

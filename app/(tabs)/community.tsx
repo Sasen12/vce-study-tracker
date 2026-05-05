@@ -77,6 +77,7 @@ const themeNameById = (themeId?: string | null) =>
 
 const usageScreenLabels: Record<UsageScreen, string> = {
   home: "Home",
+  insights: "Insights",
   study: "Study",
   calendar: "Calendar",
   questions: "Questions",

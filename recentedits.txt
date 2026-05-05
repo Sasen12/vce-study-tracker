@@ -3,7 +3,42 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - Subject-aware Command Term Trainer
+Most recent edit: 2026-05-05 - Home cleanup and Insights screen
+
+Summary:
+- Simplified the Home page so it follows Sasen's requested order:
+  - Header stays the same with "Hey {user}" on the left and the day streak on the right.
+  - Browser-style search bar is now the first main control.
+  - Daily Spark comes next.
+  - SAC Panic Mode comes before Weakness Coach.
+  - VCE Weakness Coach follows.
+  - Protect the next deadline follows.
+  - Upcoming events stays as the final core Home section.
+- Removed the Home-page analytics clutter:
+  - Removed the Today minutes analytics card from Home.
+  - Removed Subject mix from Home.
+  - Removed Weekly study report from Home.
+  - Removed the old XP bar from Home.
+  - Removed Quick start and Continue cards from Home so the page is more focused.
+- Added a new hidden Insights screen at app/(tabs)/insights.tsx.
+  - It is opened from the compact level/Insights chip inside the Home search bar.
+  - It contains the fuller XP/level view using a progress ring instead of the old bar.
+  - It contains Weekly study report, Study pulse, Subject mix, Weekly pace, and Continue items.
+- Added the hidden Insights route to the tab navigator without adding another bottom-nav item.
+- Added "insights" to frontend and backend usage tracking labels so admin analytics can understand the new screen.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-05 - Subject-aware Command Term Trainer
 
 Summary:
 - Made Questions > Tools > Terms adapt to the selected VCE subject instead of showing one Business/Humanities-style command-term set for everything.

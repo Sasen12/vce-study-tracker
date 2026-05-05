@@ -25,7 +25,7 @@ const giftThemeSchema = z.object({
   equip: z.boolean().default(true)
 });
 
-const trackedScreens = ["home", "study", "calendar", "questions", "community", "shop", "profile"] as const;
+const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "profile"] as const;
 type TrackedScreen = (typeof trackedScreens)[number];
 
 const usageEventSchema = z.object({
@@ -35,6 +35,7 @@ const usageEventSchema = z.object({
 
 const screenLabels: Record<TrackedScreen, string> = {
   home: "Home",
+  insights: "Insights",
   study: "Study",
   calendar: "Calendar",
   questions: "Questions",

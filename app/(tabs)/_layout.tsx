@@ -38,6 +38,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="insights"
+        options={{
+          href: null,
+          title: "Insights"
+        }}
+      />
+      <Tabs.Screen
         name="study"
         options={{
           title: "Study",
