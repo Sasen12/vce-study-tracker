@@ -3,6 +3,7 @@ import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from "react-
 import * as DocumentPicker from "expo-document-picker";
 import { Button, Dialog, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { ClassNotetakerPanel } from "@/components/session/ClassNotetakerPanel";
+import { FormattedStudyText } from "@/components/session/FormattedStudyText";
 import { AppCard } from "@/components/ui/AppCard";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { palette } from "@/constants/theme";
@@ -358,7 +359,7 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
               <Text style={styles.muted}>
                 {viewingNote?.subject?.subjectName ?? "General"} - {viewingNote?.noteType.replace("_", " ")}
               </Text>
-              <Text style={styles.fullNote}>{viewingNoteBody || "Image note"}</Text>
+              <FormattedStudyText value={viewingNoteBody || "Image note"} />
               {viewingNoteImages.length ? (
                 <View style={styles.fullImageGrid}>
                   {viewingNoteImages.map((image) => (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Button, Text, TextInput } from "react-native-paper";
+import { FormattedStudyText } from "@/components/session/FormattedStudyText";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
@@ -228,7 +229,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
 
       {answer ? (
         <View style={styles.answerStack}>
-          <Text style={styles.answer}>{answer.answer}</Text>
+          <FormattedStudyText value={answer.answer} />
 
           {answer.key_points.length ? (
             <View style={styles.block}>
@@ -290,7 +291,11 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
                     {expanded ? "Hide" : "View"}
                   </Button>
                 </View>
-                {expanded ? <Text style={styles.historyBody}>{note.body}</Text> : null}
+                {expanded ? (
+                  <View style={styles.historyBody}>
+                    <FormattedStudyText value={note.body} compact />
+                  </View>
+                ) : null}
               </View>
             );
           })}
@@ -459,8 +464,6 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   historyBody: {
-    color: palette.text,
-    lineHeight: 21,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: palette.border,
