@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Button, Text, TextInput } from "react-native-paper";
@@ -16,6 +16,36 @@ type ScreenshotAsset = {
   name: string;
   mimeType?: string;
   file?: Blob;
+};
+
+const coachAnswerTag = "coach-answer";
+
+const coachNoteTitle = (question: string) => `Coach: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
+
+const coachNoteBody = (question: string, answer: StudyAnswer, screenshotCount: number) =>
+  [
+    "Question",
+    question,
+    screenshotCount ? `Screenshots attached: ${screenshotCount}` : null,
+    "Answer",
+    answer.answer,
+    answer.key_points.length ? `Key points\n${answer.key_points.map((point) => `- ${point}`).join("\n")}` : null,
+    answer.sources_used.length
+      ? `Sources\n${answer.sources_used
+          .map((source) => `- ${source.title}${source.detail || source.source_type ? ` (${source.detail || source.source_type})` : ""}`)
+          .join("\n")}`
+      : null,
+    answer.follow_up_questions.length
+      ? `Follow-up questions\n${answer.follow_up_questions.map((followUp) => `- ${followUp}`).join("\n")}`
+      : null
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const formatSavedDate = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
 const appendScreenshot = (formData: FormData, asset: ScreenshotAsset) => {
@@ -44,11 +74,23 @@ const SourceRow = ({ title, detail }: { title: string; detail?: string }) => (
 
 export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
+  const createNote = useAppStore((state) => state.createNote);
+  const notes = useAppStore((state) => state.notes);
   const [question, setQuestion] = useState("");
   const [screenshots, setScreenshots] = useState<ScreenshotAsset[]>([]);
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const selectedSubjectId = selectedSubject?.id ?? null;
+
+  const coachHistory = useMemo(
+    () =>
+      notes.filter(
+        (note) => note.tags.includes(coachAnswerTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
+      ),
+    [notes, selectedSubjectId]
+  );
 
   const addScreenshotAssets = useCallback((assets: ScreenshotAsset[]) => {
     if (!assets.length) return;
@@ -103,7 +145,8 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
   };
 
   const ask = async () => {
-    if (!selectedSubject || !question.trim()) {
+    const askedQuestion = question.trim();
+    if (!selectedSubject || !askedQuestion) {
       setMessage("Choose a subject and add a question.");
       return;
     }
@@ -113,11 +156,23 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
     try {
       const formData = new FormData();
       formData.append("subjectId", selectedSubject.id);
-      formData.append("question", question.trim());
+      formData.append("question", askedQuestion);
       screenshots.forEach((asset) => appendScreenshot(formData, asset));
 
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
+      try {
+        await createNote({
+          subjectId: selectedSubject.id,
+          title: coachNoteTitle(askedQuestion),
+          body: coachNoteBody(askedQuestion, nextAnswer, screenshots.length),
+          noteType: "general",
+          tags: [coachAnswerTag]
+        });
+        setMessage("Coach answer saved.");
+      } catch {
+        setMessage("Answer shown, but it could not be saved.");
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not answer that yet.");
     } finally {
@@ -166,7 +221,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
         <Button mode="outlined" icon="image-plus" disabled={asking || screenshots.length >= 4} onPress={addScreenshots}>
           Image
         </Button>
-        <Button mode="contained" icon="send" loading={asking} disabled={asking || !selectedSubject} onPress={ask}>
+        <Button mode="contained" icon="send" loading={asking} disabled={asking || !selectedSubject || !question.trim()} onPress={ask}>
           Ask
         </Button>
       </View>
@@ -204,6 +259,41 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
               ))}
             </View>
           ) : null}
+        </View>
+      ) : null}
+
+      {coachHistory.length ? (
+        <View style={styles.historyStack}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.blockTitle}>Saved coach answers</Text>
+            <Text style={styles.muted}>
+              {coachHistory.length} saved{selectedSubject ? "" : " total"}
+            </Text>
+          </View>
+          {coachHistory.map((note) => {
+            const expanded = expandedHistoryId === note.id;
+            return (
+              <View key={note.id} style={styles.historyItem}>
+                <View style={styles.historyRow}>
+                  <View style={styles.historyText}>
+                    <Text style={styles.historyTitle}>{note.title.replace(/^Coach:\s*/, "")}</Text>
+                    <Text style={styles.muted}>
+                      {note.subject?.subjectName ?? "General"} - {formatSavedDate(note.createdAt)}
+                    </Text>
+                  </View>
+                  <Button
+                    mode="text"
+                    compact
+                    icon={expanded ? "chevron-up" : "eye-outline"}
+                    onPress={() => setExpandedHistoryId(expanded ? null : note.id)}
+                  >
+                    {expanded ? "Hide" : "View"}
+                  </Button>
+                </View>
+                {expanded ? <Text style={styles.historyBody}>{note.body}</Text> : null}
+              </View>
+            );
+          })}
         </View>
       ) : null}
 
@@ -333,6 +423,49 @@ const styles = StyleSheet.create({
   followUps: {
     alignItems: "flex-start",
     gap: 2
+  },
+  historyStack: {
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 12
+  },
+  historyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap"
+  },
+  historyItem: {
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 10
+  },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  historyText: {
+    flex: 1,
+    minWidth: 0
+  },
+  historyTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  historyBody: {
+    color: palette.text,
+    lineHeight: 21,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surfaceRaised,
+    padding: 10
   },
   message: {
     color: palette.warning,
