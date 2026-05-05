@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { ClassNotetakerPanel } from "@/components/session/ClassNotetakerPanel";
 import { AppCard } from "@/components/ui/AppCard";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
-import type { StudyNoteType, UserSubject } from "@/types";
+import type { StudyNote, StudyNoteType, UserSubject } from "@/types";
 
 type StudyNotesPanelProps = {
   subjects: UserSubject[];
@@ -98,6 +98,7 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [viewingNote, setViewingNote] = useState<StudyNote | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
@@ -106,6 +107,8 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
     () => notes.filter((note) => !selectedSubjectId || note.subjectId === selectedSubjectId).slice(0, 6),
     [notes, selectedSubjectId]
   );
+  const viewingNoteImages = useMemo(() => (viewingNote ? embeddedImagesFromBody(viewingNote.body) : []), [viewingNote]);
+  const viewingNoteBody = viewingNote ? bodyWithoutImages(viewingNote.body) : "";
 
   const addImageFiles = useCallback(async (files: { file: Blob; name: string }[]) => {
     if (!files.length) return;
@@ -310,16 +313,21 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
                       {note.subject?.subjectName ?? "General"} - {note.noteType.replace("_", " ")}
                     </Text>
                   </View>
-                  <Button
-                    mode="text"
-                    compact
-                    icon={confirmDeleteId === note.id ? "check" : "delete-outline"}
-                    textColor={confirmDeleteId === note.id ? palette.secondary : palette.muted}
-                    loading={deletingId === note.id}
-                    onPress={() => removeNote(note.id)}
-                  >
-                    {confirmDeleteId === note.id ? "Confirm" : "Delete"}
-                  </Button>
+                  <View style={styles.noteButtons}>
+                    <Button mode="text" compact icon="eye-outline" onPress={() => setViewingNote(note)}>
+                      View
+                    </Button>
+                    <Button
+                      mode="text"
+                      compact
+                      icon={confirmDeleteId === note.id ? "check" : "delete-outline"}
+                      textColor={confirmDeleteId === note.id ? palette.secondary : palette.muted}
+                      loading={deletingId === note.id}
+                      onPress={() => removeNote(note.id)}
+                    >
+                      {confirmDeleteId === note.id ? "Confirm" : "Delete"}
+                    </Button>
+                  </View>
                 </View>
                 <Text numberOfLines={3} style={styles.preview}>
                   {bodyWithoutImages(note.body) || "Image note"}
@@ -336,6 +344,30 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
           })}
         </AppCard>
       ) : null}
+
+      <Portal>
+        <Dialog visible={Boolean(viewingNote)} onDismiss={() => setViewingNote(null)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{viewingNote?.title}</Dialog.Title>
+          <Dialog.Content>
+            <ScrollView style={styles.noteDialogScroll} contentContainerStyle={styles.noteDialogContent}>
+              <Text style={styles.muted}>
+                {viewingNote?.subject?.subjectName ?? "General"} - {viewingNote?.noteType.replace("_", " ")}
+              </Text>
+              <Text style={styles.fullNote}>{viewingNoteBody || "Image note"}</Text>
+              {viewingNoteImages.length ? (
+                <View style={styles.fullImageGrid}>
+                  {viewingNoteImages.map((image) => (
+                    <Image key={image.id} source={{ uri: image.dataUrl }} style={styles.fullImage} />
+                  ))}
+                </View>
+              ) : null}
+            </ScrollView>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setViewingNote(null)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
@@ -371,6 +403,12 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     minWidth: 0
+  },
+  noteButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 2
   },
   noteActions: {
     flexDirection: "row",
@@ -426,6 +464,35 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: palette.border
+  },
+  dialog: {
+    backgroundColor: palette.surface
+  },
+  dialogTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  noteDialogScroll: {
+    maxHeight: 460
+  },
+  noteDialogContent: {
+    gap: 12
+  },
+  fullNote: {
+    color: palette.text,
+    lineHeight: 21
+  },
+  fullImageGrid: {
+    gap: 12
+  },
+  fullImage: {
+    width: "100%",
+    height: 260,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    resizeMode: "contain",
+    backgroundColor: palette.surfaceRaised
   },
   message: {
     color: palette.success,

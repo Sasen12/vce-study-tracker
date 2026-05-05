@@ -360,6 +360,7 @@ export type StudyResource = {
   fileType: "pdf" | "docx" | "doc" | "markdown" | "text" | string;
   sourceType: ResourceSourceType | string;
   extractedTextPreview?: string;
+  extractedText?: string;
   createdAt: string;
   subject?: UserSubject | null;
 };

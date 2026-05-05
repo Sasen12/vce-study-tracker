@@ -9,7 +9,7 @@ import { StudyAskCard } from "@/components/session/StudyAskCard";
 import { motion } from "@/constants/motion";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
-import type { AdaptiveStudyTask, DailyStudyPlan, PlanSourceEvent, SubjectRoadmap, UserSubject } from "@/types";
+import type { AdaptiveStudyTask, DailyStudyPlan, PlanSourceEvent, StudyReflection, SubjectRoadmap, UserSubject } from "@/types";
 import { eventDateKey, isAssessmentEvent, isStudyTimeEvent, recurrenceLabel } from "@/utils/studyEvents";
 
 type StudyCoachPanelProps = {
@@ -560,6 +560,55 @@ const displayTaskMake = (task: AdaptiveStudyTask, dayIndex: number, taskIndex = 
   return baseOutput;
 };
 
+function ClassLogItem({
+  reflection,
+  expanded,
+  onToggle
+}: {
+  reflection: StudyReflection;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const dateKey = reflection.classDate.slice(0, 10);
+
+  return (
+    <View style={styles.classLogItem}>
+      <View style={styles.classLogHeader}>
+        <View style={styles.classLogTitleBlock}>
+          <Text style={styles.taskTitle}>{reflection.subject?.subjectName ?? "General"}</Text>
+          <Text style={styles.muted}>{readableDate(dateKey)}</Text>
+        </View>
+        <Button mode="text" compact icon={expanded ? "chevron-up" : "chevron-down"} onPress={onToggle}>
+          {expanded ? "Hide" : "View"}
+        </Button>
+      </View>
+
+      <Text numberOfLines={expanded ? undefined : 2} style={styles.reason}>
+        {reflection.classSummary}
+      </Text>
+
+      {expanded ? (
+        <View style={styles.classLogDetails}>
+          <View style={styles.classLogDetail}>
+            <Text style={styles.classLogLabel}>Made sense</Text>
+            <Text style={styles.classLogBody}>{reflection.understood}</Text>
+          </View>
+          <View style={styles.classLogDetail}>
+            <Text style={styles.classLogLabel}>Did not click</Text>
+            <Text style={styles.classLogBody}>{reflection.confused}</Text>
+          </View>
+          {reflection.nextAction ? (
+            <View style={styles.classLogDetail}>
+              <Text style={styles.classLogLabel}>Next move</Text>
+              <Text style={styles.classLogBody}>{reflection.nextAction}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }: StudyCoachPanelProps) {
   const { events, reflections, latestPlan, createReflection, generatePlan } = useAppStore();
   const [classDate, setClassDate] = useState(todayString());
@@ -575,11 +624,15 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
   const [autoPlanning, setAutoPlanning] = useState(false);
   const [roadmapView, setRoadmapView] = useState("timeline");
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const lastAutoPlanKeyRef = useRef<string | null>(null);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
-  const recentReflections = useMemo(() => reflections.slice(0, 3), [reflections]);
+  const visibleClassLogs = useMemo(
+    () => reflections.filter((reflection) => !selectedSubject || reflection.subjectId === selectedSubject.id).slice(0, 8),
+    [reflections, selectedSubject]
+  );
   const upcomingAssessments = useMemo(
     () =>
       events
@@ -748,7 +801,7 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
 
     setSavingReflection(true);
     try {
-      await createReflection({
+      const savedLog = await createReflection({
         subjectId: selectedSubject.id,
         classDate,
         classSummary: classSummary.trim(),
@@ -756,6 +809,7 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
         confused: confused.trim(),
         nextAction: nextAction.trim() || null
       });
+      setExpandedLogId(savedLog.id);
       setClassSummary("");
       setUnderstood("");
       setConfused("");
@@ -827,6 +881,29 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
         <Button mode="contained" icon="content-save" loading={savingReflection} onPress={saveReflection}>
           Save class log
         </Button>
+      </AppCard>
+
+      <AppCard style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View>
+            <Text variant="titleMedium" style={styles.title}>
+              Saved class logs
+            </Text>
+            <Text style={styles.muted}>{selectedSubject ? `${selectedSubject.subjectName} logs` : "All subjects"}</Text>
+          </View>
+        </View>
+        {visibleClassLogs.length ? (
+          visibleClassLogs.map((reflection) => (
+            <ClassLogItem
+              key={reflection.id}
+              reflection={reflection}
+              expanded={expandedLogId === reflection.id}
+              onToggle={() => setExpandedLogId((current) => (current === reflection.id ? null : reflection.id))}
+            />
+          ))
+        ) : (
+          <Text style={styles.muted}>No saved class logs yet.</Text>
+        )}
       </AppCard>
 
       <AppCard style={styles.card}>
@@ -1178,21 +1255,6 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
           </View>
         ) : null}
       </AppCard>
-
-      {recentReflections.length ? (
-        <AppCard style={styles.card}>
-          <Text variant="titleMedium" style={styles.title}>
-            Recent logs
-          </Text>
-          {recentReflections.map((reflection) => (
-            <View key={reflection.id} style={styles.recentLog}>
-              <Text style={styles.taskTitle}>{reflection.subject?.subjectName ?? "General"}</Text>
-              <Text style={styles.muted}>{reflection.classDate.slice(0, 10)}</Text>
-              <Text style={styles.reason}>{reflection.confused}</Text>
-            </View>
-          ))}
-        </AppCard>
-      ) : null}
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
@@ -1900,11 +1962,43 @@ const styles = StyleSheet.create({
     borderTopColor: palette.border,
     paddingTop: 10
   },
-  recentLog: {
-    gap: 3,
+  classLogItem: {
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: palette.border,
     paddingTop: 10
+  },
+  classLogHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  classLogTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3
+  },
+  classLogDetails: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12
+  },
+  classLogDetail: {
+    gap: 4
+  },
+  classLogLabel: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  classLogBody: {
+    color: palette.text,
+    lineHeight: 20
   },
   message: {
     color: palette.success,

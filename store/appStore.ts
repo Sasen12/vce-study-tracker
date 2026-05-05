@@ -119,7 +119,7 @@ type AppState = {
     understood: string;
     confused: string;
     nextAction?: string | null;
-  }) => Promise<void>;
+  }) => Promise<StudyReflection>;
   createNote: (input: {
     subjectId?: string | null;
     title: string;
@@ -304,6 +304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createReflection: async (input) => {
     const data = await studyApi.createReflection(input);
     set({ reflections: [data.reflection, ...get().reflections] });
+    return data.reflection;
   },
   createNote: async (input) => {
     const data = await studyApi.createNote(input);

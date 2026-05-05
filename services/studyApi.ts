@@ -157,6 +157,7 @@ export const studyApi = {
     apiFetch<{ note: StudyNote }>(`/coach/notes/${id}`, { method: "PUT", body }),
   deleteNote: (id: string) => apiFetch<void>(`/coach/notes/${id}`, { method: "DELETE" }),
   resources: () => apiFetch<{ resources: StudyResource[] }>("/coach/resources"),
+  resource: (id: string) => apiFetch<{ resource: StudyResource }>(`/coach/resources/${id}`),
   uploadResources: (formData: FormData) =>
     apiUpload<{ resources: StudyResource[] }>("/coach/resources/upload", formData),
   deleteResource: (id: string) => apiFetch<void>(`/coach/resources/${id}`, { method: "DELETE" }),

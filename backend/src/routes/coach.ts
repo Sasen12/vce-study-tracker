@@ -493,6 +493,24 @@ coachRouter.post(
   })
 );
 
+coachRouter.get(
+  "/resources/:id",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const resource = await prisma.studyResource.findFirst({
+      where: { id: req.params.id, userId: authReq.user.id },
+      include: { subject: true }
+    });
+    if (!resource) throw new HttpError(404, "Resource not found");
+    res.json({
+      resource: {
+        ...resource,
+        extractedTextPreview: resource.extractedText.slice(0, 260)
+      }
+    });
+  })
+);
+
 coachRouter.delete(
   "/resources/:id",
   asyncHandler(async (req, res) => {

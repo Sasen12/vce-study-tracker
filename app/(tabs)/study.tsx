@@ -68,6 +68,7 @@ export default function StudyScreen() {
   const [checkpointResult, setCheckpointResult] = useState<"correct" | "wrong" | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [confettiKey, setConfettiKey] = useState(0);
   const [mode, setMode] = useState("coach");
   const scale = useSharedValue(1);
@@ -168,6 +169,7 @@ export default function StudyScreen() {
   const stop = () => {
     setRunning(false);
     if (elapsed >= 60) {
+      setSummaryError(null);
       setSummaryOpen(true);
     } else {
       setElapsed(0);
@@ -178,35 +180,66 @@ export default function StudyScreen() {
   const confirmSave = async () => {
     if (!selectedSubject) return;
     setSaving(true);
+    setSummaryError(null);
     const previousLevel = gamification?.level ?? 1;
+    const topic = studyTopic.trim();
+    const typedNotes = notes.trim();
     const sessionNotes = [
-      studyTopic.trim() ? `Topic: ${studyTopic.trim()}` : "",
-      notes.trim(),
+      topic ? `Topic: ${topic}` : "",
+      typedNotes,
       timerBonusXp ? `Timer check bonus: ${timerBonusXp} XP` : ""
     ]
       .filter(Boolean)
       .join("\n\n");
-    await saveSession({
-      subjectId: selectedSubject.id,
-      durationSeconds: elapsed,
-      notes: sessionNotes || null,
-      bonusXp: timerBonusXp
-    });
-    const nextLevel = useAppStore.getState().gamification?.level ?? previousLevel;
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (nextLevel > previousLevel) setConfettiKey((key) => key + 1);
-    setMessage(MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)]);
-    setSaving(false);
-    setSummaryOpen(false);
-    setElapsed(0);
-    setStudyTopic("");
-    setNotes("");
-    setTimerBonusXp(0);
-    setNextCheckpointAt(checkpointIntervalSeconds);
-    setCheckpointQuestion(null);
-    setCheckpointOpen(false);
-    setSelectedCheckpointOption(null);
-    setCheckpointResult(null);
+
+    try {
+      await saveSession({
+        subjectId: selectedSubject.id,
+        durationSeconds: elapsed,
+        notes: sessionNotes || null,
+        bonusXp: timerBonusXp
+      });
+
+      let noteMirrorError: string | null = null;
+      if (typedNotes) {
+        try {
+          await createNote({
+            subjectId: selectedSubject.id,
+            title: `Session notes: ${topic || selectedSubject.subjectName}`.slice(0, 140),
+            noteType: "general",
+            tags: ["session-summary"],
+            body: [
+              `${formatElapsed(elapsed)} focused on ${selectedSubject.subjectName}.`,
+              topic ? `Topic: ${topic}` : "",
+              typedNotes
+            ]
+              .filter(Boolean)
+              .join("\n\n")
+          });
+        } catch (error) {
+          noteMirrorError = error instanceof Error ? error.message : "Could not copy notes into Recent notes.";
+        }
+      }
+
+      const nextLevel = useAppStore.getState().gamification?.level ?? previousLevel;
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      if (nextLevel > previousLevel) setConfettiKey((key) => key + 1);
+      setMessage(noteMirrorError ?? MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)]);
+      setSummaryOpen(false);
+      setElapsed(0);
+      setStudyTopic("");
+      setNotes("");
+      setTimerBonusXp(0);
+      setNextCheckpointAt(checkpointIntervalSeconds);
+      setCheckpointQuestion(null);
+      setCheckpointOpen(false);
+      setSelectedCheckpointOption(null);
+      setCheckpointResult(null);
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : "Could not save this study session.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const answerCheckpoint = async (option: GeneratedAnswerOption) => {
@@ -408,10 +441,11 @@ export default function StudyScreen() {
               numberOfLines={3}
               onChangeText={setNotes}
             />
+            {summaryError ? <Text style={styles.summaryError}>{summaryError}</Text> : null}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setSummaryOpen(false)}>Cancel</Button>
-            <Button mode="contained" loading={saving} disabled={saving} onPress={confirmSave}>
+            <Button mode="contained" loading={saving} disabled={saving || !selectedSubject} onPress={confirmSave}>
               Save
             </Button>
           </Dialog.Actions>
@@ -593,6 +627,11 @@ const styles = StyleSheet.create({
   },
   summaryBonus: {
     color: palette.success,
+    fontFamily: "Outfit_700Bold"
+  },
+  summaryError: {
+    color: palette.warning,
+    textAlign: "center",
     fontFamily: "Outfit_700Bold"
   },
   checkpointTopic: {

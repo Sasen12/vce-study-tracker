@@ -53,6 +53,28 @@ const daysUntil = (date: string) => {
   return Math.ceil((target.getTime() - now.getTime()) / 86400000);
 };
 
+const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
+const timePattern = /^\d{2}:\d{2}$/;
+
+const isValidDateKey = (value: string) => {
+  if (!dateKeyPattern.test(value)) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && localDateKey(date) === value;
+};
+
+const datePickerValue = (value: string) => (isValidDateKey(value) ? new Date(`${value}T00:00:00`) : new Date());
+
+const isValidTime = (value: string) => {
+  if (!timePattern.test(value)) return false;
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+};
+
+const timeToMinutes = (value: string) => {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
 const displayMeta = (occurrence: EventOccurrence) => {
   const { event, dateKey } = occurrence;
   if (isStudyTimeEvent(event)) {
@@ -184,12 +206,32 @@ export default function CalendarScreen() {
   const dueSoonCount = useMemo(() => upcoming.filter((occurrence) => daysUntil(occurrence.dateKey) <= 7).length, [upcoming]);
   const todayAssessmentCount = useMemo(() => upcoming.filter((occurrence) => daysUntil(occurrence.dateKey) === 0).length, [upcoming]);
   const nextAssessment = upcoming[0];
+  const eventDateMarked = useMemo(
+    () =>
+      isValidDateKey(eventDate)
+        ? {
+            [eventDate]: {
+              selected: true,
+              selectedColor: palette.primary
+            }
+          }
+        : {},
+    [eventDate]
+  );
+
+  const eventDateValid = isValidDateKey(eventDate);
+  const recurrenceUntilValid = !recurrenceUntil.trim() || isValidDateKey(recurrenceUntil.trim());
+  const studyTimesValid =
+    eventKind !== "study" || (isValidTime(startTime) && isValidTime(endTime) && timeToMinutes(endTime) > timeToMinutes(startTime));
+  const canSubmitEvent =
+    !saving && eventDateValid && recurrenceUntilValid && studyTimesValid && (eventKind === "study" || Boolean(subjectId));
 
   const resetForm = (kind: EventKind) => {
+    const defaultDate = selectedDate >= todayKey() ? selectedDate : todayKey();
     setEventKind(kind);
     setSubjectId(kind === "assessment" ? subjects[0]?.id ?? null : null);
     setEventType("SAC");
-    setEventDate(selectedDate);
+    setEventDate(defaultDate);
     setTitle(kind === "study" ? "Study block" : "");
     setStartTime("15:30");
     setEndTime("16:30");
@@ -200,6 +242,20 @@ export default function CalendarScreen() {
     setMessage(null);
     setEditingEventId(null);
     setShowPicker(false);
+  };
+
+  const changeEventKind = (value: string) => {
+    const nextKind = value as EventKind;
+    setEventKind(nextKind);
+    setMessage(null);
+    if (nextKind === "study") {
+      setTitle((current) => current.trim() || "Study block");
+      setNotificationMinutes((current) => current || "15");
+      return;
+    }
+    setSubjectId((current) => current ?? subjects[0]?.id ?? null);
+    setTitle((current) => (current === "Study block" ? "" : current));
+    setNotificationMinutes((current) => current || "60");
   };
 
   const openAddDialog = (kind: EventKind = "assessment") => {
@@ -228,12 +284,20 @@ export default function CalendarScreen() {
 
   const submitEvent = async () => {
     const isStudyTime = eventKind === "study";
+    if (!eventDateValid) {
+      setMessage("Use a real date like 2026-05-12.");
+      return;
+    }
+    if (!recurrenceUntilValid) {
+      setMessage("Repeat-until must be a real date like 2026-06-30.");
+      return;
+    }
     if (!isStudyTime && !subjectId) {
       setMessage("Choose a subject for the assessment.");
       return;
     }
-    if (isStudyTime && (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime))) {
-      setMessage("Use 24-hour times like 15:30.");
+    if (!studyTimesValid) {
+      setMessage("Use 24-hour times like 15:30, with the end after the start.");
       return;
     }
 
@@ -425,7 +489,7 @@ export default function CalendarScreen() {
           <Dialog.Content style={styles.dialogContent}>
             <SegmentedButtons
               value={eventKind}
-              onValueChange={(value) => setEventKind(value as EventKind)}
+              onValueChange={changeEventKind}
               buttons={[
                 { value: "assessment", label: "Assessment" },
                 { value: "study", label: "Study time" }
@@ -470,19 +534,51 @@ export default function CalendarScreen() {
                 </Pressable>
               ))}
             </View>
-            <Button mode="outlined" icon="calendar" onPress={() => setShowPicker(true)}>
-              {eventDate}
-            </Button>
+            <TextInput
+              mode="outlined"
+              label="Date"
+              value={eventDate}
+              placeholder="YYYY-MM-DD"
+              onChangeText={(value) => {
+                setEventDate(value.trim());
+                setMessage(null);
+              }}
+              right={<TextInput.Icon icon="calendar" onPress={() => setShowPicker((value) => !value)} />}
+            />
             {showPicker ? (
-              <DateTimePicker
-                value={new Date(`${eventDate}T00:00:00`)}
-                mode="date"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                onChange={(_, date) => {
-                  if (Platform.OS !== "ios") setShowPicker(false);
-                  if (date) setEventDate(localDateKey(date));
-                }}
-              />
+              Platform.OS === "web" ? (
+                <Calendar
+                  current={isValidDateKey(eventDate) ? eventDate : todayKey()}
+                  markedDates={eventDateMarked}
+                  onDayPress={(day: DateData) => {
+                    setEventDate(day.dateString);
+                    setShowPicker(false);
+                    setMessage(null);
+                  }}
+                  theme={{
+                    calendarBackground: palette.surface,
+                    dayTextColor: palette.text,
+                    monthTextColor: palette.text,
+                    textDisabledColor: "#44445A",
+                    arrowColor: palette.primary,
+                    todayTextColor: palette.success,
+                    selectedDayTextColor: palette.text
+                  }}
+                />
+              ) : (
+                <DateTimePicker
+                  value={datePickerValue(eventDate)}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  onChange={(_, date) => {
+                    if (Platform.OS !== "ios") setShowPicker(false);
+                    if (date) {
+                      setEventDate(localDateKey(date));
+                      setMessage(null);
+                    }
+                  }}
+                />
+              )
             ) : null}
 
             {eventKind === "study" ? (
@@ -493,6 +589,7 @@ export default function CalendarScreen() {
                     label="Start"
                     value={startTime}
                     onChangeText={setStartTime}
+                    keyboardType="numbers-and-punctuation"
                     style={styles.timeInput}
                   />
                   <TextInput
@@ -500,6 +597,7 @@ export default function CalendarScreen() {
                     label="End"
                     value={endTime}
                     onChangeText={setEndTime}
+                    keyboardType="numbers-and-punctuation"
                     style={styles.timeInput}
                   />
                 </View>
@@ -541,7 +639,7 @@ export default function CalendarScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDialogOpen(false)}>Cancel</Button>
-            <Button mode="contained" loading={saving} disabled={saving || !title.trim()} onPress={submitEvent}>
+            <Button mode="contained" loading={saving} disabled={!canSubmitEvent} onPress={submitEvent}>
               {editingEventId ? "Update" : "Save"}
             </Button>
           </Dialog.Actions>
