@@ -750,7 +750,7 @@ export default function QuestionsScreen() {
     try {
       const result = await checkAnswer({
         subjectId: selectedSubject.id,
-        question: `${selectedCommandPrompt.term}: ${selectedCommandPrompt.prompt}\nWeak answer: ${selectedCommandPrompt.weakAnswer}`,
+        question: `${selectedCommandPrompt.term}: ${selectedCommandPrompt.practiceQuestion}\nTask: ${selectedCommandPrompt.prompt}\nWeak answer: ${selectedCommandPrompt.weakAnswer}`,
         studentAnswer: commandAnswer.trim(),
         modelAnswer: selectedCommandPrompt.modelAnswer,
         topic: `${selectedCommandPrompt.term} command term`,
@@ -1289,35 +1289,61 @@ export default function QuestionsScreen() {
           ) : toolMode === "command" ? (
             <>
               <AppCard style={styles.form}>
-                <Text style={styles.battleKicker}>Command Term Trainer</Text>
-                <SegmentedButtons
-                  value={commandTerm}
-                  onValueChange={(value) => {
-                    setCommandTerm(value);
-                    setCommandFeedback(null);
-                    setCommandAnswer("");
-                  }}
-                  buttons={commandTermPrompts.slice(0, 4).map((prompt) => ({ value: prompt.term, label: prompt.term }))}
-                />
-                <SegmentedButtons
-                  value={commandTermPrompts.slice(4).some((prompt) => prompt.term === commandTerm) ? commandTerm : "more"}
-                  onValueChange={(value) => {
-                    if (value !== "more") {
-                      setCommandTerm(value);
-                      setCommandFeedback(null);
-                      setCommandAnswer("");
-                    }
-                  }}
-                  buttons={[{ value: "more", label: "More" }, ...commandTermPrompts.slice(4).map((prompt) => ({ value: prompt.term, label: prompt.term }))]}
-                />
+                <View style={styles.commandHeader}>
+                  <View>
+                    <Text style={styles.battleKicker}>Command Term Trainer</Text>
+                    <Text style={styles.commandSubtitle}>{selectedSubject?.subjectName ?? "Pick a subject"} response skill</Text>
+                  </View>
+                  <Text style={styles.commandBadge}>{selectedCommandPrompt.subjectHint}</Text>
+                </View>
+                <View style={styles.commandChipGrid}>
+                  {commandTermPrompts.map((prompt) => {
+                    const selected = commandTerm === prompt.term;
+                    return (
+                      <Pressable
+                        key={prompt.term}
+                        style={[styles.commandChip, selected && styles.commandChipActive]}
+                        onPress={() => {
+                          setCommandTerm(prompt.term);
+                          setCommandFeedback(null);
+                          setCommandAnswer("");
+                        }}
+                      >
+                        <Text style={[styles.commandChipText, selected && styles.commandChipTextActive]}>{prompt.term}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.commandGuide}>
+                  <View style={styles.commandGuideTop}>
+                    <Text style={styles.commandTermTitle}>{selectedCommandPrompt.term}</Text>
+                    <Text style={styles.commandGuideLabel}>What the marker wants</Text>
+                  </View>
+                  <Text style={styles.answer}>{selectedCommandPrompt.studentJob}</Text>
+                  <View style={styles.commandFormulaBox}>
+                    <Text style={styles.answerTitle}>Answer formula</Text>
+                    <Text style={styles.answer}>{selectedCommandPrompt.answerFormula}</Text>
+                  </View>
+                  <Text style={styles.commandTrap}>Common trap: {selectedCommandPrompt.markTrap}</Text>
+                </View>
+                <View style={styles.commandExampleGrid}>
+                  <View style={styles.commandExampleBox}>
+                    <Text style={styles.commandWeakTitle}>Weak answer</Text>
+                    <Text style={styles.answer}>{selectedCommandPrompt.weakAnswer}</Text>
+                  </View>
+                  <View style={styles.commandExampleBoxStrong}>
+                    <Text style={styles.answerTitle}>Stronger answer</Text>
+                    <Text style={styles.answer}>{selectedCommandPrompt.modelAnswer}</Text>
+                  </View>
+                </View>
                 <View style={styles.answerBox}>
-                  <Text style={styles.answerTitle}>{selectedCommandPrompt.term}</Text>
-                  <Text style={styles.answer}>{selectedCommandPrompt.prompt}</Text>
-                  <Text style={styles.muted}>Weak answer: {selectedCommandPrompt.weakAnswer}</Text>
+                  <Text style={styles.answerTitle}>Your turn</Text>
+                  <Text style={styles.answer}>{selectedCommandPrompt.practiceQuestion}</Text>
+                  <Text style={styles.muted}>{selectedCommandPrompt.prompt}</Text>
                 </View>
                 <TextInput
                   mode="outlined"
-                  label="Your improved answer"
+                  label={`${selectedCommandPrompt.term} answer`}
                   value={commandAnswer}
                   onChangeText={setCommandAnswer}
                   multiline
@@ -1602,6 +1628,126 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     color: palette.text,
     backgroundColor: `${palette.warning}33`,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap"
+  },
+  commandSubtitle: {
+    color: palette.text,
+    fontSize: 20,
+    fontFamily: "Outfit_700Bold",
+    marginTop: 2
+  },
+  commandBadge: {
+    overflow: "hidden",
+    maxWidth: 280,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}55`,
+    backgroundColor: `${palette.info}14`,
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  commandChipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  commandChip: {
+    minWidth: 118,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  commandChipActive: {
+    borderColor: palette.warning,
+    backgroundColor: `${palette.warning}22`
+  },
+  commandChipText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandChipTextActive: {
+    color: palette.text
+  },
+  commandGuide: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}33`,
+    backgroundColor: "rgba(124,110,255,0.08)",
+    padding: 14
+  },
+  commandGuideTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap"
+  },
+  commandTermTitle: {
+    color: palette.success,
+    fontSize: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandGuideLabel: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  commandFormulaBox: {
+    gap: 5,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12
+  },
+  commandTrap: {
+    color: palette.warning,
+    lineHeight: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandExampleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  commandExampleBox: {
+    flex: 1,
+    minWidth: 260,
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.secondary}44`,
+    backgroundColor: `${palette.secondary}10`,
+    padding: 12
+  },
+  commandExampleBoxStrong: {
+    flex: 1,
+    minWidth: 260,
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}10`,
+    padding: 12
+  },
+  commandWeakTitle: {
+    color: palette.secondary,
     fontFamily: "Outfit_700Bold"
   },
   gameCard: {

@@ -3,7 +3,32 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - VCE Weakness Coach upgrade
+Most recent edit: 2026-05-05 - Command Term Trainer cleanup
+
+Summary:
+- Reworked the Command Term Trainer UI inside Questions > Tools > Terms.
+- Removed the confusing two-row segmented control where "More" could look selected while another term was active.
+- Replaced it with a single wraparound set of command-term chips.
+- Expanded each command term with:
+  - What the marker wants
+  - Answer formula
+  - Common trap
+  - Weak answer
+  - Stronger example
+  - A clearer "your turn" practice prompt
+- Updated the answer-checking prompt so AI feedback receives the command term, practice question, task, and weak answer context.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-05 - VCE Weakness Coach upgrade
 
 Summary:
 - Added a shared frontend helper layer at utils/vceCoach.ts for VCE-specific study intelligence.

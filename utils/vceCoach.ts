@@ -88,56 +88,84 @@ export const commandTermPrompts = [
   {
     term: "Define",
     subjectHint: "Most VCE subjects",
+    studentJob: "Give the exact meaning of the term. Keep it tight; do not explain effects yet.",
+    answerFormula: "Term + category + key feature or measurable detail.",
+    markTrap: "Writing a vague everyday meaning instead of a precise VCE definition.",
     weakAnswer: "Market share is how much of the market a business has.",
-    prompt: "Improve this into a precise definition with the key idea and no waffle.",
+    prompt: "Rewrite the weak answer as a precise definition.",
+    practiceQuestion: "Define market share.",
     modelAnswer: "Market share is the percentage of total sales in a market held by one business over a specific period.",
     criteria: ["Precise meaning", "Uses measurable language", "Avoids extra explanation"]
   },
   {
     term: "Describe",
     subjectHint: "Sciences, Humanities, PE, Tech",
+    studentJob: "Say what it is like. Give features, characteristics or observable details.",
+    answerFormula: "Name the idea + give 2-3 clear features.",
+    markTrap: "Explaining why it matters when the question only asks what it is like.",
     weakAnswer: "Motivation makes employees work harder.",
-    prompt: "Improve this by giving clear characteristics, not just a vague effect.",
+    prompt: "Rewrite the weak answer so it describes the idea clearly.",
+    practiceQuestion: "Describe employee motivation.",
     modelAnswer: "Motivation is the internal or external drive that encourages employees to put effort into work tasks and persist toward business objectives.",
     criteria: ["Gives characteristics", "Mentions effort or persistence", "Links to the context"]
   },
   {
     term: "Explain",
     subjectHint: "Business, Health, Legal, Psychology",
+    studentJob: "Show why or how something happens. The marker wants cause and effect.",
+    answerFormula: "Point + because/which means/therefore + outcome.",
+    markTrap: "Listing a fact without showing the chain of reasoning.",
     weakAnswer: "Training is good because employees learn new skills.",
-    prompt: "Improve this by showing cause and effect.",
+    prompt: "Rewrite the weak answer with a clear cause-and-effect chain.",
+    practiceQuestion: "Explain how training can improve business performance.",
     modelAnswer: "Training improves employee skills and knowledge, which can reduce errors and increase productivity because employees complete tasks more efficiently.",
     criteria: ["Uses because/therefore logic", "Shows cause and effect", "Links to an outcome"]
   },
   {
     term: "Analyse",
     subjectHint: "Business, English, Humanities, Tech",
+    studentJob: "Break the idea into parts and show how those parts connect to the result.",
+    answerFormula: "Idea + mechanism + evidence/detail + link back to the question.",
+    markTrap: "Only saying something is good or bad without unpacking how it works.",
     weakAnswer: "This strategy helps because it improves productivity.",
-    prompt: "Improve this by breaking the idea into parts and linking back to the objective.",
+    prompt: "Rewrite the weak answer so it breaks down how the strategy works.",
+    practiceQuestion: "Analyse how a strategy can improve business efficiency.",
     modelAnswer: "This strategy can improve productivity by reducing wasted time in the production process. Higher productivity lowers unit costs, helping the business meet its objective of improving efficiency.",
     criteria: ["Breaks down how it works", "Uses evidence or a mechanism", "Links back to the objective"]
   },
   {
     term: "Evaluate",
     subjectHint: "Business, Legal, Health, English",
+    studentJob: "Weigh strengths and weaknesses, then make a judgement.",
+    answerFormula: "Strength + limitation + context + overall judgement.",
+    markTrap: "Giving two sides but never deciding which side is stronger.",
     weakAnswer: "This method is effective but has some disadvantages.",
-    prompt: "Improve this by weighing strengths and limits, then making a judgement.",
+    prompt: "Rewrite the weak answer so it weighs both sides and decides.",
+    practiceQuestion: "Evaluate the effectiveness of a management strategy.",
     modelAnswer: "This method is effective in the short term because it gives clear direction, but it may reduce employee input and motivation. Overall, it is most suitable during urgent change rather than long-term improvement.",
     criteria: ["Gives both sides", "Makes a judgement", "Uses context to decide"]
   },
   {
     term: "Justify",
     subjectHint: "Data, Software, Business, Legal",
+    studentJob: "Make a choice and prove why that choice is reasonable.",
+    answerFormula: "Decision + evidence/reason + link to criteria, objective or user need.",
+    markTrap: "Saying 'it is better' without evidence or a criterion.",
     weakAnswer: "I would choose this design because it is better.",
-    prompt: "Improve this by giving a clear decision and evidence-based reason.",
+    prompt: "Rewrite the weak answer so the decision is properly defended.",
+    practiceQuestion: "Justify a design choice for a user scenario.",
     modelAnswer: "I would choose this design because it directly addresses the user's need for faster data entry while reducing validation errors through constrained input fields.",
     criteria: ["States a decision", "Gives evidence", "Links to criteria or user need"]
   },
   {
     term: "Compare",
     subjectHint: "English, Humanities, Sciences",
+    studentJob: "Show similarities and/or differences between two things.",
+    answerFormula: "Both items named + comparative word + specific similarity/difference + effect.",
+    markTrap: "Describing each thing separately without directly comparing them.",
     weakAnswer: "The two methods are different because one is faster.",
-    prompt: "Improve this by naming both sides and using a clear similarity or difference.",
+    prompt: "Rewrite the weak answer so both sides are directly compared.",
+    practiceQuestion: "Compare two methods or approaches.",
     modelAnswer: "Method A is faster because it requires fewer steps, whereas Method B is slower but produces more detailed evidence for checking the result.",
     criteria: ["Names both sides", "Uses comparative language", "Explains the basis of comparison"]
   }
@@ -555,4 +583,3 @@ export const globalStudySearch = ({
       }))
   ].slice(0, 12);
 };
-
