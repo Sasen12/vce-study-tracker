@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Platform, ScrollView, StyleSheet, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Button, Dialog, Portal, Text } from "react-native-paper";
 import { AppCard } from "@/components/ui/AppCard";
@@ -29,6 +29,18 @@ const sourceLabels: Record<SourceType, string> = {
   practice_sac: "Practice SAC",
   practice_sat: "Practice SAT"
 };
+
+const sourceTabLabels: Record<SourceType, string> = {
+  textbook: "Textbook",
+  obsidian: "Obsidian",
+  notes: "Notes",
+  exam: "Exam paper",
+  exam_report: "Exam report",
+  practice_sac: "Practice SAC",
+  practice_sat: "Practice SAT"
+};
+
+const sourceTypes: SourceType[] = ["textbook", "notes", "exam", "exam_report", "practice_sac", "practice_sat", "obsidian"];
 
 const sourceMessages: Record<SourceType, string> = {
   textbook: "Textbook context added.",
@@ -83,11 +95,17 @@ const downloadFileName = (fileName: string) => {
 const ResourceRow = ({
   resource,
   opening,
-  onOpen
+  deleting,
+  confirmingDelete,
+  onOpen,
+  onDelete
 }: {
   resource: StudyResource;
   opening: boolean;
+  deleting: boolean;
+  confirmingDelete: boolean;
   onOpen: (resource: StudyResource) => void;
+  onDelete: (resource: StudyResource) => void;
 }) => (
   <View style={styles.resourceRow}>
     <View style={styles.fileBadge}>
@@ -104,22 +122,49 @@ const ResourceRow = ({
         </Text>
       ) : null}
     </View>
-    <Button mode="text" compact icon="open-in-new" loading={opening} onPress={() => onOpen(resource)}>
-      Open
-    </Button>
+    <View style={styles.resourceActions}>
+      <Button mode="text" compact icon="open-in-new" loading={opening} onPress={() => onOpen(resource)}>
+        Open
+      </Button>
+      <Button
+        mode="text"
+        compact
+        icon={confirmingDelete ? "check" : "delete-outline"}
+        textColor={confirmingDelete ? palette.secondary : palette.muted}
+        loading={deleting}
+        onPress={() => onDelete(resource)}
+      >
+        {confirmingDelete ? "Confirm" : "Delete"}
+      </Button>
+    </View>
   </View>
 );
 
 export function StudyResourcesPanel({ subjects, selectedSubjectId, onSelectSubject }: StudyResourcesPanelProps) {
-  const { resources, uploadResources } = useAppStore();
+  const { resources, uploadResources, deleteResource } = useAppStore();
+  const [selectedSourceType, setSelectedSourceType] = useState<SourceType>("textbook");
   const [uploading, setUploading] = useState<SourceType | null>(null);
   const [openingResourceId, setOpeningResourceId] = useState<string | null>(null);
+  const [deletingResourceId, setDeletingResourceId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [viewingResource, setViewingResource] = useState<StudyResource | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
-  const visibleResources = useMemo(
-    () => resources.filter((resource) => !selectedSubjectId || resource.subjectId === selectedSubjectId).slice(0, 8),
+  const subjectResources = useMemo(
+    () => resources.filter((resource) => !selectedSubjectId || resource.subjectId === selectedSubjectId),
     [resources, selectedSubjectId]
+  );
+  const resourceCounts = useMemo(
+    () =>
+      sourceTypes.reduce<Record<SourceType, number>>((acc, sourceType) => {
+        acc[sourceType] = subjectResources.filter((resource) => resource.sourceType === sourceType).length;
+        return acc;
+      }, {} as Record<SourceType, number>),
+    [subjectResources]
+  );
+  const visibleResources = useMemo(
+    () => subjectResources.filter((resource) => resource.sourceType === selectedSourceType),
+    [selectedSourceType, subjectResources]
   );
 
   const pickFiles = async (sourceType: SourceType) => {
@@ -161,6 +206,27 @@ export function StudyResourcesPanel({ subjects, selectedSubjectId, onSelectSubje
     }
   };
 
+  const removeResource = async (resource: StudyResource) => {
+    if (confirmDeleteId !== resource.id) {
+      setConfirmDeleteId(resource.id);
+      setMessage("Tap confirm to remove that file.");
+      return;
+    }
+
+    setDeletingResourceId(resource.id);
+    setMessage(null);
+    try {
+      await deleteResource(resource.id);
+      if (viewingResource?.id === resource.id) setViewingResource(null);
+      setConfirmDeleteId(null);
+      setMessage("File removed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove that file.");
+    } finally {
+      setDeletingResourceId(null);
+    }
+  };
+
   const downloadResourceText = () => {
     if (Platform.OS !== "web" || !viewingResource?.extractedText || typeof document === "undefined") return;
     const blob = new Blob([viewingResource.extractedText], { type: "text/plain;charset=utf-8" });
@@ -184,37 +250,66 @@ export function StudyResourcesPanel({ subjects, selectedSubjectId, onSelectSubje
           <Text style={styles.muted}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
         </View>
 
-        <View style={styles.buttons}>
-          {(["textbook", "notes", "exam", "exam_report", "practice_sac", "practice_sat", "obsidian"] as SourceType[]).map((sourceType) => (
-            <Button
-              key={sourceType}
-              mode={sourceType === "textbook" ? "contained" : "outlined"}
-              icon={iconFor(sourceType)}
-              loading={uploading === sourceType}
-              disabled={!!uploading}
-              onPress={() => pickFiles(sourceType)}
-            >
-              {sourceLabels[sourceType]}
-            </Button>
-          ))}
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.resourceTabs}>
+          {sourceTypes.map((sourceType) => {
+            const selected = selectedSourceType === sourceType;
+            return (
+              <Pressable
+                key={sourceType}
+                onPress={() => setSelectedSourceType(sourceType)}
+                style={[styles.resourceTab, selected && styles.resourceTabSelected]}
+              >
+                <Text style={[styles.resourceTabText, selected && styles.resourceTabTextSelected]}>
+                  {sourceTabLabels[sourceType]}
+                </Text>
+                <View style={[styles.resourceTabCount, selected && styles.resourceTabCountSelected]}>
+                  <Text style={[styles.resourceTabCountText, selected && styles.resourceTabCountTextSelected]}>
+                    {resourceCounts[sourceType]}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <Button
+          mode="contained"
+          icon={iconFor(selectedSourceType)}
+          loading={uploading === selectedSourceType}
+          disabled={!!uploading}
+          onPress={() => pickFiles(selectedSourceType)}
+        >
+          Upload {sourceLabels[selectedSourceType]}
+        </Button>
       </AppCard>
 
-      {visibleResources.length ? (
-        <AppCard style={styles.card}>
+      <AppCard style={styles.card}>
+        <View style={styles.listHeader}>
           <Text variant="titleMedium" style={styles.title}>
-            Uploaded context
+            {sourceTabLabels[selectedSourceType]}
           </Text>
-          {visibleResources.map((resource) => (
+          <Text style={styles.muted}>
+            {visibleResources.length} file{visibleResources.length === 1 ? "" : "s"}
+          </Text>
+        </View>
+        {visibleResources.length ? (
+          visibleResources.map((resource) => (
             <ResourceRow
               key={resource.id}
               resource={resource}
               opening={openingResourceId === resource.id}
+              deleting={deletingResourceId === resource.id}
+              confirmingDelete={confirmDeleteId === resource.id}
               onOpen={openResource}
+              onDelete={removeResource}
             />
-          ))}
-        </AppCard>
-      ) : null}
+          ))
+        ) : (
+          <Text style={styles.muted}>
+            No {sourceTabLabels[selectedSourceType].toLowerCase()} files for {selectedSubject?.subjectName ?? "this subject"}.
+          </Text>
+        )}
+      </AppCard>
 
       <Portal>
         <Dialog visible={Boolean(viewingResource)} onDismiss={() => setViewingResource(null)} style={styles.dialog}>
@@ -259,10 +354,60 @@ const styles = StyleSheet.create({
   muted: {
     color: palette.muted
   },
-  buttons: {
+  resourceTabs: {
+    gap: 8,
+    paddingRight: 2
+  },
+  resourceTab: {
+    minHeight: 44,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  resourceTabSelected: {
+    borderColor: `${palette.info}88`,
+    backgroundColor: `${palette.info}1C`
+  },
+  resourceTabText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 13
+  },
+  resourceTabTextSelected: {
+    color: palette.text
+  },
+  resourceTabCount: {
+    minWidth: 24,
+    minHeight: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 7
+  },
+  resourceTabCountSelected: {
+    backgroundColor: `${palette.info}33`
+  },
+  resourceTabCountText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  resourceTabCountTextSelected: {
+    color: palette.info
+  },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap"
   },
   resourceRow: {
     flexDirection: "row",
@@ -289,11 +434,16 @@ const styles = StyleSheet.create({
   },
   resourceText: {
     flex: 1,
+    minWidth: 0,
     gap: 3
   },
   resourceTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  resourceActions: {
+    alignItems: "flex-end",
+    gap: 2
   },
   preview: {
     color: palette.muted,

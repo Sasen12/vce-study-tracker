@@ -80,7 +80,7 @@ const displayMeta = (occurrence: EventOccurrence) => {
   if (isStudyTimeEvent(event)) {
     return `${event.subject?.subjectName ?? "Flexible"} · Study time · ${event.startTime}-${event.endTime} · ${recurrenceLabel(event.recurrence)}`;
   }
-  return `${event.subject?.subjectName ?? "Deleted subject"} · ${eventTypeLabel[event.eventType]} · ${
+  return `${event.subject?.subjectName ?? "No subject"} · ${eventTypeLabel[event.eventType]} · ${
     daysUntil(dateKey) === 0 ? "today" : `in ${daysUntil(dateKey)} days`
   }`;
 };

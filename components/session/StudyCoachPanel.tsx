@@ -630,7 +630,7 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
   const visibleClassLogs = useMemo(
-    () => reflections.filter((reflection) => !selectedSubject || reflection.subjectId === selectedSubject.id).slice(0, 8),
+    () => reflections.filter((reflection) => !selectedSubject || reflection.subjectId === selectedSubject.id),
     [reflections, selectedSubject]
   );
   const upcomingAssessments = useMemo(
@@ -890,6 +890,9 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
               Saved class logs
             </Text>
             <Text style={styles.muted}>{selectedSubject ? `${selectedSubject.subjectName} logs` : "All subjects"}</Text>
+            <Text style={styles.muted}>
+              {visibleClassLogs.length} log{visibleClassLogs.length === 1 ? "" : "s"}
+            </Text>
           </View>
         </View>
         {visibleClassLogs.length ? (

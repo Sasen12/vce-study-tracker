@@ -217,7 +217,7 @@ export default function StudyScreen() {
               .join("\n\n")
           });
         } catch (error) {
-          noteMirrorError = error instanceof Error ? error.message : "Could not copy notes into Recent notes.";
+          noteMirrorError = error instanceof Error ? error.message : "Could not copy notes into Saved notes.";
         }
       }
 
@@ -343,7 +343,7 @@ export default function StudyScreen() {
               onSelect={(subject) => setSelectedSubjectId(subject.id)}
             />
           ) : (
-            <EmptyState title="No subjects found" body="Create a subject first, then your sessions can earn XP." />
+            <EmptyState title="No subjects found" body="Add a subject from Profile, then your sessions can earn XP." />
           )}
 
           <AppCard style={styles.timerCard}>
@@ -487,7 +487,7 @@ export default function StudyScreen() {
                 {checkpointResult ? (
                   <View style={styles.checkpointResult}>
                     <Text style={checkpointResult === "correct" ? styles.resultCorrect : styles.resultWrong}>
-                      {checkpointResult === "correct" ? `Correct. +${checkpointBonusXp} XP` : "Saved to your roadmap notes."}
+                      {checkpointResult === "correct" ? `Correct. +${checkpointBonusXp} XP` : "Saved to Saved notes."}
                     </Text>
                     <Text style={styles.modelAnswer}>{checkpointQuestion.model_answer}</Text>
                   </View>

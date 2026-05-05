@@ -438,7 +438,7 @@ export default function DashboardScreen() {
               onSelect={(subject) => setQuickSubjectId(subject.id)}
             />
           ) : (
-            <EmptyState title="No subjects yet" body="Add subjects when registering or through the backend seed data." />
+            <EmptyState title="No subjects yet" body="Add a subject from Profile, then jump back here to start studying." />
           )}
         </AppCard>
       </Animated.View>
@@ -478,7 +478,7 @@ export default function DashboardScreen() {
                   <Text style={styles.muted} numberOfLines={1}>
                     {isStudyTimeEvent(event)
                       ? `${event.subject?.subjectName ?? "Flexible"} - ${event.startTime}-${event.endTime}`
-                      : `${subjectForDeadline(event, subjects)?.subjectName ?? "Deleted subject"} - ${countdownLabel(event)}`}
+                      : `${subjectForDeadline(event, subjects)?.subjectName ?? "No subject"} - ${countdownLabel(event)}`}
                   </Text>
                 </View>
               </Pressable>

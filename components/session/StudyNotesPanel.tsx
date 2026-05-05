@@ -104,7 +104,7 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
   const isGeneralMath = selectedSubject?.subjectName.toLowerCase().includes("general mathematics");
   const visibleNotes = useMemo(
-    () => notes.filter((note) => !selectedSubjectId || note.subjectId === selectedSubjectId).slice(0, 6),
+    () => notes.filter((note) => !selectedSubjectId || note.subjectId === selectedSubjectId),
     [notes, selectedSubjectId]
   );
   const viewingNoteImages = useMemo(() => (viewingNote ? embeddedImagesFromBody(viewingNote.body) : []), [viewingNote]);
@@ -299,9 +299,14 @@ export function StudyNotesPanel({ subjects, selectedSubjectId, onSelectSubject }
 
       {visibleNotes.length ? (
         <AppCard style={styles.card}>
-          <Text variant="titleMedium" style={styles.title}>
-            Recent notes
-          </Text>
+          <View style={styles.listHeader}>
+            <Text variant="titleMedium" style={styles.title}>
+              Saved notes
+            </Text>
+            <Text style={styles.muted}>
+              {visibleNotes.length} note{visibleNotes.length === 1 ? "" : "s"}
+            </Text>
+          </View>
           {visibleNotes.map((note) => {
             const noteImages = embeddedImagesFromBody(note.body);
             return (
@@ -403,6 +408,13 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     minWidth: 0
+  },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap"
   },
   noteButtons: {
     flexDirection: "row",

@@ -129,6 +129,7 @@ type AppState = {
   }) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   uploadResources: (formData: FormData) => Promise<void>;
+  deleteResource: (id: string) => Promise<void>;
   generatePlan: (input: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) => Promise<void>;
   refreshCoach: () => Promise<void>;
   setLeaderboardPreference: (optIn: boolean) => Promise<void>;
@@ -317,6 +318,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadResources: async (formData) => {
     const data = await studyApi.uploadResources(formData);
     set({ resources: [...data.resources, ...get().resources] });
+  },
+  deleteResource: async (id) => {
+    await studyApi.deleteResource(id);
+    set({ resources: get().resources.filter((resource) => resource.id !== id) });
   },
   generatePlan: async (input) => {
     const data = await studyApi.generatePlan(input);
