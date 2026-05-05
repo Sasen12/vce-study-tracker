@@ -19,7 +19,99 @@ type ScreenshotAsset = {
   file?: Blob;
 };
 
+type SubjectDomain = {
+  id: string;
+  subjectTerms: string[];
+  questionSignals: { pattern: RegExp; weight: number }[];
+};
+
 const coachAnswerTag = "coach-answer";
+
+const subjectDomains: SubjectDomain[] = [
+  {
+    id: "maths",
+    subjectTerms: ["mathematics", "maths", "math", "methods", "specialist", "further"],
+    questionSignals: [
+      { pattern: /\\frac|\\boxed|\\\(|\\\[|\^|[a-z]\s*=/i, weight: 4 },
+      { pattern: /\bannuit(?:y|ies)|recursion|compound interest|interest rate|monthly payment|depreciation\b/i, weight: 5 },
+      { pattern: /\bsolve|calculate|equation|formula|function|gradient|derivative|integral|probability|matrix|matrices|cas\b/i, weight: 3 },
+      { pattern: /\bsine|cosine|tangent|trigonometry|quadratic|linear|standard deviation|mean|median\b/i, weight: 3 }
+    ]
+  },
+  {
+    id: "business",
+    subjectTerms: ["business", "management"],
+    questionSignals: [
+      { pattern: /\bbusiness management|management style|management skill|stakeholder|corporate culture\b/i, weight: 5 },
+      { pattern: /\boperations management|human resources|marketing|employee|motivation|kpi|key performance indicator\b/i, weight: 4 },
+      { pattern: /\bswot|porter|change management|leadership|business objective|strategy\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "accounting",
+    subjectTerms: ["accounting"],
+    questionSignals: [
+      { pattern: /\bbalance sheet|income statement|ledger|journal entry|debit|credit|accounts receivable|accounts payable\b/i, weight: 5 },
+      { pattern: /\bassets|liabilities|equity|cash flow|gross profit|net profit|inventory turnover\b/i, weight: 3 }
+    ]
+  },
+  {
+    id: "economics",
+    subjectTerms: ["economics", "eco"],
+    questionSignals: [
+      { pattern: /\bsupply and demand|aggregate demand|aggregate supply|inflation|gdp|monetary policy|fiscal policy\b/i, weight: 5 },
+      { pattern: /\bexchange rate|unemployment|scarcity|opportunity cost|market failure|elasticity\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "biology",
+    subjectTerms: ["biology", "bio"],
+    questionSignals: [
+      { pattern: /\bcell|cells|dna|rna|enzyme|photosynthesis|respiration|homeostasis|immune|evolution\b/i, weight: 4 },
+      { pattern: /\bgene|genetic|allele|mutation|protein synthesis|pathogen|antibody\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "chemistry",
+    subjectTerms: ["chemistry", "chem"],
+    questionSignals: [
+      { pattern: /\bmole|molar|stoichiometry|titration|oxidation|reduction|enthalpy|hydrocarbon\b/i, weight: 4 },
+      { pattern: /\bacid|base|covalent|ionic|equilibrium|reaction rate|organic chemistry\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "physics",
+    subjectTerms: ["physics"],
+    questionSignals: [
+      { pattern: /\bforce|velocity|acceleration|momentum|energy|power|circuit|voltage|current\b/i, weight: 4 },
+      { pattern: /\bnewton|magnetic field|electric field|wave|frequency|gravity|projectile\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "english",
+    subjectTerms: ["english", "literature", "eal"],
+    questionSignals: [
+      { pattern: /\bessay|argument analysis|language analysis|text response|comparative|contention\b/i, weight: 4 },
+      { pattern: /\btheme|symbolism|author|audience|tone|persuasive technique|metalanguage\b/i, weight: 3 }
+    ]
+  },
+  {
+    id: "legal",
+    subjectTerms: ["legal"],
+    questionSignals: [
+      { pattern: /\bconstitution|parliament|court|justice|law reform|precedent|statutory interpretation\b/i, weight: 4 },
+      { pattern: /\bcivil|criminal|rights|remedy|sanction|jury|high court\b/i, weight: 3 }
+    ]
+  },
+  {
+    id: "psychology",
+    subjectTerms: ["psychology", "psych"],
+    questionSignals: [
+      { pattern: /\bbrain|neuron|memory|learning|conditioning|sleep|stress|mental health\b/i, weight: 4 },
+      { pattern: /\bamygdala|hippocampus|classical conditioning|operant conditioning|consciousness\b/i, weight: 4 }
+    ]
+  }
+];
 
 const coachNoteTitle = (question: string) => `Coach: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
 
@@ -49,6 +141,42 @@ const formatSavedDate = (value: string) => {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
+const subjectDomainScore = (subject: UserSubject, domain: SubjectDomain) => {
+  const subjectName = subject.subjectName.toLowerCase();
+  return domain.subjectTerms.reduce((score, term) => score + (subjectName.includes(term) ? 1 : 0), 0);
+};
+
+const questionDomainScore = (question: string, domain: SubjectDomain) =>
+  domain.questionSignals.reduce((score, signal) => score + (signal.pattern.test(question) ? signal.weight : 0), 0);
+
+const smartSubjectForQuestion = (question: string, selectedSubject: UserSubject, subjects: UserSubject[]) => {
+  const rankedDomains = subjectDomains
+    .map((domain) => ({
+      domain,
+      score:
+        questionDomainScore(question, domain) +
+        (domain.subjectTerms.some((term) => question.toLowerCase().includes(term)) ? 4 : 0)
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const bestDomain = rankedDomains[0];
+  const nextDomain = rankedDomains[1];
+  if (!bestDomain || bestDomain.score < 4 || (nextDomain && bestDomain.score - nextDomain.score < 2)) {
+    return selectedSubject;
+  }
+
+  if (subjectDomainScore(selectedSubject, bestDomain.domain) > 0) {
+    return selectedSubject;
+  }
+
+  const matchingSubject = subjects
+    .map((subject) => ({ subject, score: subjectDomainScore(subject, bestDomain.domain) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.subject.subjectName.localeCompare(b.subject.subjectName))[0]?.subject;
+
+  return matchingSubject ?? selectedSubject;
+};
+
 const appendScreenshot = (formData: FormData, asset: ScreenshotAsset) => {
   const webFile = Platform.OS === "web" ? asset.file : null;
   if (webFile) {
@@ -76,11 +204,15 @@ const SourceRow = ({ title, detail }: { title: string; detail?: string }) => (
 export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
   const createNote = useAppStore((state) => state.createNote);
+  const deleteNote = useAppStore((state) => state.deleteNote);
   const notes = useAppStore((state) => state.notes);
+  const subjects = useAppStore((state) => state.subjects);
   const [question, setQuestion] = useState("");
   const [screenshots, setScreenshots] = useState<ScreenshotAsset[]>([]);
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
   const [asking, setAsking] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const selectedSubjectId = selectedSubject?.id ?? null;
@@ -145,6 +277,28 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
     setScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
+  const removeCoachAnswer = async (id: string) => {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setMessage("Tap confirm to delete that coach answer.");
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      await deleteNote(id);
+      if (expandedHistoryId === id) {
+        setExpandedHistoryId(null);
+      }
+      setConfirmDeleteId(null);
+      setMessage("Saved coach answer deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not delete that coach answer.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const ask = async () => {
     const askedQuestion = question.trim();
     if (!selectedSubject || !askedQuestion) {
@@ -155,8 +309,10 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
     setAsking(true);
     setMessage(null);
     try {
+      const questionSubject = smartSubjectForQuestion(askedQuestion, selectedSubject, subjects);
+      const routed = questionSubject.id !== selectedSubject.id;
       const formData = new FormData();
-      formData.append("subjectId", selectedSubject.id);
+      formData.append("subjectId", questionSubject.id);
       formData.append("question", askedQuestion);
       screenshots.forEach((asset) => appendScreenshot(formData, asset));
 
@@ -164,13 +320,13 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
       setAnswer(nextAnswer);
       try {
         await createNote({
-          subjectId: selectedSubject.id,
+          subjectId: questionSubject.id,
           title: coachNoteTitle(askedQuestion),
           body: coachNoteBody(askedQuestion, nextAnswer, screenshots.length),
           noteType: "general",
           tags: [coachAnswerTag]
         });
-        setMessage("Coach answer saved.");
+        setMessage(routed ? `Routed to ${questionSubject.subjectName} and saved.` : "Coach answer saved.");
       } catch {
         setMessage("Answer shown, but it could not be saved.");
       }
@@ -282,14 +438,26 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
                       {note.subject?.subjectName ?? "General"} - {formatSavedDate(note.createdAt)}
                     </Text>
                   </View>
-                  <Button
-                    mode="text"
-                    compact
-                    icon={expanded ? "chevron-up" : "eye-outline"}
-                    onPress={() => setExpandedHistoryId(expanded ? null : note.id)}
-                  >
-                    {expanded ? "Hide" : "View"}
-                  </Button>
+                  <View style={styles.historyActions}>
+                    <Button
+                      mode="text"
+                      compact
+                      icon={expanded ? "chevron-up" : "eye-outline"}
+                      onPress={() => setExpandedHistoryId(expanded ? null : note.id)}
+                    >
+                      {expanded ? "Hide" : "View"}
+                    </Button>
+                    <Button
+                      mode="text"
+                      compact
+                      icon={confirmDeleteId === note.id ? "check" : "delete-outline"}
+                      textColor={confirmDeleteId === note.id ? palette.secondary : palette.muted}
+                      loading={deletingId === note.id}
+                      onPress={() => removeCoachAnswer(note.id)}
+                    >
+                      {confirmDeleteId === note.id ? "Confirm" : "Delete"}
+                    </Button>
+                  </View>
                 </View>
                 {expanded ? (
                   <View style={styles.historyBody}>
@@ -457,6 +625,12 @@ const styles = StyleSheet.create({
   historyText: {
     flex: 1,
     minWidth: 0
+  },
+  historyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 2
   },
   historyTitle: {
     color: palette.text,
