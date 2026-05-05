@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
-import { BADGE_SHOP_ITEMS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
+import { BADGE_SHOP_ITEMS, DEFAULT_TITLE_ID, STARTER_TITLE_IDS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
@@ -28,9 +28,9 @@ export default function ShopScreen() {
 
   const xpBalance = gamification?.xpBalance ?? 0;
   const activeTheme = gamification?.activeTheme ?? "midnight";
-  const activeTitle = gamification?.activeTitle ?? "year_12_rookie";
+  const activeTitle = gamification?.activeTitle ?? DEFAULT_TITLE_ID;
   const unlocked = useMemo(
-    () => new Set(["midnight", "title:year_12_rookie", ...(gamification?.unlockedCosmetics ?? [])]),
+    () => new Set(["midnight", ...STARTER_TITLE_IDS.map((titleId) => `title:${titleId}`), ...(gamification?.unlockedCosmetics ?? [])]),
     [gamification?.unlockedCosmetics]
   );
   const badges = useMemo(() => new Set(gamification?.badges ?? []), [gamification?.badges]);

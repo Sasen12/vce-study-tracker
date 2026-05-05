@@ -2,7 +2,7 @@ import { prisma } from "../db/prismaClient.js";
 import { dateKeyInMelbourne, hourInMelbourne, isYesterday, toDateOnly, todayMelbourne } from "../utils/date.js";
 
 export const LEVELS = [
-  { level: 1, xp: 0, title: "Year 12 Rookie" },
+  { level: 1, xp: 0, title: "VCE Rookie" },
   { level: 2, xp: 200, title: "On the Grind" },
   { level: 3, xp: 500, title: "SAC Survivor" },
   { level: 4, xp: 1000, title: "Study Machine" },
@@ -13,7 +13,8 @@ export const LEVELS = [
 ];
 
 export const DEFAULT_THEME_ID = "midnight";
-export const DEFAULT_TITLE_ID = "year_12_rookie";
+export const DEFAULT_TITLE_ID = "vce_rookie";
+export const STARTER_TITLE_IDS = [DEFAULT_TITLE_ID, "year_11_rookie", "year_12_rookie"] as const;
 
 export const THEME_SHOP_ITEMS = [
   {
@@ -147,9 +148,21 @@ export const THEME_SHOP_ITEMS = [
 export const TITLE_SHOP_ITEMS = [
   {
     id: DEFAULT_TITLE_ID,
+    label: "VCE Rookie",
+    price: 0,
+    description: "Starter title for any VCE student."
+  },
+  {
+    id: "year_11_rookie",
+    label: "Year 11 Rookie",
+    price: 0,
+    description: "Starter title for Unit 1/2 students."
+  },
+  {
+    id: "year_12_rookie",
     label: "Year 12 Rookie",
     price: 0,
-    description: "Starter profile title."
+    description: "Starter title for Unit 3/4 students."
   },
   {
     id: "academic_comeback",
@@ -249,7 +262,14 @@ const mergeBadges = (current: unknown, incoming: string[]) =>
   Array.from(new Set([...badgesAsArray(current), ...incoming]));
 
 const mergeCosmetics = (current: unknown, incoming: string[]) =>
-  Array.from(new Set([DEFAULT_THEME_ID, ...cosmeticsAsArray(current), ...incoming]));
+  Array.from(
+    new Set([
+      DEFAULT_THEME_ID,
+      ...STARTER_TITLE_IDS.map((titleId) => `title:${titleId}`),
+      ...cosmeticsAsArray(current),
+      ...incoming
+    ])
+  );
 
 export const ensureGamification = async (userId: string) => {
   const gamification = await prisma.userGamification.upsert({
@@ -257,20 +277,23 @@ export const ensureGamification = async (userId: string) => {
     update: {},
     create: {
       userId,
-      unlockedCosmetics: [DEFAULT_THEME_ID, `title:${DEFAULT_TITLE_ID}`],
+      unlockedCosmetics: mergeCosmetics([], []),
       activeTheme: DEFAULT_THEME_ID,
       activeTitle: DEFAULT_TITLE_ID
     }
   });
 
   const unlocked = cosmeticsAsArray(gamification.unlockedCosmetics);
+  const nextUnlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
+  const missingStarterTitles = nextUnlocked.some((cosmetic) => !unlocked.includes(cosmetic));
   const hasOnlyStarterTheme = unlocked.length <= 1 && (!unlocked.length || unlocked.includes(DEFAULT_THEME_ID));
-  if (gamification.totalXp > 0 && gamification.xpBalance === 0 && hasOnlyStarterTheme) {
+  const shouldBackfillBalance = gamification.totalXp > 0 && gamification.xpBalance === 0 && hasOnlyStarterTheme;
+  if (missingStarterTitles || shouldBackfillBalance) {
     return prisma.userGamification.update({
       where: { userId },
       data: {
-        xpBalance: gamification.totalXp,
-        unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [])
+        ...(shouldBackfillBalance ? { xpBalance: gamification.totalXp } : {}),
+        ...(missingStarterTitles ? { unlockedCosmetics: nextUnlocked } : {})
       }
     });
   }

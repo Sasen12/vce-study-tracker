@@ -1,5 +1,5 @@
 export const LEVELS = [
-  { level: 1, xp: 0, title: "Year 12 Rookie" },
+  { level: 1, xp: 0, title: "VCE Rookie" },
   { level: 2, xp: 200, title: "On the Grind" },
   { level: 3, xp: 500, title: "SAC Survivor" },
   { level: 4, xp: 1000, title: "Study Machine" },
@@ -29,12 +29,27 @@ export const BADGES = [
   { id: "badge_comeback_energy", label: "Comeback Energy", trigger: "Coin shop collectible" }
 ];
 
+export const DEFAULT_TITLE_ID = "vce_rookie";
+export const STARTER_TITLE_IDS = [DEFAULT_TITLE_ID, "year_11_rookie", "year_12_rookie"] as const;
+
 export const TITLE_SHOP_ITEMS = [
+  {
+    id: DEFAULT_TITLE_ID,
+    label: "VCE Rookie",
+    price: 0,
+    description: "Starter title for any VCE student."
+  },
+  {
+    id: "year_11_rookie",
+    label: "Year 11 Rookie",
+    price: 0,
+    description: "Starter title for Unit 1/2 students."
+  },
   {
     id: "year_12_rookie",
     label: "Year 12 Rookie",
     price: 0,
-    description: "Starter profile title."
+    description: "Starter title for Unit 3/4 students."
   },
   {
     id: "academic_comeback",
@@ -114,7 +129,9 @@ export const BADGE_SHOP_ITEMS = [
 ];
 
 export const titleLabelById = (titleId?: string | null) =>
-  TITLE_SHOP_ITEMS.find((title) => title.id === titleId)?.label ?? TITLE_SHOP_ITEMS[0].label;
+  TITLE_SHOP_ITEMS.find((title) => title.id === titleId)?.label ??
+  TITLE_SHOP_ITEMS.find((title) => title.id === DEFAULT_TITLE_ID)?.label ??
+  TITLE_SHOP_ITEMS[0].label;
 
 export const MOTIVATION_MESSAGES = [
   "SAC szn let's go",

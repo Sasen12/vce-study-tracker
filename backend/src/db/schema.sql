@@ -69,7 +69,7 @@ CREATE TABLE user_gamification (
   badges JSONB DEFAULT '[]',
   unlocked_cosmetics JSONB DEFAULT '["midnight"]',
   active_theme TEXT DEFAULT 'midnight',
-  active_title TEXT DEFAULT 'year_12_rookie',
+  active_title TEXT DEFAULT 'vce_rookie',
   leaderboard_opt_in BOOLEAN DEFAULT FALSE,
   leaderboard_prompted_at TIMESTAMPTZ
 );

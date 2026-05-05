@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
-import { grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
+import { DEFAULT_TITLE_ID, grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const communityRouter = Router();
@@ -155,7 +155,7 @@ const serialiseAdminUser = (user: {
   leaderboardOptIn: user.gamification?.leaderboardOptIn ?? false,
   unlockedCosmetics: cosmeticsAsArray(user.gamification?.unlockedCosmetics),
   activeTheme: user.gamification?.activeTheme ?? "midnight",
-  activeTitle: user.gamification?.activeTitle ?? "year_12_rookie",
+  activeTitle: user.gamification?.activeTitle ?? DEFAULT_TITLE_ID,
   subjectCount: user._count.subjects,
   sessionCount: user._count.sessions,
   feedbackCount: user._count.feedbackItems,

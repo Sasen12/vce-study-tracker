@@ -119,7 +119,7 @@ model UserGamification {
   badges            Json      @default("[]")
   unlockedCosmetics Json      @default("[\"midnight\"]") @map("unlocked_cosmetics")
   activeTheme       String    @default("midnight") @map("active_theme")
-  activeTitle       String    @default("year_12_rookie") @map("active_title")
+  activeTitle       String    @default("vce_rookie") @map("active_title")
   leaderboardOptIn  Boolean   @default(false) @map("leaderboard_opt_in")
   leaderboardPromptedAt DateTime? @map("leaderboard_prompted_at") @db.Timestamptz(6)
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
