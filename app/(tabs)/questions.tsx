@@ -12,7 +12,7 @@ import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { AnswerFeedback, GeneratedAnswerOption, GeneratedQuestion, SavedQuestion, StudyNote } from "@/types";
 import {
-  commandTermPrompts,
+  commandTermsForSubject,
   flashcardTag,
   flashcardsFromNote,
   formatFlashcardNoteBody,
@@ -288,7 +288,7 @@ export default function QuestionsScreen() {
   const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
   const [examFeedback, setExamFeedback] = useState<Record<number, FeedbackState>>({});
   const [examCheckingIndex, setExamCheckingIndex] = useState<number | null>(null);
-  const [commandTerm, setCommandTerm] = useState(commandTermPrompts[3].term);
+  const [commandTerm, setCommandTerm] = useState("Analyse");
   const [commandAnswer, setCommandAnswer] = useState("");
   const [commandFeedback, setCommandFeedback] = useState<FeedbackState | null>(null);
   const [commandChecking, setCommandChecking] = useState(false);
@@ -307,7 +307,18 @@ export default function QuestionsScreen() {
   );
 
   const selectedSubject = subjects.find((subject) => subject.id === subjectId) ?? subjects[0];
+  const commandTermPrompts = useMemo(
+    () => commandTermsForSubject(selectedSubject?.subjectName),
+    [selectedSubject?.subjectName]
+  );
   const presetTopics = TOPICS[selectedSubject?.subjectName ?? ""] ?? ["Key knowledge", "Exam revision", "Common mistakes"];
+  useEffect(() => {
+    if (!commandTermPrompts.some((prompt) => prompt.term === commandTerm)) {
+      setCommandTerm(commandTermPrompts[0]?.term ?? "Explain");
+      setCommandFeedback(null);
+      setCommandAnswer("");
+    }
+  }, [commandTerm, commandTermPrompts]);
   useEffect(() => {
     if (!cooldownActive) return;
     const timer = setTimeout(() => setCooldownActive(false), 2500);
@@ -1292,7 +1303,7 @@ export default function QuestionsScreen() {
                 <View style={styles.commandHeader}>
                   <View>
                     <Text style={styles.battleKicker}>Command Term Trainer</Text>
-                    <Text style={styles.commandSubtitle}>{selectedSubject?.subjectName ?? "Pick a subject"} response skill</Text>
+                    <Text style={styles.commandSubtitle}>{selectedSubject?.subjectName ?? "Pick a subject"} exam wording</Text>
                   </View>
                   <Text style={styles.commandBadge}>{selectedCommandPrompt.subjectHint}</Text>
                 </View>

@@ -8,6 +8,7 @@ import type {
   StudySession,
   UserSubject
 } from "@/types";
+import { VCE_SUBJECTS } from "@/constants/vceSubjects";
 
 export const mistakeTag = "mistake-log";
 export const flashcardTag = "flashcard";
@@ -84,7 +85,20 @@ export type StudySearchResult = {
   route: "/(tabs)/study" | "/(tabs)/questions" | "/(tabs)/calendar";
 };
 
-export const commandTermPrompts = [
+export type CommandTermPrompt = {
+  term: string;
+  subjectHint: string;
+  studentJob: string;
+  answerFormula: string;
+  markTrap: string;
+  weakAnswer: string;
+  prompt: string;
+  practiceQuestion: string;
+  modelAnswer: string;
+  criteria: string[];
+};
+
+const humanitiesCommandTermPrompts: CommandTermPrompt[] = [
   {
     term: "Define",
     subjectHint: "Most VCE subjects",
@@ -99,7 +113,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Describe",
-    subjectHint: "Sciences, Humanities, PE, Tech",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Say what it is like. Give features, characteristics or observable details.",
     answerFormula: "Name the idea + give 2-3 clear features.",
     markTrap: "Explaining why it matters when the question only asks what it is like.",
@@ -111,7 +125,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Explain",
-    subjectHint: "Business, Health, Legal, Psychology",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Show why or how something happens. The marker wants cause and effect.",
     answerFormula: "Point + because/which means/therefore + outcome.",
     markTrap: "Listing a fact without showing the chain of reasoning.",
@@ -123,7 +137,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Analyse",
-    subjectHint: "Business, English, Humanities, Tech",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Break the idea into parts and show how those parts connect to the result.",
     answerFormula: "Idea + mechanism + evidence/detail + link back to the question.",
     markTrap: "Only saying something is good or bad without unpacking how it works.",
@@ -135,7 +149,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Evaluate",
-    subjectHint: "Business, Legal, Health, English",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Weigh strengths and weaknesses, then make a judgement.",
     answerFormula: "Strength + limitation + context + overall judgement.",
     markTrap: "Giving two sides but never deciding which side is stronger.",
@@ -147,7 +161,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Justify",
-    subjectHint: "Data, Software, Business, Legal",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Make a choice and prove why that choice is reasonable.",
     answerFormula: "Decision + evidence/reason + link to criteria, objective or user need.",
     markTrap: "Saying 'it is better' without evidence or a criterion.",
@@ -159,7 +173,7 @@ export const commandTermPrompts = [
   },
   {
     term: "Compare",
-    subjectHint: "English, Humanities, Sciences",
+    subjectHint: "Humanities, Business, Health/PE",
     studentJob: "Show similarities and/or differences between two things.",
     answerFormula: "Both items named + comparative word + specific similarity/difference + effect.",
     markTrap: "Describing each thing separately without directly comparing them.",
@@ -170,6 +184,438 @@ export const commandTermPrompts = [
     criteria: ["Names both sides", "Uses comparative language", "Explains the basis of comparison"]
   }
 ];
+
+const mathsCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Calculate",
+    subjectHint: "Mathematics",
+    studentJob: "Use a mathematical process to get a numerical answer. Show enough working for method marks.",
+    answerFormula: "Substitute/setup + working + final answer + units or rounding if needed.",
+    markTrap: "Only writing the final number with no working, units, or context.",
+    weakAnswer: "The gradient is 3.",
+    prompt: "Improve this by showing the method and final answer clearly.",
+    practiceQuestion: "Calculate the gradient between (2, 5) and (6, 17).",
+    modelAnswer: "Gradient = (17 - 5) / (6 - 2) = 12 / 4 = 3, so the gradient is 3.",
+    criteria: ["Correct setup", "Clear working", "Final answer stated"]
+  },
+  {
+    term: "Determine",
+    subjectHint: "Mathematics",
+    studentJob: "Find the required value using the information given. Choose a suitable method and show the result.",
+    answerFormula: "Relevant rule/method + substitution or reasoning + required value.",
+    markTrap: "Jumping to an answer without showing how the value was found.",
+    weakAnswer: "The median is 24.",
+    prompt: "Improve this by showing how the value was determined.",
+    practiceQuestion: "Determine the median of 12, 18, 24, 30 and 42.",
+    modelAnswer: "The values are already ordered. The middle value is 24, so the median is 24.",
+    criteria: ["Uses the given data", "Shows method", "States the required value"]
+  },
+  {
+    term: "Solve",
+    subjectHint: "Mathematics",
+    studentJob: "Find the value or values that make an equation or condition true.",
+    answerFormula: "Equation + algebra/technology steps + solution set + restrictions if needed.",
+    markTrap: "Giving one value when there may be more, or not checking restrictions.",
+    weakAnswer: "x = 4.",
+    prompt: "Improve this by showing the equation steps.",
+    practiceQuestion: "Solve 3x + 5 = 17.",
+    modelAnswer: "3x + 5 = 17, so 3x = 12 and x = 4.",
+    criteria: ["Correct algebra", "Clear solution", "Checks the requested value"]
+  },
+  {
+    term: "Show that",
+    subjectHint: "Mathematics",
+    studentJob: "Prove the given result from the information. The answer is already known, so the working matters.",
+    answerFormula: "Start from given information + valid working + arrive at the stated result.",
+    markTrap: "Restating the result without proving it.",
+    weakAnswer: "It equals 20, so it is shown.",
+    prompt: "Improve this by proving the result instead of just stating it.",
+    practiceQuestion: "Show that 4(3 + 2) = 20.",
+    modelAnswer: "4(3 + 2) = 4 x 5 = 20, so the expression is equal to 20.",
+    criteria: ["Starts with the given expression", "Uses valid steps", "Arrives at the stated result"]
+  },
+  {
+    term: "Interpret",
+    subjectHint: "Mathematics",
+    studentJob: "Explain what a value, graph feature, statistic, or result means in the context.",
+    answerFormula: "Mathematical result + plain-language meaning + context/units.",
+    markTrap: "Repeating the number without saying what it means.",
+    weakAnswer: "The gradient is positive.",
+    prompt: "Improve this by explaining the meaning in context.",
+    practiceQuestion: "Interpret a positive gradient on a distance-time graph.",
+    modelAnswer: "A positive gradient means the distance from the starting point is increasing over time, so the object is moving away from the start.",
+    criteria: ["Uses the mathematical feature", "Explains meaning", "Links to context"]
+  },
+  {
+    term: "Justify",
+    subjectHint: "Mathematics",
+    studentJob: "Give a mathematical reason for a choice, conclusion, or statement.",
+    answerFormula: "Conclusion + calculation/property/evidence + why it supports the conclusion.",
+    markTrap: "Saying an answer is correct without mathematical evidence.",
+    weakAnswer: "This model is better because it is closer.",
+    prompt: "Improve this with mathematical evidence.",
+    practiceQuestion: "Justify which model better fits a data set.",
+    modelAnswer: "Model A is better because its residuals are smaller and more randomly scattered, so its predictions are closer to the observed data with less systematic error.",
+    criteria: ["States a conclusion", "Uses mathematical evidence", "Explains why the evidence supports it"]
+  }
+];
+
+const scienceCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Define",
+    subjectHint: "Sciences",
+    studentJob: "Give the exact scientific meaning of a term.",
+    answerFormula: "Term + scientific category + key feature.",
+    markTrap: "Using everyday wording instead of scientific wording.",
+    weakAnswer: "Homeostasis is when the body stays normal.",
+    prompt: "Improve this into a precise scientific definition.",
+    practiceQuestion: "Define homeostasis.",
+    modelAnswer: "Homeostasis is the regulation of internal conditions within narrow limits despite changes in the external environment.",
+    criteria: ["Scientific wording", "Key feature included", "Concise definition"]
+  },
+  {
+    term: "Explain",
+    subjectHint: "Sciences",
+    studentJob: "Show the cause, process, or reason behind a result.",
+    answerFormula: "Cause/process + because/therefore + scientific outcome.",
+    markTrap: "Naming the process but not explaining how it causes the outcome.",
+    weakAnswer: "Enzymes work faster when it is warm.",
+    prompt: "Improve this by showing the process.",
+    practiceQuestion: "Explain why enzyme activity increases as temperature rises up to an optimum.",
+    modelAnswer: "As temperature rises, enzyme and substrate particles have more kinetic energy, so successful collisions occur more often until the optimum temperature is reached.",
+    criteria: ["Uses science concepts", "Shows cause and effect", "Links to outcome"]
+  },
+  {
+    term: "Compare",
+    subjectHint: "Sciences",
+    studentJob: "State similarities and/or differences using both items.",
+    answerFormula: "Item A + comparative word + item B + specific feature.",
+    markTrap: "Describing two things separately without direct comparison.",
+    weakAnswer: "Mitosis has two cells and meiosis has four.",
+    prompt: "Improve this by directly comparing the processes.",
+    practiceQuestion: "Compare mitosis and meiosis.",
+    modelAnswer: "Mitosis produces two genetically identical diploid cells, whereas meiosis produces four genetically different haploid cells.",
+    criteria: ["Names both items", "Uses comparative language", "Specific similarity or difference"]
+  },
+  {
+    term: "Analyse",
+    subjectHint: "Sciences",
+    studentJob: "Break data, evidence, or a process into parts and explain the relationship.",
+    answerFormula: "Pattern/part + evidence + scientific link + conclusion.",
+    markTrap: "Stating a trend without using data or scientific reasoning.",
+    weakAnswer: "The rate goes up because concentration is higher.",
+    prompt: "Improve this by unpacking the relationship.",
+    practiceQuestion: "Analyse how concentration affects reaction rate.",
+    modelAnswer: "As concentration increases, particles are closer together, causing more frequent successful collisions per second and therefore a higher reaction rate.",
+    criteria: ["Identifies relationship", "Uses evidence or mechanism", "Draws conclusion"]
+  },
+  {
+    term: "Evaluate",
+    subjectHint: "Sciences",
+    studentJob: "Judge the quality, reliability, or usefulness of evidence or a method.",
+    answerFormula: "Strength + limitation + effect on validity/reliability + judgement.",
+    markTrap: "Listing pros and cons without deciding how trustworthy the evidence is.",
+    weakAnswer: "The experiment is good but has errors.",
+    prompt: "Improve this by judging the method or evidence.",
+    practiceQuestion: "Evaluate the reliability of an experiment.",
+    modelAnswer: "The experiment is reasonably reliable because repeated trials produced similar results, but the small sample size limits confidence in applying the conclusion broadly.",
+    criteria: ["Uses evidence quality", "Mentions limitation", "Makes judgement"]
+  },
+  {
+    term: "Interpret",
+    subjectHint: "Sciences",
+    studentJob: "State what data, a graph, or an observation means scientifically.",
+    answerFormula: "Data feature + scientific meaning + context.",
+    markTrap: "Reading the graph value but not explaining what it means.",
+    weakAnswer: "The line goes down.",
+    prompt: "Improve this by explaining the scientific meaning.",
+    practiceQuestion: "Interpret a decreasing line on a concentration-time graph.",
+    modelAnswer: "The decreasing line shows that reactant concentration is falling over time as reactant particles are being used up in the reaction.",
+    criteria: ["Reads the data feature", "Explains meaning", "Uses context"]
+  }
+];
+
+const englishCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Analyse",
+    subjectHint: "English and Literature",
+    studentJob: "Break down how language, structure, evidence, or author choices create meaning.",
+    answerFormula: "Author choice + evidence + effect on reader/meaning + link to argument.",
+    markTrap: "Naming a technique without explaining its effect.",
+    weakAnswer: "The author uses imagery to show sadness.",
+    prompt: "Improve this by explaining how the technique creates meaning.",
+    practiceQuestion: "Analyse how imagery creates meaning in a text.",
+    modelAnswer: "The image of the empty street suggests isolation, positioning the reader to see the character's grief as private and unresolved.",
+    criteria: ["Identifies author choice", "Explains effect", "Links to interpretation"]
+  },
+  {
+    term: "Compare",
+    subjectHint: "English and Literature",
+    studentJob: "Show similarities and/or differences between texts, characters, arguments, or ideas.",
+    answerFormula: "Text A + comparative word + Text B + meaning/effect.",
+    markTrap: "Writing two separate mini paragraphs without a direct comparison.",
+    weakAnswer: "Both texts are about family but they are different.",
+    prompt: "Improve this by comparing the ideas directly.",
+    practiceQuestion: "Compare how two texts present family responsibility.",
+    modelAnswer: "While both texts present family responsibility as demanding, Text A frames it as a source of identity, whereas Text B presents it as a burden that restricts personal freedom.",
+    criteria: ["Direct comparison", "Mentions both texts", "Explains meaning"]
+  },
+  {
+    term: "Discuss",
+    subjectHint: "English and Literature",
+    studentJob: "Explore an idea from more than one angle before developing a position.",
+    answerFormula: "Idea + angle one + angle two/complication + considered position.",
+    markTrap: "Only agreeing with the prompt without exploring complexity.",
+    weakAnswer: "The character is responsible for what happened.",
+    prompt: "Improve this by showing complexity.",
+    practiceQuestion: "Discuss whether a character is responsible for the outcome.",
+    modelAnswer: "The character contributes to the outcome through repeated silence, but the text also suggests that social pressure limits their ability to act freely.",
+    criteria: ["Explores more than one angle", "Uses text logic", "Builds a position"]
+  },
+  {
+    term: "Evaluate",
+    subjectHint: "English and Literature",
+    studentJob: "Make a judgement about effectiveness, significance, or extent.",
+    answerFormula: "Judgement + evidence + why it matters + qualification if needed.",
+    markTrap: "Saying something is effective without explaining why.",
+    weakAnswer: "The ending is effective because it is emotional.",
+    prompt: "Improve this with a judgement and evidence.",
+    practiceQuestion: "Evaluate the effectiveness of an ending.",
+    modelAnswer: "The ending is effective because its unresolved image forces readers to sit with the consequences of the conflict rather than offering simple closure.",
+    criteria: ["Clear judgement", "Textual evidence", "Explains significance"]
+  },
+  {
+    term: "Interpret",
+    subjectHint: "English and Literature",
+    studentJob: "Explain your reading of meaning, implication, or significance.",
+    answerFormula: "Reading/interpretation + evidence + why that reading makes sense.",
+    markTrap: "Retelling plot instead of explaining meaning.",
+    weakAnswer: "This scene means the character is upset.",
+    prompt: "Improve this into a richer interpretation.",
+    practiceQuestion: "Interpret a scene where a character refuses to speak.",
+    modelAnswer: "The character's refusal to speak can be read as resistance, because silence becomes the only control they have in a conversation dominated by others.",
+    criteria: ["Gives interpretation", "Uses evidence", "Explains significance"]
+  }
+];
+
+const technologyCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Describe",
+    subjectHint: "Technology",
+    studentJob: "Give the relevant features of a system, design, data set, or process.",
+    answerFormula: "Feature + purpose + relevant detail.",
+    markTrap: "Naming the feature without saying what it does.",
+    weakAnswer: "Validation checks the data.",
+    prompt: "Improve this by describing the feature clearly.",
+    practiceQuestion: "Describe a validation technique.",
+    modelAnswer: "A range check is a validation technique that ensures entered data falls between accepted minimum and maximum values before it is stored.",
+    criteria: ["Names feature", "Gives purpose", "Includes relevant detail"]
+  },
+  {
+    term: "Explain",
+    subjectHint: "Technology",
+    studentJob: "Show how or why a design decision, process, or security control works.",
+    answerFormula: "Decision/control + mechanism + impact on user, data, or system.",
+    markTrap: "Listing a benefit without explaining the mechanism.",
+    weakAnswer: "Encryption is good because it is safer.",
+    prompt: "Improve this by explaining how it helps.",
+    practiceQuestion: "Explain how encryption protects data.",
+    modelAnswer: "Encryption converts readable data into unreadable ciphertext, so unauthorised users cannot understand the data without the correct key.",
+    criteria: ["Explains mechanism", "Links to impact", "Uses technical terms correctly"]
+  },
+  {
+    term: "Justify",
+    subjectHint: "Technology",
+    studentJob: "Defend a design or technical choice using criteria, evidence, or user needs.",
+    answerFormula: "Choice + criterion/user need + evidence + why it fits.",
+    markTrap: "Saying a choice is better without linking to the scenario.",
+    weakAnswer: "I would use a drop-down because it is easier.",
+    prompt: "Improve this by linking the choice to a user or data need.",
+    practiceQuestion: "Justify using a drop-down list in an input form.",
+    modelAnswer: "A drop-down list is suitable because it limits input to valid options, reducing data-entry errors for users and improving data consistency.",
+    criteria: ["States choice", "Links to criteria", "Uses scenario evidence"]
+  },
+  {
+    term: "Evaluate",
+    subjectHint: "Technology",
+    studentJob: "Judge how well a solution, method, or design meets criteria.",
+    answerFormula: "Strength + weakness + criterion + final judgement.",
+    markTrap: "Listing features without deciding whether the solution meets the need.",
+    weakAnswer: "The design is good but could be improved.",
+    prompt: "Improve this by judging against criteria.",
+    practiceQuestion: "Evaluate a solution against usability.",
+    modelAnswer: "The solution is mostly usable because navigation is consistent and labels are clear, but small button spacing may reduce accuracy on mobile devices.",
+    criteria: ["Uses criteria", "Gives strength and limitation", "Makes judgement"]
+  },
+  {
+    term: "Analyse",
+    subjectHint: "Technology",
+    studentJob: "Break down a scenario, data flow, algorithm, or design decision and show relationships.",
+    answerFormula: "Component + role + relationship/effect + conclusion.",
+    markTrap: "Describing parts without explaining how they interact.",
+    weakAnswer: "The database stores the customer data.",
+    prompt: "Improve this by explaining the relationship in the system.",
+    practiceQuestion: "Analyse how a database supports an online booking system.",
+    modelAnswer: "The database stores customer, booking, and availability data so the interface can check times in real time and prevent double bookings.",
+    criteria: ["Identifies components", "Explains relationships", "Links to system outcome"]
+  }
+];
+
+const artsCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Describe",
+    subjectHint: "The Arts",
+    studentJob: "Give visible, audible, or design features using subject-specific language.",
+    answerFormula: "Feature + subject term + detail.",
+    markTrap: "Writing personal opinion instead of observable features.",
+    weakAnswer: "The artwork looks bright and nice.",
+    prompt: "Improve this with specific visual language.",
+    practiceQuestion: "Describe the use of colour in an artwork.",
+    modelAnswer: "The artwork uses saturated warm colours, especially red and orange, to create a strong focal point in the centre of the composition.",
+    criteria: ["Uses subject language", "Specific feature", "Clear detail"]
+  },
+  {
+    term: "Analyse",
+    subjectHint: "The Arts",
+    studentJob: "Break down how elements, principles, techniques, or choices create meaning/effect.",
+    answerFormula: "Element/choice + technique + effect + meaning.",
+    markTrap: "Naming an element without explaining its effect.",
+    weakAnswer: "The artist uses line to make it interesting.",
+    prompt: "Improve this by explaining how the element works.",
+    practiceQuestion: "Analyse how line creates movement.",
+    modelAnswer: "The repeated diagonal lines guide the viewer's eye upward, creating a sense of movement and tension across the composition.",
+    criteria: ["Identifies choice", "Explains effect", "Links to meaning"]
+  },
+  {
+    term: "Evaluate",
+    subjectHint: "The Arts",
+    studentJob: "Judge how effectively a work, performance, or design achieves an intention.",
+    answerFormula: "Judgement + evidence + intention/criteria + limitation if relevant.",
+    markTrap: "Saying you like it without judging effectiveness.",
+    weakAnswer: "The performance was effective because it was emotional.",
+    prompt: "Improve this with evidence and judgement.",
+    practiceQuestion: "Evaluate how effectively a performance communicates tension.",
+    modelAnswer: "The performance communicates tension effectively because the slow pacing, restricted movement, and silence create suspense before the final confrontation.",
+    criteria: ["Makes judgement", "Uses evidence", "Links to intention"]
+  }
+];
+
+const vmVetCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Identify",
+    subjectHint: "VCE VM and VET",
+    studentJob: "Name the correct item, issue, skill, factor, or example.",
+    answerFormula: "Clear item named + relevant context if needed.",
+    markTrap: "Explaining around the answer but never naming it clearly.",
+    weakAnswer: "It is about safety.",
+    prompt: "Improve this by naming the specific item.",
+    practiceQuestion: "Identify one workplace hazard.",
+    modelAnswer: "One workplace hazard is an exposed electrical cord across a walkway.",
+    criteria: ["Names the item", "Specific", "Relevant to context"]
+  },
+  {
+    term: "Describe",
+    subjectHint: "VCE VM and VET",
+    studentJob: "Give key features or details of a skill, process, workplace issue, or example.",
+    answerFormula: "Item + features + relevant workplace/community detail.",
+    markTrap: "Giving a one-word answer when detail is required.",
+    weakAnswer: "Teamwork is helping people.",
+    prompt: "Improve this with practical details.",
+    practiceQuestion: "Describe teamwork in a workplace.",
+    modelAnswer: "Teamwork involves communicating clearly, sharing tasks, and supporting others so the group can complete work safely and efficiently.",
+    criteria: ["Gives features", "Practical context", "Clear detail"]
+  },
+  {
+    term: "Explain",
+    subjectHint: "VCE VM and VET",
+    studentJob: "Show why something matters or how it leads to an outcome.",
+    answerFormula: "Point + because + workplace/community outcome.",
+    markTrap: "Saying something is important without explaining why.",
+    weakAnswer: "Communication is important at work.",
+    prompt: "Improve this by showing why.",
+    practiceQuestion: "Explain why clear communication matters in the workplace.",
+    modelAnswer: "Clear communication matters because it helps workers understand tasks and safety expectations, reducing mistakes and improving teamwork.",
+    criteria: ["Shows reason", "Links to outcome", "Uses context"]
+  },
+  {
+    term: "Apply",
+    subjectHint: "VCE VM and VET",
+    studentJob: "Use knowledge or a skill in a practical scenario.",
+    answerFormula: "Scenario detail + relevant skill/knowledge + action.",
+    markTrap: "Giving a general definition instead of using the scenario.",
+    weakAnswer: "I would be safe.",
+    prompt: "Improve this by applying the idea to the scenario.",
+    practiceQuestion: "Apply a safety procedure to a workplace scenario.",
+    modelAnswer: "I would move the exposed cord away from the walkway, report it to a supervisor, and use signage until the hazard is fixed.",
+    criteria: ["Uses scenario", "Gives practical action", "Relevant skill or knowledge"]
+  }
+];
+
+const languageCommandTermPrompts: CommandTermPrompt[] = [
+  {
+    term: "Identify",
+    subjectHint: "Languages",
+    studentJob: "Find a specific detail, idea, audience, purpose, or language feature.",
+    answerFormula: "Specific detail + where relevant, evidence from the text.",
+    markTrap: "Giving a broad topic instead of the exact detail asked for.",
+    weakAnswer: "The text is about travel.",
+    prompt: "Improve this by identifying the specific detail.",
+    practiceQuestion: "Identify the speaker's main reason for travelling.",
+    modelAnswer: "The speaker is travelling to visit relatives during the school holidays.",
+    criteria: ["Specific detail", "Relevant to question", "Text-based"]
+  },
+  {
+    term: "Explain",
+    subjectHint: "Languages",
+    studentJob: "Show meaning, purpose, or reason using evidence from the text.",
+    answerFormula: "Meaning/reason + evidence/detail + link to purpose.",
+    markTrap: "Translating a phrase without explaining its purpose.",
+    weakAnswer: "The phrase means it is important.",
+    prompt: "Improve this by explaining meaning and purpose.",
+    practiceQuestion: "Explain why the writer uses a polite expression.",
+    modelAnswer: "The polite expression shows respect for the audience and makes the request sound less direct.",
+    criteria: ["Explains meaning", "Uses evidence", "Links to purpose"]
+  },
+  {
+    term: "Compare",
+    subjectHint: "Languages",
+    studentJob: "Show similarities or differences in views, customs, language choices, or details.",
+    answerFormula: "Item A + comparative language + item B + evidence.",
+    markTrap: "Describing both sides separately without a direct comparison.",
+    weakAnswer: "They have different opinions.",
+    prompt: "Improve this by directly comparing the views.",
+    practiceQuestion: "Compare two speakers' opinions about school.",
+    modelAnswer: "Speaker A sees school as stressful because of exams, whereas Speaker B focuses on friendship and support.",
+    criteria: ["Compares directly", "Uses both sides", "Includes evidence"]
+  }
+];
+
+export const commandTermPrompts = humanitiesCommandTermPrompts;
+
+export const commandTermsForSubject = (subjectName?: string | null): CommandTermPrompt[] => {
+  const subject = VCE_SUBJECTS.find((item) => item.name.toLowerCase() === subjectName?.trim().toLowerCase());
+  switch (subject?.category) {
+    case "Mathematics":
+      return mathsCommandTermPrompts;
+    case "Sciences":
+      return scienceCommandTermPrompts;
+    case "English":
+      return englishCommandTermPrompts;
+    case "Technology":
+      return technologyCommandTermPrompts;
+    case "The Arts":
+      return artsCommandTermPrompts;
+    case "Languages":
+      return languageCommandTermPrompts;
+    case "VCE VM":
+    case "VCE VET":
+      return vmVetCommandTermPrompts;
+    case "Health and PE":
+    case "Humanities":
+    default:
+      return humanitiesCommandTermPrompts;
+  }
+};
 
 const normalise = (value?: string | null) => value?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() ?? "";
 

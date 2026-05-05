@@ -3,7 +3,34 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - Command Term Trainer cleanup
+Most recent edit: 2026-05-05 - Subject-aware Command Term Trainer
+
+Summary:
+- Made Questions > Tools > Terms adapt to the selected VCE subject instead of showing one Business/Humanities-style command-term set for everything.
+- Added subject/category-specific command-term banks:
+  - Mathematics: Calculate, Determine, Solve, Show that, Interpret, Justify.
+  - Sciences: Define, Explain, Compare, Analyse, Evaluate, Interpret.
+  - English/Literature/EAL: Analyse, Compare, Discuss, Evaluate, Interpret.
+  - Technology subjects: Describe, Explain, Justify, Evaluate, Analyse.
+  - The Arts: Describe, Analyse, Evaluate.
+  - Languages: Identify, Explain, Compare.
+  - VCE VM/VET: Identify, Describe, Explain, Apply.
+  - Humanities/Business/Health/PE keep the extended-response style terms.
+- The trainer now uses constants/vceSubjects.ts to identify the selected subject category, so it covers the full VCE subject list rather than hardcoded assumptions.
+- Changed the screen heading from "response skill" to "exam wording" so Maths and other non-essay subjects make more sense.
+- General Mathematics now shows Maths-style examples and advice instead of Business examples like productivity/objectives.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-05 - Command Term Trainer cleanup
 
 Summary:
 - Reworked the Command Term Trainer UI inside Questions > Tools > Terms.
