@@ -56,7 +56,7 @@ export const themeShopItems: ThemeShopItem[] = [
   {
     id: "mint",
     name: "Mint Sprint",
-    price: 120,
+    price: 60,
     colors: {
       background: "#071412",
       surface: "#10211D",
@@ -74,7 +74,7 @@ export const themeShopItems: ThemeShopItem[] = [
   {
     id: "sunset",
     name: "Sunset Revision",
-    price: 180,
+    price: 90,
     colors: {
       background: "#180D12",
       surface: "#261820",
@@ -92,7 +92,7 @@ export const themeShopItems: ThemeShopItem[] = [
   {
     id: "ocean",
     name: "Ocean Mode",
-    price: 240,
+    price: 140,
     colors: {
       background: "#06111F",
       surface: "#0F1D2D",

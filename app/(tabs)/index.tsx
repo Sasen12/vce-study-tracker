@@ -506,8 +506,8 @@ export default function DashboardScreen() {
           <Dialog.Title style={styles.dialogTitle}>Join the weekly leaderboard?</Dialog.Title>
           <Dialog.Content>
             <Text style={styles.dialogBody}>
-              Compete on weekly XP with other students who opt in. Your display name, weekly XP, study minutes and
-              session count will be visible in Community.
+              Optional public mode: if you join, other opted-in students can see your display name, weekly XP, study
+              minutes and session count in Community. Choose Not now to stay private.
             </Text>
             {leaderboardError ? <Text style={styles.error}>{leaderboardError}</Text> : null}
           </Dialog.Content>

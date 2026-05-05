@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Dimensions, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Dimensions, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
@@ -154,6 +154,7 @@ function SavedQuestionCard({ item }: { item: SavedQuestion }) {
 
 export default function QuestionsScreen() {
   useTrackScreen("questions");
+  const screenRef = useRef<ScrollView | null>(null);
   const { subjects, generatedQuestions, savedQuestions, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer } =
     useAppStore();
   const [mode, setMode] = useState("generate");
@@ -284,6 +285,12 @@ export default function QuestionsScreen() {
     setCheckingIndex(null);
   };
 
+  const scrollToDeck = useCallback(() => {
+    setTimeout(() => {
+      screenRef.current?.scrollTo({ y: 520, animated: true });
+    }, 120);
+  }, []);
+
   const requestQuestions = async () => {
     if (!selectedSubject || !topic.trim()) return false;
     setGenerating(true);
@@ -313,6 +320,7 @@ export default function QuestionsScreen() {
       setCooldownActive(true);
       setGameStarted(false);
       setGameOver(false);
+      scrollToDeck();
     }
   };
 
@@ -341,6 +349,7 @@ export default function QuestionsScreen() {
     if (!selectedSubject || !topic.trim()) return;
     const ok = await requestQuestions();
     if (!ok) return;
+    setMode("game");
     setCooldownActive(true);
     setGameStarted(true);
     setGameOver(false);
@@ -355,6 +364,7 @@ export default function QuestionsScreen() {
     setHiddenOptions([]);
     setSelectedOption(null);
     setLastResult(null);
+    scrollToDeck();
   };
 
   const chooseGameOption = (option: GeneratedAnswerOption) => {
@@ -409,7 +419,7 @@ export default function QuestionsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen scrollRef={screenRef}>
       <View>
         <Text style={styles.eyebrow}>AI practice</Text>
         <Text variant="headlineLarge" style={styles.title}>
@@ -474,6 +484,7 @@ export default function QuestionsScreen() {
             <Button
               mode="contained"
               icon="auto-fix"
+              loading={generating}
               disabled={!topic.trim() || !selectedSubject || generating || cooldownActive}
               onPress={submitGenerate}
             >
@@ -483,12 +494,16 @@ export default function QuestionsScreen() {
 
           {generating ? (
             <AppCard style={styles.loadingCard}>
+              <Text style={styles.loadingText}>Forging questions from your topic...</Text>
               <Skeleton style={styles.skeletonTitle} />
               <Skeleton style={styles.skeletonBody} />
               <Skeleton style={styles.skeletonBody} />
             </AppCard>
           ) : generatedQuestions.length ? (
             <>
+              <View style={styles.deckHint}>
+                <Text style={styles.deckHintText}>Swipe sideways to move through the generated set.</Text>
+              </View>
               <FlatList
                 horizontal
                 pagingEnabled
@@ -514,7 +529,7 @@ export default function QuestionsScreen() {
               <Button mode="outlined" icon="refresh" disabled={generating || cooldownActive} onPress={submitGenerate}>
                 Try again
               </Button>
-              <Button mode="contained-tonal" icon="sword-cross" disabled={generating} onPress={startGame}>
+              <Button mode="contained-tonal" icon="sword-cross" loading={generating} disabled={generating} onPress={startGame}>
                 Play battle deck
               </Button>
             </>
@@ -573,13 +588,20 @@ export default function QuestionsScreen() {
               ]}
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button mode="contained" icon="play" disabled={!topic.trim() || !selectedSubject || generating} onPress={startGame}>
+            <Button
+              mode="contained"
+              icon="play"
+              loading={generating}
+              disabled={!topic.trim() || !selectedSubject || generating}
+              onPress={startGame}
+            >
               {generating ? "Building deck..." : "Start battle"}
             </Button>
           </AppCard>
 
           {generating ? (
             <AppCard style={styles.loadingCard}>
+              <Text style={styles.loadingText}>Building your first round...</Text>
               <Skeleton style={styles.skeletonTitle} />
               <Skeleton style={styles.skeletonBody} />
             </AppCard>
@@ -1002,6 +1024,21 @@ const styles = StyleSheet.create({
   savedTools: {
     gap: 12
   },
+  deckHint: {
+    minHeight: 38,
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}55`,
+    backgroundColor: `${palette.info}12`,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  deckHintText: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "center"
+  },
   reviewQueue: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1017,6 +1054,10 @@ const styles = StyleSheet.create({
   },
   loadingCard: {
     gap: 12
+  },
+  loadingText: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
   },
   skeletonTitle: {
     width: "45%"

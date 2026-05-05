@@ -89,6 +89,7 @@ export default function StudyScreen() {
   const [checkpointGenerating, setCheckpointGenerating] = useState(false);
   const [selectedCheckpointOption, setSelectedCheckpointOption] = useState<string | null>(null);
   const [checkpointResult, setCheckpointResult] = useState<"correct" | "wrong" | null>(null);
+  const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -187,6 +188,10 @@ export default function StudyScreen() {
   const xp = calculateXp(elapsed) + timerBonusXp;
   const targetSeconds = Number(targetMinutes) * 60;
   const targetProgress = targetSeconds ? Math.min(100, Math.round((elapsed / targetSeconds) * 100)) : 0;
+  const remainingSeconds = Math.max(0, targetSeconds - elapsed);
+  const overtimeSeconds = Math.max(0, elapsed - targetSeconds);
+  const countdownLabel =
+    elapsed >= targetSeconds && elapsed > 0 ? `+${formatElapsed(overtimeSeconds)} over target` : formatElapsed(remainingSeconds);
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
@@ -241,18 +246,25 @@ export default function StudyScreen() {
       setMessage("Add the topic before starting so timer check-ins know what to ask.");
       return;
     }
-    const fullscreenResult = await enterBrowserFullscreen();
-    if (fullscreenResult === "blocked") {
-      setMessage("Your browser blocked fullscreen. Press Start again and allow fullscreen to begin deep work.");
-      return;
+    setStarting(true);
+    try {
+      const fullscreenResult = await enterBrowserFullscreen();
+      if (elapsed === 0) {
+        setTimerBonusXp(0);
+        setNextCheckpointAt(checkpointIntervalSeconds);
+      }
+      setMode("timer");
+      setMessage(
+        fullscreenResult === "blocked"
+          ? "Focus lock was blocked, but the timer is running. Keep going here, or allow fullscreen next time for stricter focus."
+          : fullscreenResult === "unsupported"
+            ? "This browser cannot use fullscreen focus lock, but the timer is running."
+            : null
+      );
+      setRunning(true);
+    } finally {
+      setStarting(false);
     }
-    if (elapsed === 0) {
-      setTimerBonusXp(0);
-      setNextCheckpointAt(checkpointIntervalSeconds);
-    }
-    setMode("timer");
-    setMessage(fullscreenResult === "unsupported" ? "This browser cannot use fullscreen focus lock, but the timer is running." : null);
-    setRunning(true);
   };
 
   const pause = () => {
@@ -467,6 +479,13 @@ export default function StudyScreen() {
             <Animated.View style={timerStyle}>
               <Text style={styles.timer}>{formatElapsed(elapsed)}</Text>
             </Animated.View>
+            <View style={styles.targetTrack}>
+              <View style={[styles.targetFill, { width: `${targetProgress}%` }]} />
+            </View>
+            <View style={styles.countdownRow}>
+              <Text style={styles.countdownLabel}>{elapsed >= targetSeconds && elapsed > 0 ? "Over target" : "Time remaining"}</Text>
+              <Text style={styles.countdownValue}>{countdownLabel}</Text>
+            </View>
             <View style={styles.timerMetaRow}>
               <Text style={styles.xp}>{xp} XP estimated</Text>
               <Text style={styles.progressPill}>{targetProgress}% target</Text>
@@ -481,7 +500,7 @@ export default function StudyScreen() {
 
             <View style={styles.controls}>
               {!running ? (
-                <Button mode="contained" icon="play" disabled={!selectedSubject} onPress={start}>
+                <Button mode="contained" icon="play" loading={starting} disabled={!selectedSubject || starting} onPress={start}>
                   Start
                 </Button>
               ) : (
@@ -639,6 +658,42 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 72,
     lineHeight: 82,
+    fontFamily: "Outfit_700Bold"
+  },
+  targetTrack: {
+    width: "100%",
+    maxWidth: 520,
+    height: 10,
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)"
+  },
+  targetFill: {
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: palette.primary
+  },
+  countdownRow: {
+    width: "100%",
+    maxWidth: 520,
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  countdownLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  countdownValue: {
+    color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
   xp: {

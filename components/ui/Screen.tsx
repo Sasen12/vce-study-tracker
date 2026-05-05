@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import type { RefObject } from "react";
 import type { ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -11,9 +12,10 @@ import { useActivePalette } from "@/hooks/useActiveTheme";
 type ScreenProps = {
   children: ReactNode;
   scroll?: boolean;
+  scrollRef?: RefObject<ScrollView>;
 };
 
-export function Screen({ children, scroll = true }: ScreenProps) {
+export function Screen({ children, scroll = true, scrollRef }: ScreenProps) {
   const activePalette = useActivePalette();
   const focusProgress = useSharedValue(1);
   const focusStyle = useAnimatedStyle(() => ({
@@ -37,7 +39,7 @@ export function Screen({ children, scroll = true }: ScreenProps) {
     </Animated.View>
   );
   const content = scroll ? (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {stack}
     </ScrollView>
   ) : (

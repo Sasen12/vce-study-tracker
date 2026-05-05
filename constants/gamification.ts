@@ -21,6 +21,7 @@ export const BADGES = [
   { id: "goal_setter", label: "Goal Setter", trigger: "Set goals for all subjects" },
   { id: "sac_ready", label: "SAC Ready", trigger: "Add upcoming SAC dates" },
   { id: "all_rounder", label: "All Rounder", trigger: "Study 4+ subjects" },
+  { id: "badge_first_focus", label: "First Focus", trigger: "Coin shop collectible" },
   { id: "badge_calm_under_pressure", label: "Calm Under Pressure", trigger: "Coin shop collectible" },
   { id: "badge_deadline_defender", label: "Deadline Defender", trigger: "Coin shop collectible" },
   { id: "badge_past_paper_pro", label: "Past Paper Pro", trigger: "Coin shop collectible" },
@@ -38,8 +39,14 @@ export const TITLE_SHOP_ITEMS = [
   {
     id: "academic_comeback",
     label: "Academic Comeback",
-    price: 260,
+    price: 90,
     description: "For rebuilding momentum one block at a time."
+  },
+  {
+    id: "revision_starter",
+    label: "Revision Starter",
+    price: 140,
+    description: "For getting moving before the pressure arrives."
   },
   {
     id: "deadline_defender",
@@ -69,9 +76,15 @@ export const TITLE_SHOP_ITEMS = [
 
 export const BADGE_SHOP_ITEMS = [
   {
+    id: "badge_first_focus",
+    label: "First Focus",
+    price: 60,
+    description: "A first collectible for getting a few focused blocks done."
+  },
+  {
     id: "badge_calm_under_pressure",
     label: "Calm Under Pressure",
-    price: 220,
+    price: 140,
     description: "A collectible badge for steady exam-week energy."
   },
   {

@@ -37,6 +37,15 @@ export default function ShopScreen() {
   const unlockedCount = themeShopItems.filter((theme) => unlocked.has(theme.id)).length;
   const titleCount = TITLE_SHOP_ITEMS.filter((title) => unlocked.has(`title:${title.id}`)).length;
   const badgeCount = BADGE_SHOP_ITEMS.filter((badge) => badges.has(badge.id)).length;
+  const entryPrice = useMemo(() => {
+    const prices =
+      mode === "themes"
+        ? themeShopItems.map((item) => item.price)
+        : mode === "titles"
+          ? TITLE_SHOP_ITEMS.map((item) => item.price)
+          : BADGE_SHOP_ITEMS.map((item) => item.price);
+    return Math.min(...prices.filter((price) => price > 0));
+  }, [mode]);
 
   const chooseTheme = async (themeId: string, isUnlocked: boolean) => {
     setBusyId(themeId);
@@ -125,6 +134,7 @@ export default function ShopScreen() {
                   ? `${titleCount}/${TITLE_SHOP_ITEMS.length} unlocked`
                   : `${badgeCount}/${BADGE_SHOP_ITEMS.length} collected`}
             </Text>
+            <Text style={styles.muted}>Starter picks from {entryPrice} coins.</Text>
           </View>
         </View>
       </AppCard>

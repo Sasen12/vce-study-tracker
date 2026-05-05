@@ -1,0 +1,41 @@
+Standing request from Sasen:
+- After finishing edits in this repo, update this file with a clear summary of what changed.
+- After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
+- This file is meant as a handoff note for a fresh Codex tab.
+
+Most recent edit: 2026-05-05
+
+Summary:
+- Fixed the Study timer start flow so a blocked browser fullscreen request no longer prevents the timer from starting.
+- Added a visible timer target progress bar and remaining-time countdown, including an over-target state.
+- Added a loading state to the Study timer Start button.
+- Added optional scrollRef support to components/ui/Screen.tsx so screens can scroll programmatically.
+- Improved Question Forge and Battle feedback:
+  - Generate and Battle buttons now show loading spinners while AI decks are being built.
+  - Generated question decks auto-scroll into view.
+  - A hint tells students to swipe sideways through generated questions.
+  - "Play battle deck" now switches to the Battle tab before showing the active round.
+- Clarified leaderboard privacy in Community and the home-screen prompt:
+  - Students can see that joining is optional/public.
+  - The app explains what becomes visible and that opting out keeps them off rankings.
+- Made shop rewards more approachable for new users:
+  - Lowered starter theme prices for Mint Sprint, Sunset Revision, and Ocean Mode.
+  - Lowered Academic Comeback title price.
+  - Added a new Revision Starter title.
+  - Added a new First Focus badge.
+  - Lowered the first paid badge price.
+  - Added "Starter picks from X coins" copy to the Shop summary.
+- Synced shop price/item changes between frontend constants and backend gamification service constants.
+
+Validation run:
+- npm run lint
+- npm run build --prefix backend
+
+Local preview started:
+- Web app: http://localhost:8081
+- API health checked at: http://localhost:3001/health
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app

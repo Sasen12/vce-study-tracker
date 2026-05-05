@@ -658,7 +658,7 @@ export default function CommunityScreen() {
                     ? viewerRank
                       ? `Your current weekly rank is #${viewerRank}.`
                       : "Log a study session to land on the board."
-                    : "Join when you want your weekly XP to count against other opted-in students."}
+                    : "Stay private, or join when you want your weekly XP to count against other opted-in students."}
                 </Text>
               </View>
               <View style={styles.leaderboardActions}>
@@ -685,9 +685,26 @@ export default function CommunityScreen() {
               </View>
             </View>
             <Text style={styles.muted}>
-              {formatWeekRange(leaderboard?.weekStart, leaderboard?.weekEnd)} - shows display name, weekly XP, weekly
-              minutes and session count.
+              {formatWeekRange(leaderboard?.weekStart, leaderboard?.weekEnd)} - the board only includes students who
+              choose Join.
             </Text>
+          </AppCard>
+
+          <AppCard style={styles.leaderboardPrivacyCard}>
+            <View style={styles.privacyHeader}>
+              <View style={styles.privacyIcon}>
+                <MaterialCommunityIcons name="shield-check-outline" color={palette.info} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Leaderboard privacy</Text>
+                <Text style={styles.muted}>Joining makes your display name visible on the weekly public board.</Text>
+              </View>
+            </View>
+            <View style={styles.privacyList}>
+              <Text style={styles.privacyBullet}>Visible when joined: display name, title, weekly XP, minutes and sessions.</Text>
+              <Text style={styles.privacyBullet}>Private mode: stay opted out and your name will not appear in rankings.</Text>
+              <Text style={styles.privacyBullet}>You can opt out again from this screen at any time.</Text>
+            </View>
           </AppCard>
 
           {topThree.length ? (
@@ -939,6 +956,31 @@ const styles = StyleSheet.create({
   leaderboardActions: {
     alignItems: "flex-end",
     gap: 8
+  },
+  leaderboardPrivacyCard: {
+    gap: 12,
+    borderColor: "rgba(96,165,250,0.24)",
+    backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  privacyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  privacyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(96,165,250,0.14)"
+  },
+  privacyList: {
+    gap: 8
+  },
+  privacyBullet: {
+    color: palette.text,
+    lineHeight: 20
   },
   metricGrid: {
     flexDirection: "row",

@@ -25,19 +25,19 @@ export const THEME_SHOP_ITEMS = [
   {
     id: "mint",
     name: "Mint Sprint",
-    price: 120,
+    price: 60,
     colors: { primary: "#34D399", secondary: "#60A5FA", background: "#071412", surface: "#10211D" }
   },
   {
     id: "sunset",
     name: "Sunset Revision",
-    price: 180,
+    price: 90,
     colors: { primary: "#FB7185", secondary: "#F59E0B", background: "#180D12", surface: "#261820" }
   },
   {
     id: "ocean",
     name: "Ocean Mode",
-    price: 240,
+    price: 140,
     colors: { primary: "#38BDF8", secondary: "#2DD4BF", background: "#06111F", surface: "#0F1D2D" }
   },
   {
@@ -154,8 +154,14 @@ export const TITLE_SHOP_ITEMS = [
   {
     id: "academic_comeback",
     label: "Academic Comeback",
-    price: 260,
+    price: 90,
     description: "For rebuilding momentum one block at a time."
+  },
+  {
+    id: "revision_starter",
+    label: "Revision Starter",
+    price: 140,
+    description: "For getting moving before the pressure arrives."
   },
   {
     id: "deadline_defender",
@@ -185,9 +191,15 @@ export const TITLE_SHOP_ITEMS = [
 
 export const BADGE_SHOP_ITEMS = [
   {
+    id: "badge_first_focus",
+    label: "First Focus",
+    price: 60,
+    description: "A first collectible for getting a few focused blocks done."
+  },
+  {
     id: "badge_calm_under_pressure",
     label: "Calm Under Pressure",
-    price: 220,
+    price: 140,
     description: "A collectible badge for steady exam-week energy."
   },
   {
