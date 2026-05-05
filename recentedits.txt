@@ -3,7 +3,40 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - Optional subject chat rooms
+Most recent edit: 2026-05-05 - VCE Weakness Coach upgrade
+
+Summary:
+- Added a shared frontend helper layer at utils/vceCoach.ts for VCE-specific study intelligence.
+- Added Home dashboard return-loop features:
+  - Global search across notes, coach answers, saved questions, calendar events, files, mistakes, and flashcards.
+  - VCE Weakness Coach card that detects the weakest subject/topic using weekly goals, study sessions, saved questions, events, and mistake-log evidence.
+  - SAC Panic Mode dialog that builds and saves a survival plan from subject, topic, date, notes, saved questions, sessions, and previous mistakes.
+  - Continue where you left off card for latest SAC panic plan, mistake, or flashcard.
+  - Weekly Study Report card showing minutes studied, strongest subject, ignored goal subject, saved questions, mistake count, streak, and next move.
+- Expanded Questions into a fuller practice/repair centre:
+  - Added a Tools mode beside Forge, Battle, and Saved.
+  - Added Exam Mode for timed mini-tests using the existing AI question generator and examiner-style answer feedback.
+  - Added Command Term Trainer for Define, Describe, Explain, Analyse, Evaluate, Justify, and Compare.
+  - Added Mistake Log view with manual mistake capture, auto-saving weak checked answers, delete, and "make card" actions.
+  - Added Flashcard Forge to turn notes, coach answers, class notes, and mistake logs into review cards.
+  - Added flashcard review with reveal/hide and next/previous controls.
+  - Added a "Mistake" save action directly on checked Forge answers.
+- Added a simple Study focus filter:
+  - Timer mode can hide extra study tools during a running session.
+  - Students can toggle the filter on/off from the timer.
+- No database migration was added. Mistakes, flashcards, SAC panic plans, and reports use existing notes/tags plus existing questions/events/files/session data.
+
+Validation run:
+- npm run build --prefix backend
+- npx tsc --noEmit
+- npm run lint
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-05 - Optional subject chat rooms
 
 Summary:
 - Added optional subject-specific chat rooms inside Community > Chat while keeping the existing all-school chat.

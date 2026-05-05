@@ -95,6 +95,7 @@ export default function StudyScreen() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [confettiKey, setConfettiKey] = useState(0);
   const [mode, setMode] = useState("coach");
+  const [focusMode, setFocusMode] = useState(false);
   const scale = useSharedValue(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intentionalFullscreenExitRef = useRef(false);
@@ -403,17 +404,29 @@ export default function StudyScreen() {
         </Text>
       </View>
 
-      <SegmentedButtons
-        value={mode}
-        onValueChange={changeMode}
-        buttons={[
-          { value: "timer", label: "Timer" },
-          { value: "coach", label: "Coach" },
-          { value: "notes", label: "Notes" },
-          { value: "resources", label: "Files" },
-          { value: "chess", label: "Chess" }
-        ]}
-      />
+      {running && focusMode ? (
+        <AppCard style={styles.focusBanner}>
+          <View style={styles.focusBannerText}>
+            <Text style={styles.cardTitle}>Focus filter is on</Text>
+            <Text style={styles.muted}>Chat, shop-style distractions and extra study tools are hidden until you pause or switch it off.</Text>
+          </View>
+          <Button mode="outlined" icon="eye-outline" onPress={() => setFocusMode(false)}>
+            Show tools
+          </Button>
+        </AppCard>
+      ) : (
+        <SegmentedButtons
+          value={mode}
+          onValueChange={changeMode}
+          buttons={[
+            { value: "timer", label: "Timer" },
+            { value: "coach", label: "Coach" },
+            { value: "notes", label: "Notes" },
+            { value: "resources", label: "Files" },
+            { value: "chess", label: "Chess" }
+          ]}
+        />
+      )}
 
       {mode === "coach" ? (
         <StudyCoachPanel
@@ -491,6 +504,14 @@ export default function StudyScreen() {
               <Text style={styles.progressPill}>{targetProgress}% target</Text>
               {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} check-in XP</Text> : null}
             </View>
+            <Button
+              mode={focusMode ? "contained-tonal" : "outlined"}
+              compact
+              icon={focusMode ? "eye-off-outline" : "eye-outline"}
+              onPress={() => setFocusMode((value) => !value)}
+            >
+              {focusMode ? "Focus filter on" : "Focus filter"}
+            </Button>
             {elapsed >= targetSeconds && elapsed > 0 ? <Text style={styles.targetReached}>Target reached. Save now or keep going.</Text> : null}
             {running ? (
               <Text style={styles.checkInMeta}>
@@ -629,6 +650,18 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  focusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}10`
+  },
+  focusBannerText: {
+    flex: 1,
+    minWidth: 0
   },
   timerCard: {
     alignItems: "center",

@@ -10,7 +10,19 @@ import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
-import type { AnswerFeedback, GeneratedAnswerOption, GeneratedQuestion, SavedQuestion } from "@/types";
+import type { AnswerFeedback, GeneratedAnswerOption, GeneratedQuestion, SavedQuestion, StudyNote } from "@/types";
+import {
+  commandTermPrompts,
+  flashcardTag,
+  flashcardsFromNote,
+  formatFlashcardNoteBody,
+  formatMistakeNoteBody,
+  isFlashcardNote,
+  isMistakeNote,
+  mistakeTag,
+  parseFlashcardNote,
+  parseMistakeNote
+} from "@/utils/vceCoach";
 
 const width = Dimensions.get("window").width;
 
@@ -50,6 +62,8 @@ type FeedbackState = {
   xpEarned: number;
 };
 
+type PracticeTool = "exam" | "command" | "mistakes" | "flashcards";
+
 function QuestionCard({
   item,
   index,
@@ -61,7 +75,9 @@ function QuestionCard({
   onCheck,
   checking,
   onSave,
-  saving
+  saving,
+  onSaveMistake,
+  savingMistake
 }: {
   item: GeneratedQuestion;
   index: number;
@@ -74,6 +90,8 @@ function QuestionCard({
   checking: boolean;
   onSave: () => void;
   saving: boolean;
+  onSaveMistake?: () => void;
+  savingMistake?: boolean;
 }) {
   return (
     <AppCard style={styles.questionCard}>
@@ -131,6 +149,11 @@ function QuestionCard({
         <Button mode="outlined" icon={revealed ? "eye-off" : "eye"} onPress={onReveal}>
           {revealed ? "Hide" : "Reveal"}
         </Button>
+        {feedback ? (
+          <Button mode="outlined" icon="alert-circle-outline" loading={savingMistake} disabled={savingMistake} onPress={onSaveMistake}>
+            Mistake
+          </Button>
+        ) : null}
         <Button mode="contained" icon="content-save" disabled={saving} onPress={onSave}>
           {saving ? "Saving" : "Save"}
         </Button>
@@ -152,12 +175,82 @@ function SavedQuestionCard({ item }: { item: SavedQuestion }) {
   );
 }
 
+function MistakeCard({
+  note,
+  onFlashcard,
+  onDelete,
+  busy
+}: {
+  note: StudyNote;
+  onFlashcard: (note: StudyNote) => void;
+  onDelete: (id: string) => void;
+  busy: boolean;
+}) {
+  const mistake = parseMistakeNote(note);
+  return (
+    <AppCard style={styles.savedCard}>
+      <View style={styles.questionHeader}>
+        <Text style={styles.badge}>{mistake.commandTerm || "mistake"}</Text>
+        <Text style={styles.muted}>{mistake.subjectName ?? "General"}</Text>
+      </View>
+      <Text style={styles.questionText}>{mistake.question}</Text>
+      <View style={styles.answerBox}>
+        <Text style={styles.answerTitle}>What went wrong</Text>
+        <Text style={styles.answer}>{mistake.issue}</Text>
+        <Text style={styles.answerTitle}>Next-time rule</Text>
+        <Text style={styles.answer}>{mistake.nextRule}</Text>
+      </View>
+      <View style={styles.cardActions}>
+        <Button mode="outlined" icon="cards-outline" loading={busy} disabled={busy} onPress={() => onFlashcard(note)}>
+          Make card
+        </Button>
+        <Button mode="text" icon="delete-outline" textColor={palette.secondary} disabled={busy} onPress={() => onDelete(note.id)}>
+          Delete
+        </Button>
+      </View>
+    </AppCard>
+  );
+}
+
+function FlashcardReview({
+  note,
+  revealed,
+  onFlip,
+  onDelete
+}: {
+  note: StudyNote;
+  revealed: boolean;
+  onFlip: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const card = parseFlashcardNote(note);
+  return (
+    <AppCard style={styles.flashcard}>
+      <View style={styles.questionHeader}>
+        <Text style={styles.badge}>{card.cardType}</Text>
+        <Text style={styles.muted}>{card.subjectName ?? "General"}</Text>
+      </View>
+      <Text style={styles.flashcardFace}>{revealed ? card.back : card.front}</Text>
+      <Text style={styles.muted}>Source: {card.sourceTitle}</Text>
+      <View style={styles.cardActions}>
+        <Button mode="contained" icon={revealed ? "eye-off" : "eye"} onPress={onFlip}>
+          {revealed ? "Hide" : "Reveal"}
+        </Button>
+        <Button mode="text" icon="delete-outline" textColor={palette.secondary} onPress={() => onDelete(note.id)}>
+          Delete
+        </Button>
+      </View>
+    </AppCard>
+  );
+}
+
 export default function QuestionsScreen() {
   useTrackScreen("questions");
   const screenRef = useRef<ScrollView | null>(null);
-  const { subjects, generatedQuestions, savedQuestions, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer } =
+  const { subjects, generatedQuestions, savedQuestions, notes, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer, createNote, deleteNote } =
     useAppStore();
   const [mode, setMode] = useState("generate");
+  const [toolMode, setToolMode] = useState<PracticeTool>("exam");
   const [subjectId, setSubjectId] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
@@ -166,6 +259,7 @@ export default function QuestionsScreen() {
   const [generating, setGenerating] = useState(false);
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [checkingIndex, setCheckingIndex] = useState<number | null>(null);
+  const [savingMistakeIndex, setSavingMistakeIndex] = useState<number | null>(null);
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const [studentAnswers, setStudentAnswers] = useState<Record<number, string>>({});
   const [answerFeedback, setAnswerFeedback] = useState<Record<number, FeedbackState>>({});
@@ -186,6 +280,25 @@ export default function QuestionsScreen() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<"correct" | "wrong" | "shield" | "timeout" | null>(null);
   const [gameOver, setGameOver] = useState(false);
+  const [toolMessage, setToolMessage] = useState<string | null>(null);
+  const [examMinutes, setExamMinutes] = useState("10");
+  const [examStarted, setExamStarted] = useState(false);
+  const [examStartedAt, setExamStartedAt] = useState<number | null>(null);
+  const [examIndex, setExamIndex] = useState(0);
+  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
+  const [examFeedback, setExamFeedback] = useState<Record<number, FeedbackState>>({});
+  const [examCheckingIndex, setExamCheckingIndex] = useState<number | null>(null);
+  const [commandTerm, setCommandTerm] = useState(commandTermPrompts[3].term);
+  const [commandAnswer, setCommandAnswer] = useState("");
+  const [commandFeedback, setCommandFeedback] = useState<FeedbackState | null>(null);
+  const [commandChecking, setCommandChecking] = useState(false);
+  const [manualMistakeQuestion, setManualMistakeQuestion] = useState("");
+  const [manualMistakeIssue, setManualMistakeIssue] = useState("");
+  const [busyNoteId, setBusyNoteId] = useState<string | null>(null);
+  const [flashcardRevealed, setFlashcardRevealed] = useState(false);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flashcardSourceId, setFlashcardSourceId] = useState<string | null>(null);
+  const [creatingFlashcards, setCreatingFlashcards] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -221,6 +334,30 @@ export default function QuestionsScreen() {
     () => [...filteredSaved].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, 3),
     [filteredSaved]
   );
+  const mistakeNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => isMistakeNote(note) && (!filterSubjectId || note.subjectId === filterSubjectId))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [filterSubjectId, notes]
+  );
+  const flashcardNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => isFlashcardNote(note) && (!filterSubjectId || note.subjectId === filterSubjectId))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [filterSubjectId, notes]
+  );
+  const flashcardSources = useMemo(
+    () =>
+      notes
+        .filter((note) => !isFlashcardNote(note) && (!filterSubjectId || note.subjectId === filterSubjectId))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 12),
+    [filterSubjectId, notes]
+  );
+  const currentFlashcard = flashcardNotes[flashcardIndex] ?? flashcardNotes[0] ?? null;
+  const selectedCommandPrompt = commandTermPrompts.find((prompt) => prompt.term === commandTerm) ?? commandTermPrompts[0];
 
   const currentGameQuestion = generatedQuestions[gameIndex];
   const currentGameOptions = useMemo(
@@ -418,6 +555,234 @@ export default function QuestionsScreen() {
     setSavingIndex(null);
   };
 
+  const saveMistakeForAnswer = async (item: GeneratedQuestion, index: number) => {
+    if (!selectedSubject) return;
+    const feedback = answerFeedback[index];
+    const studentAnswer = studentAnswers[index]?.trim();
+    if (!feedback || !studentAnswer) return;
+
+    setSavingMistakeIndex(index);
+    setToolMessage(null);
+    try {
+      await createNote({
+        subjectId: selectedSubject.id,
+        title: `Mistake: ${item.topic || selectedSubject.subjectName}`.slice(0, 140),
+        noteType: "mistake_log",
+        tags: [mistakeTag, item.topic.toLowerCase(), feedback.feedback.verdict],
+        body: formatMistakeNoteBody({
+          topic: item.topic,
+          commandTerm: selectedCommandPrompt.term,
+          question: item.question,
+          studentAnswer,
+          issue: feedback.feedback.improvements.join("\n") || feedback.feedback.next_step,
+          correctIdea: item.model_answer,
+          nextRule: feedback.feedback.next_step
+        })
+      });
+      setToolMessage("Saved to Mistake Log.");
+      await fetchAll();
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not save mistake.");
+    } finally {
+      setSavingMistakeIndex(null);
+    }
+  };
+
+  const saveManualMistake = async () => {
+    if (!selectedSubject || !manualMistakeQuestion.trim() || !manualMistakeIssue.trim()) {
+      setToolMessage("Choose a subject and add the question plus the issue.");
+      return;
+    }
+    setBusyNoteId("manual");
+    setToolMessage(null);
+    try {
+      await createNote({
+        subjectId: selectedSubject.id,
+        title: `Mistake: ${topic.trim() || selectedSubject.subjectName}`.slice(0, 140),
+        noteType: "mistake_log",
+        tags: [mistakeTag, topic.trim().toLowerCase() || "manual"],
+        body: formatMistakeNoteBody({
+          topic: topic.trim() || "General",
+          commandTerm,
+          question: manualMistakeQuestion,
+          studentAnswer: "Added manually",
+          issue: manualMistakeIssue,
+          correctIdea: "Rewrite this using the marking criteria, then turn it into a card.",
+          nextRule: "Name the command-term job before writing the answer."
+        })
+      });
+      setManualMistakeQuestion("");
+      setManualMistakeIssue("");
+      setToolMessage("Manual mistake saved.");
+      await fetchAll();
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not save manual mistake.");
+    } finally {
+      setBusyNoteId(null);
+    }
+  };
+
+  const createFlashcardsFromNote = async (note: StudyNote) => {
+    if (!note.subjectId) {
+      setToolMessage("Pick a subject-specific note or mistake first.");
+      return;
+    }
+    const cards = flashcardsFromNote(note);
+    if (!cards.length) {
+      setToolMessage("That note did not have enough clean text for cards.");
+      return;
+    }
+    setBusyNoteId(note.id);
+    setToolMessage(null);
+    try {
+      for (const card of cards) {
+        await createNote({
+          subjectId: note.subjectId,
+          title: `Flashcard: ${card.sourceTitle}`.slice(0, 140),
+          noteType: "general",
+          tags: [flashcardTag, card.cardType, card.sourceTitle.toLowerCase()],
+          body: formatFlashcardNoteBody(card)
+        });
+      }
+      setToolMessage(`${cards.length} flashcard${cards.length === 1 ? "" : "s"} forged.`);
+      await fetchAll();
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not create flashcards.");
+    } finally {
+      setBusyNoteId(null);
+    }
+  };
+
+  const createFlashcardsFromSelectedSource = async () => {
+    const source = flashcardSources.find((note) => note.id === flashcardSourceId) ?? flashcardSources[0];
+    if (!source) {
+      setToolMessage("Create a note, class note, coach answer or mistake first.");
+      return;
+    }
+    setCreatingFlashcards(true);
+    await createFlashcardsFromNote(source);
+    setCreatingFlashcards(false);
+  };
+
+  const removeNote = async (id: string) => {
+    setBusyNoteId(id);
+    setToolMessage(null);
+    try {
+      await deleteNote(id);
+      setToolMessage("Deleted.");
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not delete that item.");
+    } finally {
+      setBusyNoteId(null);
+    }
+  };
+
+  const startExamMode = async () => {
+    if (!selectedSubject || !topic.trim()) return;
+    const ok = await requestQuestions();
+    if (!ok) return;
+    setMode("tools");
+    setToolMode("exam");
+    setExamStarted(true);
+    setExamStartedAt(Date.now());
+    setExamIndex(0);
+    setExamAnswers({});
+    setExamFeedback({});
+    setToolMessage(`Exam mode started. Time limit: ${examMinutes || 10} min.`);
+    scrollToDeck();
+  };
+
+  const checkExamAnswer = async (item: GeneratedQuestion, index: number) => {
+    if (!selectedSubject || !examAnswers[index]?.trim()) return;
+    setExamCheckingIndex(index);
+    setToolMessage(null);
+    try {
+      const result = await checkAnswer({
+        subjectId: selectedSubject.id,
+        question: item.question,
+        studentAnswer: examAnswers[index].trim(),
+        modelAnswer: item.model_answer,
+        topic: item.topic,
+        marks: item.marks,
+        markingCriteria: item.marking_criteria
+      });
+      setExamFeedback((current) => ({ ...current, [index]: result }));
+    } catch (err) {
+      setToolMessage(err instanceof Error ? err.message : "Could not mark exam answer.");
+    } finally {
+      setExamCheckingIndex(null);
+    }
+  };
+
+  const saveExamMistake = async (item: GeneratedQuestion, index: number) => {
+    if (!selectedSubject || !examFeedback[index] || !examAnswers[index]?.trim()) return;
+    setSavingMistakeIndex(index);
+    try {
+      await createNote({
+        subjectId: selectedSubject.id,
+        title: `Mistake: Exam mode - ${item.topic}`.slice(0, 140),
+        noteType: "mistake_log",
+        tags: [mistakeTag, "exam-mode", item.topic.toLowerCase(), examFeedback[index].feedback.verdict],
+        body: formatMistakeNoteBody({
+          topic: item.topic,
+          commandTerm,
+          question: item.question,
+          studentAnswer: examAnswers[index],
+          issue: examFeedback[index].feedback.improvements.join("\n") || examFeedback[index].feedback.next_step,
+          correctIdea: item.model_answer,
+          nextRule: examFeedback[index].feedback.next_step
+        })
+      });
+      setToolMessage("Exam mistake saved.");
+      await fetchAll();
+    } finally {
+      setSavingMistakeIndex(null);
+    }
+  };
+
+  const checkCommandAnswer = async () => {
+    if (!selectedSubject || !commandAnswer.trim()) {
+      setToolMessage("Choose a subject and write an improved answer.");
+      return;
+    }
+    setCommandChecking(true);
+    setToolMessage(null);
+    try {
+      const result = await checkAnswer({
+        subjectId: selectedSubject.id,
+        question: `${selectedCommandPrompt.term}: ${selectedCommandPrompt.prompt}\nWeak answer: ${selectedCommandPrompt.weakAnswer}`,
+        studentAnswer: commandAnswer.trim(),
+        modelAnswer: selectedCommandPrompt.modelAnswer,
+        topic: `${selectedCommandPrompt.term} command term`,
+        marks: 4,
+        markingCriteria: selectedCommandPrompt.criteria
+      });
+      setCommandFeedback(result);
+      if (result.feedback.verdict === "needs_work" || result.feedback.verdict === "close") {
+        await createNote({
+          subjectId: selectedSubject.id,
+          title: `Mistake: ${selectedCommandPrompt.term} command term`,
+          noteType: "mistake_log",
+          tags: [mistakeTag, "command-term", selectedCommandPrompt.term.toLowerCase(), result.feedback.verdict],
+          body: formatMistakeNoteBody({
+            topic: `${selectedCommandPrompt.term} command term`,
+            commandTerm: selectedCommandPrompt.term,
+            question: selectedCommandPrompt.prompt,
+            studentAnswer: commandAnswer.trim(),
+            issue: result.feedback.improvements.join("\n") || result.feedback.next_step,
+            correctIdea: selectedCommandPrompt.modelAnswer,
+            nextRule: result.feedback.next_step
+          })
+        });
+        await fetchAll();
+      }
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not check command term answer.");
+    } finally {
+      setCommandChecking(false);
+    }
+  };
+
   return (
     <Screen scrollRef={screenRef}>
       <View>
@@ -433,7 +798,8 @@ export default function QuestionsScreen() {
         buttons={[
           { value: "generate", label: "Forge" },
           { value: "game", label: "Battle" },
-          { value: "saved", label: "Saved" }
+          { value: "saved", label: "Saved" },
+          { value: "tools", label: "Tools" }
         ]}
       />
 
@@ -523,6 +889,8 @@ export default function QuestionsScreen() {
                     checking={checkingIndex === index}
                     onSave={() => persistQuestion(item, index)}
                     saving={savingIndex === index}
+                    onSaveMistake={() => saveMistakeForAnswer(item, index)}
+                    savingMistake={savingMistakeIndex === index}
                   />
                 )}
               />
@@ -728,7 +1096,7 @@ export default function QuestionsScreen() {
             <EmptyState title="Ready for battle" body="Choose a subject and topic to build a quick multiple-choice deck." />
           )}
         </>
-      ) : (
+      ) : mode === "saved" ? (
         <>
           {subjects.length ? (
             <SubjectSelector
@@ -769,6 +1137,311 @@ export default function QuestionsScreen() {
             <EmptyState title="No saved questions" body="Save generated questions here for future revision." />
           )}
         </>
+      ) : (
+        <>
+          {subjects.length ? (
+            <SubjectSelector
+              subjects={subjects}
+              selectedId={filterSubjectId ?? selectedSubject?.id}
+              onSelect={(subject) => {
+                setSubjectId(subject.id);
+                setFilterSubjectId(filterSubjectId === subject.id ? null : subject.id);
+              }}
+            />
+          ) : null}
+          <SegmentedButtons
+            value={toolMode}
+            onValueChange={(value) => setToolMode(value as PracticeTool)}
+            buttons={[
+              { value: "exam", label: "Exam" },
+              { value: "command", label: "Terms" },
+              { value: "mistakes", label: "Mistakes" },
+              { value: "flashcards", label: "Cards" }
+            ]}
+          />
+          {toolMessage ? <Text style={toolMessage.includes("Could") ? styles.error : styles.toolMessage}>{toolMessage}</Text> : null}
+
+          {toolMode === "exam" ? (
+            <>
+              <AppCard style={styles.form}>
+                <View style={styles.battleHeader}>
+                  <View>
+                    <Text style={styles.battleKicker}>Exam mode</Text>
+                    <Text style={styles.battleTitle}>{selectedSubject?.subjectName ?? "Pick a subject"}</Text>
+                  </View>
+                  <Text style={styles.battleBadge}>{examStarted ? `${examIndex + 1}/${generatedQuestions.length || count}` : "timed"}</Text>
+                </View>
+                <TextInput mode="outlined" label="Topic" value={topic} onChangeText={setTopic} />
+                <SegmentedButtons
+                  value={difficulty}
+                  onValueChange={(value) => setDifficulty(value as "easy" | "medium" | "hard")}
+                  buttons={[
+                    { value: "easy", label: "Easy" },
+                    { value: "medium", label: "Medium" },
+                    { value: "hard", label: "Hard" }
+                  ]}
+                />
+                <SegmentedButtons
+                  value={String(count)}
+                  onValueChange={(value) => setCount(Number(value) as 1 | 3 | 5)}
+                  buttons={[
+                    { value: "1", label: "1" },
+                    { value: "3", label: "3" },
+                    { value: "5", label: "5" }
+                  ]}
+                />
+                <TextInput
+                  mode="outlined"
+                  label="Time limit minutes"
+                  keyboardType="number-pad"
+                  value={examMinutes}
+                  onChangeText={setExamMinutes}
+                />
+                <Button mode="contained" icon="timer-outline" loading={generating} disabled={!topic.trim() || !selectedSubject || generating} onPress={startExamMode}>
+                  {generating ? "Building exam..." : "Start mini exam"}
+                </Button>
+              </AppCard>
+
+              {examStarted && generatedQuestions[examIndex] ? (
+                <AppCard style={styles.gameCard}>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statPill}>
+                      <Text style={styles.statNumber}>{examIndex + 1}</Text>
+                      <Text style={styles.statLabel}>question</Text>
+                    </View>
+                    <View style={styles.statPill}>
+                      <Text style={styles.statNumber}>{generatedQuestions.reduce((sum, item) => sum + item.marks, 0)}</Text>
+                      <Text style={styles.statLabel}>marks</Text>
+                    </View>
+                    <View style={styles.statPill}>
+                      <Text style={styles.statNumber}>
+                        {examStartedAt ? Math.max(0, Number(examMinutes || 10) - Math.floor((Date.now() - examStartedAt) / 60000)) : Number(examMinutes || 10)}
+                      </Text>
+                      <Text style={styles.statLabel}>min left</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.badge}>{generatedQuestions[examIndex].marks} marks</Text>
+                  <Text style={styles.questionText}>{generatedQuestions[examIndex].question}</Text>
+                  <TextInput
+                    mode="outlined"
+                    label="Exam answer"
+                    value={examAnswers[examIndex] ?? ""}
+                    onChangeText={(value) => setExamAnswers((current) => ({ ...current, [examIndex]: value }))}
+                    multiline
+                    numberOfLines={5}
+                    style={styles.answerInput}
+                  />
+                  <Button
+                    mode="contained"
+                    icon="check-decagram"
+                    loading={examCheckingIndex === examIndex}
+                    disabled={!examAnswers[examIndex]?.trim() || examCheckingIndex === examIndex}
+                    onPress={() => checkExamAnswer(generatedQuestions[examIndex], examIndex)}
+                  >
+                    Mark like examiner
+                  </Button>
+                  {examFeedback[examIndex] ? (
+                    <View style={styles.feedbackBox}>
+                      <Text style={styles.feedbackTitle}>
+                        {VERDICT_COPY[examFeedback[examIndex].feedback.verdict]} - {examFeedback[examIndex].feedback.awarded_marks}/
+                        {examFeedback[examIndex].feedback.max_marks}
+                      </Text>
+                      {examFeedback[examIndex].feedback.improvements.map((point) => (
+                        <Text key={point} style={styles.feedbackPoint}>
+                          - {point}
+                        </Text>
+                      ))}
+                      <Text style={styles.nextStep}>{examFeedback[examIndex].feedback.next_step}</Text>
+                      <Button
+                        mode="outlined"
+                        icon="alert-circle-outline"
+                        loading={savingMistakeIndex === examIndex}
+                        onPress={() => saveExamMistake(generatedQuestions[examIndex], examIndex)}
+                      >
+                        Save mistake
+                      </Button>
+                    </View>
+                  ) : null}
+                  <View style={styles.cardActions}>
+                    <Button mode="outlined" disabled={examIndex === 0} onPress={() => setExamIndex((value) => Math.max(0, value - 1))}>
+                      Previous
+                    </Button>
+                    <Button
+                      mode="contained"
+                      icon={examIndex >= generatedQuestions.length - 1 ? "flag-checkered" : "arrow-right"}
+                      onPress={() => {
+                        if (examIndex >= generatedQuestions.length - 1) {
+                          setExamStarted(false);
+                          setToolMessage("Exam finished. Save weak answers to Mistake Log before starting another.");
+                        } else {
+                          setExamIndex((value) => value + 1);
+                        }
+                      }}
+                    >
+                      {examIndex >= generatedQuestions.length - 1 ? "Finish" : "Next"}
+                    </Button>
+                  </View>
+                </AppCard>
+              ) : (
+                <EmptyState title="Timed mini test" body="Build a short exam-style set, answer under pressure, then save weak responses to Mistake Log." />
+              )}
+            </>
+          ) : toolMode === "command" ? (
+            <>
+              <AppCard style={styles.form}>
+                <Text style={styles.battleKicker}>Command Term Trainer</Text>
+                <SegmentedButtons
+                  value={commandTerm}
+                  onValueChange={(value) => {
+                    setCommandTerm(value);
+                    setCommandFeedback(null);
+                    setCommandAnswer("");
+                  }}
+                  buttons={commandTermPrompts.slice(0, 4).map((prompt) => ({ value: prompt.term, label: prompt.term }))}
+                />
+                <SegmentedButtons
+                  value={commandTermPrompts.slice(4).some((prompt) => prompt.term === commandTerm) ? commandTerm : "more"}
+                  onValueChange={(value) => {
+                    if (value !== "more") {
+                      setCommandTerm(value);
+                      setCommandFeedback(null);
+                      setCommandAnswer("");
+                    }
+                  }}
+                  buttons={[{ value: "more", label: "More" }, ...commandTermPrompts.slice(4).map((prompt) => ({ value: prompt.term, label: prompt.term }))]}
+                />
+                <View style={styles.answerBox}>
+                  <Text style={styles.answerTitle}>{selectedCommandPrompt.term}</Text>
+                  <Text style={styles.answer}>{selectedCommandPrompt.prompt}</Text>
+                  <Text style={styles.muted}>Weak answer: {selectedCommandPrompt.weakAnswer}</Text>
+                </View>
+                <TextInput
+                  mode="outlined"
+                  label="Your improved answer"
+                  value={commandAnswer}
+                  onChangeText={setCommandAnswer}
+                  multiline
+                  numberOfLines={4}
+                  style={styles.answerInput}
+                />
+                <Button mode="contained" icon="school-outline" loading={commandChecking} disabled={commandChecking || !commandAnswer.trim()} onPress={checkCommandAnswer}>
+                  Check command term
+                </Button>
+              </AppCard>
+              {commandFeedback ? (
+                <AppCard style={styles.feedbackBox}>
+                  <Text style={styles.feedbackTitle}>
+                    {VERDICT_COPY[commandFeedback.feedback.verdict]} - {commandFeedback.feedback.score}%
+                  </Text>
+                  {commandFeedback.feedback.strengths.map((point) => (
+                    <Text key={point} style={styles.feedbackPoint}>
+                      + {point}
+                    </Text>
+                  ))}
+                  {commandFeedback.feedback.improvements.map((point) => (
+                    <Text key={point} style={styles.feedbackPoint}>
+                      - {point}
+                    </Text>
+                  ))}
+                  <Text style={styles.nextStep}>{commandFeedback.feedback.next_step}</Text>
+                </AppCard>
+              ) : null}
+            </>
+          ) : toolMode === "mistakes" ? (
+            <>
+              <AppCard style={styles.form}>
+                <Text style={styles.battleKicker}>Manual mistake capture</Text>
+                <TextInput mode="outlined" label="Question or weak area" value={manualMistakeQuestion} onChangeText={setManualMistakeQuestion} />
+                <TextInput
+                  mode="outlined"
+                  label="What went wrong?"
+                  value={manualMistakeIssue}
+                  onChangeText={setManualMistakeIssue}
+                  multiline
+                  numberOfLines={3}
+                />
+                <Button mode="contained" icon="alert-circle-outline" loading={busyNoteId === "manual"} onPress={saveManualMistake}>
+                  Save mistake
+                </Button>
+              </AppCard>
+              {mistakeNotes.length ? (
+                mistakeNotes.map((note) => (
+                  <MistakeCard
+                    key={note.id}
+                    note={note}
+                    busy={busyNoteId === note.id}
+                    onFlashcard={createFlashcardsFromNote}
+                    onDelete={removeNote}
+                  />
+                ))
+              ) : (
+                <EmptyState title="No mistakes logged" body="Weak checked answers and manual mistakes will appear here as repair fuel." />
+              )}
+            </>
+          ) : (
+            <>
+              <AppCard style={styles.form}>
+                <Text style={styles.battleKicker}>Flashcard Forge</Text>
+                <Text style={styles.muted}>Turn notes, coach answers, class notes, or mistake logs into review cards.</Text>
+                {flashcardSources.length ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicRow}>
+                    {flashcardSources.map((source) => {
+                      const selected = (flashcardSourceId ?? flashcardSources[0]?.id) === source.id;
+                      return (
+                        <Pressable
+                          key={source.id}
+                          style={[styles.topicChip, selected && styles.topicChipActive]}
+                          onPress={() => setFlashcardSourceId(source.id)}
+                        >
+                          <Text style={styles.topicText} numberOfLines={1}>
+                            {source.title}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
+                <Button mode="contained" icon="cards-outline" loading={creatingFlashcards} disabled={creatingFlashcards} onPress={createFlashcardsFromSelectedSource}>
+                  Forge cards
+                </Button>
+              </AppCard>
+              {currentFlashcard ? (
+                <>
+                  <FlashcardReview
+                    note={currentFlashcard}
+                    revealed={flashcardRevealed}
+                    onFlip={() => setFlashcardRevealed((value) => !value)}
+                    onDelete={removeNote}
+                  />
+                  <View style={styles.cardActions}>
+                    <Button
+                      mode="outlined"
+                      disabled={!flashcardNotes.length}
+                      onPress={() => {
+                        setFlashcardRevealed(false);
+                        setFlashcardIndex((value) => (value <= 0 ? Math.max(0, flashcardNotes.length - 1) : value - 1));
+                      }}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      mode="contained"
+                      disabled={!flashcardNotes.length}
+                      onPress={() => {
+                        setFlashcardRevealed(false);
+                        setFlashcardIndex((value) => (value + 1) % Math.max(1, flashcardNotes.length));
+                      }}
+                    >
+                      Next card
+                    </Button>
+                  </View>
+                </>
+              ) : (
+                <EmptyState title="No flashcards yet" body="Forge cards from your latest notes or mistake logs." />
+              )}
+            </>
+          )}
+        </>
       )}
     </Screen>
   );
@@ -800,12 +1473,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "rgba(255,255,255,0.03)"
   },
+  topicChipActive: {
+    borderColor: palette.primary,
+    backgroundColor: `${palette.primary}22`
+  },
   topicText: {
     color: palette.text,
     fontSize: 12
   },
   error: {
     color: palette.secondary
+  },
+  toolMessage: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "center"
   },
   questionCard: {
     width: width - 40,
@@ -891,6 +1573,7 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 10,
     marginTop: "auto"
@@ -1020,6 +1703,19 @@ const styles = StyleSheet.create({
   },
   savedCard: {
     gap: 12
+  },
+  flashcard: {
+    minHeight: 260,
+    justifyContent: "space-between",
+    gap: 14,
+    borderColor: "rgba(96,165,250,0.22)",
+    backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  flashcardFace: {
+    color: palette.text,
+    fontSize: 21,
+    lineHeight: 29,
+    fontFamily: "Outfit_700Bold"
   },
   savedTools: {
     gap: 12

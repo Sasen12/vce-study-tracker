@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, router } from "expo-router";
-import { Button, Dialog, Portal, Text } from "react-native-paper";
+import { Button, Dialog, Portal, Text, TextInput } from "react-native-paper";
 import Animated from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/ui/Screen";
@@ -21,6 +21,16 @@ import { studyApi } from "@/services/studyApi";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { DailyInspiration, StudyEvent, UserGiftMessage, UserSubject } from "@/types";
 import { isStudyTimeEvent } from "@/utils/studyEvents";
+import {
+  buildSacPanicPlan,
+  buildWeaknessSummary,
+  buildWeeklyReport,
+  globalStudySearch,
+  isFlashcardNote,
+  isMistakeNote,
+  isSacPanicNote,
+  sacPanicTag
+} from "@/utils/vceCoach";
 
 const dateKey = (value: string | Date) => (typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10));
 
@@ -83,15 +93,28 @@ export default function DashboardScreen() {
     events,
     stats,
     goals,
+    savedQuestions,
+    notes,
+    resources,
     gamification,
     loading,
     error,
     fetchAll,
+    createNote,
     setLeaderboardPreference
   } = useAppStore();
   const [quickSubjectId, setQuickSubjectId] = useState<string | null>(null);
   const [dailyInspiration, setDailyInspiration] = useState<DailyInspiration>(fallbackDailyInspiration);
   const [giftMessages, setGiftMessages] = useState<UserGiftMessage[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [panicOpen, setPanicOpen] = useState(false);
+  const [panicSubjectId, setPanicSubjectId] = useState<string | null>(null);
+  const [panicTopic, setPanicTopic] = useState("");
+  const [panicDate, setPanicDate] = useState("");
+  const [panicConfidenceBefore, setPanicConfidenceBefore] = useState("2");
+  const [panicConfidenceAfter, setPanicConfidenceAfter] = useState("3");
+  const [panicMessage, setPanicMessage] = useState<string | null>(null);
+  const [savingPanicPlan, setSavingPanicPlan] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
@@ -184,6 +207,7 @@ export default function DashboardScreen() {
   );
 
   const quickSubject = subjects.find((subject) => subject.id === quickSubjectId) ?? subjects[0];
+  const panicSubject = subjects.find((subject) => subject.id === panicSubjectId) ?? quickSubject ?? subjects[0] ?? null;
   const leaderboardPromptVisible = Boolean(
     gamification && !gamification.leaderboardOptIn && gamification.leaderboardPromptedAt == null
   );
@@ -252,6 +276,108 @@ export default function DashboardScreen() {
       subjectId: undefined
     };
   }, [dailyTargetMinutes, goals, quickSubject?.id, subjects, todayMinutes, upcomingEvents, weeklySecondsBySubject]);
+  const weaknessSummary = useMemo(
+    () => buildWeaknessSummary({ subjects, sessions, goals, notes, savedQuestions, events }),
+    [events, goals, notes, savedQuestions, sessions, subjects]
+  );
+  const weeklyReport = useMemo(
+    () => buildWeeklyReport({ subjects, sessions, goals, notes, savedQuestions, gamification }),
+    [gamification, goals, notes, savedQuestions, sessions, subjects]
+  );
+  const searchResults = useMemo(
+    () => globalStudySearch({ query: searchQuery, notes, savedQuestions, events, resources }),
+    [events, notes, resources, savedQuestions, searchQuery]
+  );
+  const latestMistake = useMemo(
+    () => notes.filter(isMistakeNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
+    [notes]
+  );
+  const latestFlashcard = useMemo(
+    () => notes.filter(isFlashcardNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
+    [notes]
+  );
+  const latestPanicPlan = useMemo(
+    () => notes.filter(isSacPanicNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null,
+    [notes]
+  );
+  const continueItems = useMemo(
+    () =>
+      [
+        latestPanicPlan
+          ? {
+              icon: "calendar-alert",
+              title: "Resume SAC plan",
+              body: latestPanicPlan.title.replace(/^SAC Panic:\s*/, ""),
+              route: "/(tabs)/study" as const
+            }
+          : null,
+        latestMistake
+          ? {
+              icon: "alert-circle-check-outline",
+              title: "Review latest mistake",
+              body: latestMistake.title.replace(/^Mistake:\s*/, ""),
+              route: "/(tabs)/questions" as const
+            }
+          : null,
+        latestFlashcard
+          ? {
+              icon: "cards-outline",
+              title: "Flip flashcards",
+              body: latestFlashcard.title.replace(/^Flashcard:\s*/, ""),
+              route: "/(tabs)/questions" as const
+            }
+          : null
+      ].filter(Boolean) as { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; body: string; route: "/(tabs)/study" | "/(tabs)/questions" }[],
+    [latestFlashcard, latestMistake, latestPanicPlan]
+  );
+
+  const openPanicForEvent = (event?: StudyEvent) => {
+    const eventSubject = event ? subjectForDeadline(event, subjects) : quickSubject;
+    setPanicSubjectId(eventSubject?.id ?? quickSubject?.id ?? subjects[0]?.id ?? null);
+    setPanicTopic(event?.description?.trim() || event?.title || "");
+    setPanicDate(event?.eventDate?.slice(0, 10) || new Date().toISOString().slice(0, 10));
+    setPanicConfidenceBefore("2");
+    setPanicConfidenceAfter("3");
+    setPanicMessage(null);
+    setPanicOpen(true);
+  };
+
+  const savePanicPlan = async () => {
+    if (!panicSubject || !panicTopic.trim() || !panicDate.trim()) {
+      setPanicMessage("Pick a subject, topic and SAC date first.");
+      return;
+    }
+    setSavingPanicPlan(true);
+    setPanicMessage(null);
+    try {
+      const plan = buildSacPanicPlan({
+        subject: panicSubject,
+        topic: panicTopic.trim(),
+        sacDate: panicDate.trim(),
+        notes,
+        savedQuestions,
+        sessions
+      });
+      await createNote({
+        subjectId: panicSubject.id,
+        title: `SAC Panic: ${panicSubject.subjectName} - ${panicTopic.trim()}`.slice(0, 140),
+        noteType: "general",
+        tags: [sacPanicTag, "sac-plan", panicTopic.trim().toLowerCase()],
+        body: [
+          plan.body,
+          "",
+          `Confidence before: ${panicConfidenceBefore}/5`,
+          `Confidence after plan: ${panicConfidenceAfter}/5`
+        ].join("\n")
+      });
+      setPanicMessage("Saved. It will show in Continue and Notes.");
+      await fetchAll();
+    } catch (error) {
+      setPanicMessage(error instanceof Error ? error.message : "Could not save the SAC plan.");
+    } finally {
+      setSavingPanicPlan(false);
+    }
+  };
 
   const chooseLeaderboard = async (optIn: boolean) => {
     setLeaderboardSaving(true);
@@ -401,6 +527,120 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
+      <Animated.View entering={motion.card(76)}>
+        <AppCard style={styles.searchCard}>
+          <TextInput
+            mode="outlined"
+            dense
+            label="Search notes, questions, files, events"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            left={<TextInput.Icon icon="magnify" />}
+            style={styles.searchInput}
+          />
+          {searchResults.length ? (
+            <View style={styles.searchResults}>
+              {searchResults.map((result) => (
+                <Pressable key={`${result.type}-${result.id}`} style={styles.searchResultRow} onPress={() => router.push(result.route)}>
+                  <Text style={styles.searchType}>{result.type}</Text>
+                  <View style={styles.searchResultText}>
+                    <Text style={styles.searchTitle} numberOfLines={1}>
+                      {result.title}
+                    </Text>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {result.detail}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : searchQuery.trim().length > 1 ? (
+            <Text style={styles.muted}>No match yet. Try a subject, topic, file name, or command term.</Text>
+          ) : null}
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(82)}>
+        <AppCard style={styles.weaknessCard}>
+          <View style={styles.nextMoveTop}>
+            <View style={styles.weaknessIcon}>
+              <MaterialCommunityIcons name="brain" color={palette.warning} size={22} />
+            </View>
+            <View style={styles.nextMoveText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                VCE Weakness Coach
+              </Text>
+              <Text style={styles.weaknessTitle}>{weaknessSummary.title}</Text>
+              <Text style={styles.muted}>{weaknessSummary.body}</Text>
+            </View>
+          </View>
+          <View style={styles.actionRow}>
+            <Button
+              mode="contained"
+              icon="timer-play-outline"
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/study",
+                  params: weaknessSummary.weakSubject ? { subjectId: weaknessSummary.weakSubject.id } : {}
+                })
+              }
+            >
+              Fix it
+            </Button>
+            <Button mode="outlined" icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
+              Practise
+            </Button>
+          </View>
+          <Text style={styles.nextActionText}>{weaknessSummary.nextAction}</Text>
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(96)}>
+        <AppCard style={styles.panicCard}>
+          <View style={styles.rowBetween}>
+            <View style={styles.flexText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                SAC Panic Mode
+              </Text>
+              <Text style={styles.muted}>Build a survival plan from your notes, mistakes, questions and date pressure.</Text>
+            </View>
+            <Button mode="contained" icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(upcomingEvents[0])}>
+              Start
+            </Button>
+          </View>
+          {upcomingEvents[0] ? (
+            <Text style={styles.panicHint}>
+              Fast pick: {upcomingEvents[0].title} is {countdownLabel(upcomingEvents[0])}.
+            </Text>
+          ) : null}
+        </AppCard>
+      </Animated.View>
+
+      {continueItems.length ? (
+        <Animated.View entering={motion.card(118)}>
+          <AppCard style={styles.section}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Continue where you left off
+            </Text>
+            {continueItems.map((item) => (
+              <Pressable key={item.title} style={styles.continueRow} onPress={() => router.push(item.route)}>
+                <View style={styles.continueIcon}>
+                  <MaterialCommunityIcons name={item.icon} color={palette.info} size={18} />
+                </View>
+                <View style={styles.eventText}>
+                  <Text style={styles.eventTitle} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.muted} numberOfLines={1}>
+                    {item.body}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </AppCard>
+        </Animated.View>
+      ) : null}
+
       <Animated.View entering={motion.card(90)}>
         <AppCard>
           <XPBar gamification={gamification} />
@@ -501,7 +741,74 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
+      <Animated.View entering={motion.card(270)}>
+        <AppCard style={styles.reportCard}>
+          <View style={styles.rowBetween}>
+            <View>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Weekly study report
+              </Text>
+              <Text style={styles.muted}>A quick read on what the week is saying.</Text>
+            </View>
+            <View style={styles.reportBadge}>
+              <Text style={styles.reportBadgeValue}>{weeklyReport.totalMinutes}</Text>
+              <Text style={styles.reportBadgeLabel}>min</Text>
+            </View>
+          </View>
+          {weeklyReport.lines.map((line) => (
+            <Text key={line} style={styles.reportLine}>
+              - {line}
+            </Text>
+          ))}
+          <Text style={styles.nextActionText}>{weeklyReport.nextMove}</Text>
+        </AppCard>
+      </Animated.View>
+
       <Portal>
+        <Dialog visible={panicOpen} onDismiss={() => setPanicOpen(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>SAC Panic Mode</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            {subjects.length ? (
+              <SubjectSelector
+                subjects={subjects}
+                selectedId={panicSubject?.id}
+                onSelect={(subject) => setPanicSubjectId(subject.id)}
+              />
+            ) : null}
+            <TextInput mode="outlined" label="Topic" value={panicTopic} onChangeText={setPanicTopic} />
+            <TextInput mode="outlined" label="SAC date YYYY-MM-DD" value={panicDate} onChangeText={setPanicDate} />
+            <View style={styles.confidenceGrid}>
+              <TextInput
+                mode="outlined"
+                dense
+                label="Before /5"
+                keyboardType="number-pad"
+                value={panicConfidenceBefore}
+                onChangeText={setPanicConfidenceBefore}
+                style={styles.confidenceInput}
+              />
+              <TextInput
+                mode="outlined"
+                dense
+                label="After plan /5"
+                keyboardType="number-pad"
+                value={panicConfidenceAfter}
+                onChangeText={setPanicConfidenceAfter}
+                style={styles.confidenceInput}
+              />
+            </View>
+            {panicMessage ? <Text style={panicMessage.includes("Saved") ? styles.successText : styles.error}>{panicMessage}</Text> : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={savingPanicPlan} onPress={() => setPanicOpen(false)}>
+              Close
+            </Button>
+            <Button mode="contained" loading={savingPanicPlan} disabled={savingPanicPlan} onPress={savePanicPlan}>
+              Build plan
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
         <Dialog visible={leaderboardPromptVisible} onDismiss={() => undefined} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>Join the weekly leaderboard?</Dialog.Title>
           <Dialog.Content>
@@ -684,6 +991,94 @@ const styles = StyleSheet.create({
     color: palette.muted,
     lineHeight: 20
   },
+  flexText: {
+    flex: 1,
+    minWidth: 0
+  },
+  searchCard: {
+    gap: 10
+  },
+  searchInput: {
+    backgroundColor: palette.surface
+  },
+  searchResults: {
+    gap: 8
+  },
+  searchResultRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  searchType: {
+    width: 74,
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  searchResultText: {
+    flex: 1,
+    minWidth: 0
+  },
+  searchTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  weaknessCard: {
+    gap: 12,
+    borderColor: "rgba(245,158,11,0.24)",
+    backgroundColor: "rgba(245,158,11,0.08)"
+  },
+  weaknessIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.warning}18`
+  },
+  weaknessTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    marginBottom: 2
+  },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  nextActionText: {
+    color: palette.info,
+    lineHeight: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  panicCard: {
+    gap: 12,
+    borderColor: "rgba(255,107,107,0.24)",
+    backgroundColor: "rgba(255,107,107,0.08)"
+  },
+  panicHint: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold"
+  },
+  continueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8
+  },
+  continueIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.info}18`
+  },
   quickStart: {
     gap: 16
   },
@@ -749,8 +1144,52 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
+  dialogContent: {
+    gap: 12
+  },
   dialogBody: {
     color: palette.muted,
     lineHeight: 21
+  },
+  confidenceGrid: {
+    flexDirection: "row",
+    gap: 10
+  },
+  confidenceInput: {
+    flex: 1
+  },
+  successText: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold"
+  },
+  reportCard: {
+    gap: 10,
+    borderColor: "rgba(74,222,128,0.22)",
+    backgroundColor: "rgba(74,222,128,0.07)"
+  },
+  reportBadge: {
+    minWidth: 78,
+    minHeight: 58,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.success}18`,
+    borderWidth: 1,
+    borderColor: `${palette.success}55`,
+    paddingHorizontal: 10
+  },
+  reportBadgeValue: {
+    color: palette.text,
+    fontSize: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  reportBadgeLabel: {
+    color: palette.success,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold"
+  },
+  reportLine: {
+    color: palette.text,
+    lineHeight: 20
   }
 });
