@@ -118,6 +118,7 @@ const planSchema = z.object({
 const askSchema = z.object({
   subjectId: z.string().uuid().optional().nullable(),
   question: z.string().min(2).max(6000),
+  responseMode: z.enum(["direct", "tutor"]).default("direct"),
   sessionMode: z.enum(["tutor_session"]).optional().nullable(),
   sessionTopic: z.string().max(180).optional().nullable(),
   sessionGoal: z.string().max(1200).optional().nullable(),
@@ -832,7 +833,7 @@ coachRouter.post(
         where: { userId: authReq.user.id, ...subjectScope },
         include: { subject: true },
         orderBy: { updatedAt: "desc" },
-        take: payload.sessionMode === "tutor_session" ? 18 : 8
+        take: payload.sessionMode === "tutor_session" || payload.responseMode === "tutor" ? 18 : 8
       }),
       prisma.studyResource.findMany({
         where: { userId: authReq.user.id, ...subjectScope },
@@ -886,6 +887,7 @@ coachRouter.post(
       question: payload.question,
       context,
       learningSignals: buildAskCoachLearningSignals(reflections, notes),
+      responseMode: payload.sessionMode === "tutor_session" ? "tutor" : payload.responseMode,
       sessionMode: payload.sessionMode ?? null,
       sessionTopic: payload.sessionTopic ?? null,
       sessionGoal: payload.sessionGoal ?? null,

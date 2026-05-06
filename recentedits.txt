@@ -3,7 +3,38 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Tutor PDF attachments
+Most recent edit: 2026-05-06 - Coach direct mode and stronger tutor sessions
+
+Summary:
+- Split Study > Coach into two clear modes:
+  - Ask coach for direct answers.
+  - Tutor session for the saved human-style tutoring workflow.
+- Direct Ask coach requests now send responseMode "direct" to the backend and hide the Tutor plan card in the UI.
+- Tutor session requests now send responseMode "tutor" and keep saving tutor turns/transcripts.
+- Strengthened the backend AI prompt so tutor mode behaves more like a real tutor:
+  - reconnects to session memory when present
+  - diagnoses the stuck point
+  - teaches one bite-sized idea
+  - asks for a student attempt
+  - continues from previous attempts/confusion
+  - ends with a concrete checkpoint instead of generic chatbot phrasing
+- Restored direct coach behaviour for students who just want a fast answer without a full tutoring flow.
+- Follow-up suggestions now render as selectable text with Ask and Copy actions.
+- Tapping Ask on a follow-up immediately sends that follow-up through the same coach/tutor mode.
+- Copy uses the browser clipboard on web, with selectable fallback text.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Tutor PDF attachments
 
 Summary:
 - Added PDF support to the Study > Coach tutor attachment flow.

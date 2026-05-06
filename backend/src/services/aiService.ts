@@ -221,6 +221,7 @@ type AskStudyQuestionInput = {
   question: string;
   context: string;
   learningSignals?: string;
+  responseMode?: "direct" | "tutor";
   sessionMode?: "tutor_session" | null;
   sessionTopic?: string | null;
   sessionGoal?: string | null;
@@ -1548,6 +1549,46 @@ const inferSubjectFromQuestion = (question: string) => {
 const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
   const hasAttachments = Boolean(input.screenshots?.length || input.attachedDocumentLabels?.length);
+  const isTutorMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor";
+
+  if (!isTutorMode) {
+    return {
+      answer: `## Direct answer
+For ${subject}, answer the exact question first, then back it with one reason or example. If this is an exam response, make the command word obvious and use the subject term the marker expects.
+
+## Why
+A direct coach answer should help you move quickly: definition, application, then the mark-earning link.
+
+## Example
+Turn "this strategy improves performance" into "this strategy improves performance because it affects a measurable KPI such as productivity, profit or customer satisfaction."`,
+      key_points: [
+        "Lead with the answer before adding detail.",
+        "Use one precise subject term and one application sentence.",
+        "Ask for marking or a similar question if you want to practise it."
+      ],
+      sources_used:
+        input.sourceLabels?.slice(0, 4).map((label) => ({ title: label, source_type: "local", detail: "Available app context" })) ??
+        [],
+      follow_up_questions: [
+        "Give me one similar question to practise.",
+        "Mark my attempt and show what to fix.",
+        "Explain the key term in simpler words."
+      ],
+      tutor_plan: {
+        diagnosis: "The student wants a fast answer, not a full tutoring session.",
+        teaching_move: "Answer directly, then offer a practice next step.",
+        guided_steps: [
+          "State the direct answer.",
+          "Add the marker-friendly reason.",
+          "Use one example or application sentence."
+        ],
+        your_turn: "Write one answer sentence and one evidence/application sentence.",
+        check_question: "Which phrase in the question tells you what the answer must do?",
+        next_revision: "Try one similar question or ask for marking on your attempt."
+      },
+      confidence: input.context || hasAttachments ? "medium" : "low"
+    };
+  }
 
   return {
     answer: `## Tutor read
@@ -1592,6 +1633,7 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const studyDesign = subject ? getStudyDesignContext(subject) : null;
   const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
+  const responseMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor" ? "tutor" : "direct";
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
     : "";
@@ -1604,21 +1646,59 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const learningSignalsBlock = input.learningSignals
     ? `\nRecent learning signals from the student's app history:\n${input.learningSignals}\n`
     : "\nRecent learning signals from the student's app history: none available.\n";
+  const directModeBlock =
+    responseMode === "direct"
+      ? `\nDirect Ask Coach mode is active.
+Mode rules:
+- The student wants a direct answer without entering a full tutoring session.
+- Answer the exact question first, then add the shortest useful explanation, example or method.
+- Do not force a full diagnosis, agenda or long "your turn" sequence in the main answer.
+- Still make follow_up_questions useful as tap-ready next actions, such as practice, marking or simplifying.\n`
+      : "";
   const tutorSessionBlock =
-    input.sessionMode === "tutor_session"
+    responseMode === "tutor"
       ? `\nTutor session mode is active.
 Session topic: ${input.sessionTopic || "Not specified"}
 Session goal: ${input.sessionGoal || "Help the student learn this topic properly."}
 Calendar booking: ${input.sessionEventTitle || "No calendar booking attached"}
+Session status: ${input.sessionMode === "tutor_session" ? "Saved tutor-session turn" : "Tutor-style response"}
 
 Session rules:
 - Treat this as one turn inside an ongoing human-style tutoring session.
-- Open by reconnecting to any previous tutor-session memory if it is present.
-- Keep a clear agenda: diagnose, teach, make the student attempt, then set the next checkpoint.
-- Do not end with "let me know if"; end with a concrete task or question for the student to answer next.\n`
+- The student chose tutoring because they want teaching, not a wall of answers.
+- Open by reconnecting to any previous tutor-session memory if it is present, but do not fake memory if it is absent.
+- Keep a clear agenda: diagnose, teach one bite-sized idea, make the student attempt, then set the next checkpoint.
+- Use a human tutor tone: specific, calm, and responsive to what the student is probably feeling stuck on.
+- Do not solve the whole thing before the student's attempt unless they explicitly ask for a model answer.
+- End with one concrete task or question for the student to answer next. Do not end with "let me know if".\n`
       : "";
+  const modeBehaviourBlock =
+    responseMode === "direct"
+      ? `Direct coach behaviour:
+- Start with the answer, not a tutoring agenda.
+- Keep the main answer compact and exam-useful.
+- Use a worked example only if it makes the answer clearer.
+- If the question is vague, give the likely answer and one clarifying question.
+- The required tutor_plan JSON should be brief and treated as optional next-step coaching, not shown as a full session plan.`
+      : `Tutor behaviour:
+- Diagnose what the student is likely stuck on before explaining.
+- Teach the next useful step, not everything you know.
+- Prefer hints, worked thinking, checking questions and "your turn" tasks over giving a finished answer only.
+- If the student asks for the answer, give a model only after showing the method and explain why it earns marks.
+- If the student is doing maths/science/accounting, show setup, one guided step, final interpretation and a quick error check.
+- If the student is doing English/humanities/health/business/legal, show command-term unpacking, evidence/application, a stronger sentence and marker cues.
+- If this is the first turn on a topic, quickly set a mini-agenda and ask one baseline check question.
+- If this is a later turn, use the previous tutor-session memory to continue from the last attempt or confusion point.
+- If the student submits an attempt, mark the attempt first, then give the next exact rewrite or calculation step.
+- If the question is vague, ask one clarifying question but still give a useful provisional tutoring path.
+- Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
+- Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.`;
 
-  return `You are a precise, encouraging VCE tutor sitting beside the student. You are not a chatbot.
+  return `You are ${
+    responseMode === "direct"
+      ? "a practical VCE study coach who gives direct answers when the student asks for them"
+      : "a precise, encouraging VCE tutor sitting beside the student"
+  }. You are not a chatbot.
 
 Subject: ${subjectLabel}
 
@@ -1631,18 +1711,10 @@ Student notes, reflections and uploaded textbook/resource context:
 ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
 ${learningSignalsBlock}
+${directModeBlock}
 ${tutorSessionBlock}
 
-Tutor behaviour:
-- Diagnose what the student is likely stuck on before explaining.
-- Teach the next useful step, not everything you know.
-- Prefer hints, worked thinking, checking questions and "your turn" tasks over giving a finished answer only.
-- If the student asks for the answer, give a model only after showing the method and explain why it earns marks.
-- If the student is doing maths/science/accounting, show setup, one guided step, final interpretation and a quick error check.
-- If the student is doing English/humanities/health/business/legal, show command-term unpacking, evidence/application, a stronger sentence and marker cues.
-- If the question is vague, ask one clarifying question but still give a useful provisional tutoring path.
-- Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
-- Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.
+${modeBehaviourBlock}
 
 Use the subject's study design and uploaded materials where they are relevant, including attached PDFs and screenshots. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
 ${studyDesignReliabilityRules(studyDesign)}
@@ -1664,9 +1736,13 @@ For attached PDFs:
 - If the extracted text is partial or does not contain the answer, say that and tutor from the closest relevant evidence.
 
 Answer formatting rules:
-- answer should use short markdown headings: "Tutor read", "Guided explanation", "Worked move" when useful, and "Your turn".
-- key_points should be tutoring takeaways, not a summary of generic content.
-- follow_up_questions should be phrased as actions the student can tap next, such as marking an attempt, getting a hint, or generating a similar question.
+- ${
+    responseMode === "direct"
+      ? 'answer should use short markdown headings such as "Direct answer", "Why", "Example" and "Next move".'
+      : 'answer should use short markdown headings such as "Tutor read", "Mini lesson", "Worked together" and "Your turn".'
+  }
+- key_points should be practical coach/tutor takeaways, not a summary of generic content.
+- follow_up_questions must be short tap-ready prompts the student can click to ask next, such as marking an attempt, getting a hint, simplifying the idea, or generating a similar question.
 - tutor_plan.diagnosis should name the misconception, missing step, or study behaviour to correct.
 - tutor_plan.teaching_move should name the specific tutoring move used.
 - tutor_plan.guided_steps should contain 3 to 5 short steps the student can follow.

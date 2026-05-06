@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { FormattedStudyText } from "@/components/session/FormattedStudyText";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
@@ -28,6 +28,8 @@ type SubjectDomain = {
   subjectTerms: string[];
   questionSignals: { pattern: RegExp; weight: number }[];
 };
+
+type CoachMode = "coach" | "tutor";
 
 const coachAnswerTag = "coach-answer";
 const tutorSessionTag = "tutor-session";
@@ -127,19 +129,25 @@ const subjectDomains: SubjectDomain[] = [
   }
 ];
 
-const coachNoteTitle = (question: string) => `Tutor: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
+const coachNoteTitle = (question: string, mode: CoachMode) =>
+  `${mode === "tutor" ? "Tutor" : "Coach"}: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
 
 const attachmentSummary = (attachmentNames: string[]) =>
   attachmentNames.length ? `Attachments\n${attachmentNames.map((name) => `- ${name}`).join("\n")}` : null;
 
-const coachNoteBody = (question: string, answer: StudyAnswer, attachmentNames: string[]) =>
+const coachNoteBody = (
+  question: string,
+  answer: StudyAnswer,
+  attachmentNames: string[],
+  options: { includeTutorPlan?: boolean } = {}
+) =>
   [
     "Question",
     question,
     attachmentSummary(attachmentNames),
     "Answer",
     answer.answer,
-    answer.tutor_plan
+    options.includeTutorPlan !== false && answer.tutor_plan
       ? `Tutor plan
 Diagnosis: ${answer.tutor_plan.diagnosis}
 Teaching move: ${answer.tutor_plan.teaching_move}
@@ -173,7 +181,7 @@ const tutorTurnNoteBody = (input: {
     "Tutor session turn",
     `Topic: ${input.topic}`,
     input.goal ? `Goal: ${input.goal}` : null,
-    coachNoteBody(input.question, input.answer, input.attachmentNames)
+    coachNoteBody(input.question, input.answer, input.attachmentNames, { includeTutorPlan: true })
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -300,6 +308,8 @@ export function StudyAskCard({
   const notes = useAppStore((state) => state.notes);
   const subjects = useAppStore((state) => state.subjects);
   const [question, setQuestion] = useState("");
+  const [coachMode, setCoachMode] = useState<CoachMode>("coach");
+  const [answerMode, setAnswerMode] = useState<CoachMode>("coach");
   const [sessionTopic, setSessionTopic] = useState("");
   const [sessionGoal, setSessionGoal] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
@@ -382,6 +392,7 @@ export function StudyAskCard({
     setSessionGoal(initialTutorGoal?.trim() ?? "");
     setSessionEventId(initialTutorEventId ?? null);
     setSessionEventTitle(initialTutorEventTitle ?? null);
+    setCoachMode("tutor");
     setSessionActive(true);
     setSessionStartedAt(new Date().toISOString());
     setSessionTurns([]);
@@ -408,6 +419,22 @@ export function StudyAskCard({
 
   const removeAttachment = (index: number) => {
     setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const copyFollowUp = async (followUp: string) => {
+    if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(followUp);
+        setMessage("Follow-up copied.");
+        return;
+      } catch {
+        setQuestion(followUp);
+        setMessage("Could not copy automatically. The follow-up is loaded and selectable.");
+        return;
+      }
+    }
+    setQuestion(followUp);
+    setMessage("Follow-up loaded. You can select the text or tap Ask.");
   };
 
   const removeCoachAnswer = async (id: string) => {
@@ -442,6 +469,7 @@ export function StudyAskCard({
       setMessage("Add the topic for this tutor session.");
       return;
     }
+    setCoachMode("tutor");
     setSessionTopic(topic);
     setSessionActive(true);
     setSessionStartedAt(new Date().toISOString());
@@ -495,13 +523,20 @@ export function StudyAskCard({
     }
   };
 
-  const ask = async () => {
-    const askedQuestion = question.trim();
+  const ask = async (overrideQuestion?: string, overrideMode?: CoachMode) => {
+    const askedQuestion = (overrideQuestion ?? question).trim();
+    const requestMode = overrideMode ?? coachMode;
     if (!selectedSubject || !askedQuestion) {
       setMessage("Choose a subject and add a question.");
       return;
     }
+    if (requestMode === "tutor" && !sessionActive) {
+      setCoachMode("tutor");
+      setMessage("Start a tutor session first, then the tutor can teach it properly and save the transcript.");
+      return;
+    }
 
+    setQuestion(askedQuestion);
     setAsking(true);
     setMessage(null);
     try {
@@ -511,7 +546,8 @@ export function StudyAskCard({
       const formData = new FormData();
       formData.append("subjectId", questionSubject.id);
       formData.append("question", askedQuestion);
-      if (sessionActive) {
+      formData.append("responseMode", requestMode === "tutor" ? "tutor" : "direct");
+      if (requestMode === "tutor" && sessionActive) {
         formData.append("sessionMode", "tutor_session");
         formData.append("sessionTopic", sessionTopic.trim() || askedQuestion);
         formData.append("sessionGoal", sessionGoal.trim());
@@ -521,7 +557,8 @@ export function StudyAskCard({
 
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
-      if (sessionActive) {
+      setAnswerMode(requestMode);
+      if (requestMode === "tutor" && sessionActive) {
         setSessionTurns((current) => [
           ...current,
           { question: askedQuestion, answer: nextAnswer, createdAt: new Date().toISOString(), attachmentNames }
@@ -530,10 +567,10 @@ export function StudyAskCard({
       try {
         await createNote({
           subjectId: questionSubject.id,
-          title: sessionActive
+          title: requestMode === "tutor"
             ? `Tutor turn: ${sessionTopic.trim() || askedQuestion}`.slice(0, 140)
-            : coachNoteTitle(askedQuestion),
-          body: sessionActive
+            : coachNoteTitle(askedQuestion, "coach"),
+          body: requestMode === "tutor"
             ? tutorTurnNoteBody({
                 topic: sessionTopic.trim() || askedQuestion,
                 goal: sessionGoal.trim(),
@@ -541,16 +578,16 @@ export function StudyAskCard({
                 answer: nextAnswer,
                 attachmentNames
               })
-            : coachNoteBody(askedQuestion, nextAnswer, attachmentNames),
+            : coachNoteBody(askedQuestion, nextAnswer, attachmentNames, { includeTutorPlan: false }),
           noteType: "general",
-          tags: sessionActive ? [coachAnswerTag, tutorSessionTag, tutorTurnTag] : [coachAnswerTag]
+          tags: requestMode === "tutor" ? [coachAnswerTag, tutorSessionTag, tutorTurnTag] : [coachAnswerTag]
         });
         setMessage(
-          sessionActive
+          requestMode === "tutor"
             ? "Tutor turn saved. Keep going or end the session to save the full transcript."
             : routed
               ? `Routed to ${questionSubject.subjectName} and saved.`
-              : "Tutor response saved."
+              : "Coach response saved."
         );
       } catch {
         setMessage("Answer shown, but it could not be saved.");
@@ -567,7 +604,7 @@ export function StudyAskCard({
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text variant="titleLarge" style={styles.title}>
-            Ask tutor
+            {coachMode === "coach" ? "Ask coach" : "Tutor session"}
           </Text>
           <Text style={styles.muted}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
           <Text style={styles.pasteHint}>Upload images/PDFs or paste screenshots with Ctrl+V</Text>
@@ -577,49 +614,60 @@ export function StudyAskCard({
         </View>
       </View>
 
-      <View style={[styles.sessionBox, sessionActive && styles.sessionBoxActive]}>
-        <View style={styles.sessionHeader}>
-          <View style={styles.sessionHeaderText}>
-            <Text style={styles.blockTitle}>{sessionActive ? "Tutor session running" : "Tutor session"}</Text>
-            <Text style={styles.muted}>
-              {sessionActive
-                ? `${sessionTurns.length} turn${sessionTurns.length === 1 ? "" : "s"} in this session`
-                : `${tutorSessionHistory.length} previous session${tutorSessionHistory.length === 1 ? "" : "s"} remembered`}
-            </Text>
+      <SegmentedButtons
+        value={coachMode}
+        onValueChange={(value) => setCoachMode(value as CoachMode)}
+        buttons={[
+          { value: "coach", label: "Ask coach", icon: "message-question-outline" },
+          { value: "tutor", label: "Tutor session", icon: "school-outline" }
+        ]}
+      />
+
+      {coachMode === "tutor" || sessionActive ? (
+        <View style={[styles.sessionBox, sessionActive && styles.sessionBoxActive]}>
+          <View style={styles.sessionHeader}>
+            <View style={styles.sessionHeaderText}>
+              <Text style={styles.blockTitle}>{sessionActive ? "Tutor session running" : "Tutor session"}</Text>
+              <Text style={styles.muted}>
+                {sessionActive
+                  ? `${sessionTurns.length} turn${sessionTurns.length === 1 ? "" : "s"} in this session`
+                  : `${tutorSessionHistory.length} previous session${tutorSessionHistory.length === 1 ? "" : "s"} remembered`}
+              </Text>
+            </View>
+            <Button
+              mode={sessionActive ? "outlined" : "contained-tonal"}
+              compact
+              icon={sessionActive ? "content-save-check-outline" : "school-outline"}
+              loading={savingSession}
+              disabled={savingSession || !selectedSubject}
+              onPress={sessionActive ? endTutorSession : startTutorSession}
+            >
+              {sessionActive ? "End & save" : "Start session"}
+            </Button>
           </View>
-          <Button
-            mode={sessionActive ? "outlined" : "contained-tonal"}
-            compact
-            icon={sessionActive ? "content-save-check-outline" : "school-outline"}
-            loading={savingSession}
-            disabled={savingSession || !selectedSubject}
-            onPress={sessionActive ? endTutorSession : startTutorSession}
-          >
-            {sessionActive ? "End & save" : "Start session"}
-          </Button>
+          <TextInput
+            mode="outlined"
+            label="Session topic"
+            value={sessionTopic}
+            onChangeText={setSessionTopic}
+            disabled={sessionActive}
+          />
+          <TextInput
+            mode="outlined"
+            label="Goal for the tutor"
+            value={sessionGoal}
+            onChangeText={setSessionGoal}
+            disabled={sessionActive}
+            multiline
+            numberOfLines={2}
+          />
+          {sessionEventTitle ? <Text style={styles.sessionEvent}>Calendar: {sessionEventTitle}</Text> : null}
         </View>
-        <TextInput
-          mode="outlined"
-          label="Session topic"
-          value={sessionTopic}
-          onChangeText={setSessionTopic}
-          disabled={sessionActive}
-        />
-        <TextInput
-          mode="outlined"
-          label="Goal for the tutor"
-          value={sessionGoal}
-          onChangeText={setSessionGoal}
-          disabled={sessionActive}
-          multiline
-          numberOfLines={2}
-        />
-        {sessionEventTitle ? <Text style={styles.sessionEvent}>Calendar: {sessionEventTitle}</Text> : null}
-      </View>
+      ) : null}
 
       <TextInput
         mode="outlined"
-        label="What are you stuck on?"
+        label={coachMode === "coach" ? "Ask a direct question" : "What should we work through?"}
         value={question}
         multiline
         numberOfLines={5}
@@ -648,8 +696,14 @@ export function StudyAskCard({
         >
           Attach file
         </Button>
-        <Button mode="contained" icon="send" loading={asking} disabled={asking || !selectedSubject || !question.trim()} onPress={ask}>
-          Tutor me
+        <Button
+          mode="contained"
+          icon="send"
+          loading={asking}
+          disabled={asking || !selectedSubject || !question.trim()}
+          onPress={() => void ask()}
+        >
+          {coachMode === "coach" ? "Ask coach" : "Tutor me"}
         </Button>
       </View>
 
@@ -657,7 +711,7 @@ export function StudyAskCard({
         <View style={styles.answerStack}>
           <FormattedStudyText value={answer.answer} />
 
-          {answer.tutor_plan ? (
+          {answerMode === "tutor" && answer.tutor_plan ? (
             <View style={styles.tutorPlan}>
               <View style={styles.tutorPlanHeader}>
                 <Text style={styles.blockTitle}>Tutor plan</Text>
@@ -696,7 +750,7 @@ export function StudyAskCard({
 
           {answer.key_points.length ? (
             <View style={styles.block}>
-              <Text style={styles.blockTitle}>Tutor focus</Text>
+              <Text style={styles.blockTitle}>{answerMode === "tutor" ? "Tutor focus" : "Coach takeaways"}</Text>
               {answer.key_points.map((point, index) => (
                 <Text key={`${point}-${index}`} style={styles.listText}>
                   - {point}
@@ -716,10 +770,27 @@ export function StudyAskCard({
 
           {answer.follow_up_questions.length ? (
             <View style={styles.followUps}>
+              <Text style={styles.blockTitle}>Follow-up actions</Text>
               {answer.follow_up_questions.slice(0, 3).map((followUp) => (
-                <Button key={followUp} mode="text" compact onPress={() => setQuestion(followUp)}>
-                  {followUp}
-                </Button>
+                <View key={followUp} style={styles.followUpCard}>
+                  <Text selectable style={styles.followUpText}>
+                    {followUp}
+                  </Text>
+                  <View style={styles.followUpActions}>
+                    <Button
+                      mode="contained-tonal"
+                      compact
+                      icon="send"
+                      disabled={asking || !selectedSubject}
+                      onPress={() => void ask(followUp, answerMode)}
+                    >
+                      Ask
+                    </Button>
+                    <Button mode="text" compact icon="content-copy" onPress={() => void copyFollowUp(followUp)}>
+                      Copy
+                    </Button>
+                  </View>
+                </View>
               ))}
             </View>
           ) : null}
@@ -729,7 +800,7 @@ export function StudyAskCard({
       {coachHistory.length ? (
         <View style={styles.historyStack}>
           <View style={styles.historyHeader}>
-            <Text style={styles.blockTitle}>Saved tutor answers</Text>
+            <Text style={styles.blockTitle}>Saved coach/tutor answers</Text>
             <Text style={styles.muted}>
               {coachHistory.length} saved{selectedSubject ? "" : " total"}
             </Text>
@@ -1004,8 +1075,25 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   followUps: {
-    alignItems: "flex-start",
-    gap: 2
+    gap: 8
+  },
+  followUpCard: {
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surfaceRaised,
+    padding: 10
+  },
+  followUpText: {
+    color: palette.text,
+    lineHeight: 20
+  },
+  followUpActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 8
   },
   historyStack: {
     gap: 10,
