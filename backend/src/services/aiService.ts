@@ -1546,6 +1546,16 @@ const inferSubjectFromQuestion = (question: string) => {
   return null;
 };
 
+const requestedMinimumWordCount = (question: string) => {
+  const match = question.match(/\b(?:at\s+least|minimum|min\.?|no\s+less\s+than)\s+(\d{2,4})\s+words?\b/i);
+  return match ? Number(match[1]) : null;
+};
+
+const requestedMarkCount = (question: string) => {
+  const match = question.match(/\b(\d{1,2})\s*[- ]?marks?\b/i);
+  return match ? Number(match[1]) : null;
+};
+
 const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
   const hasAttachments = Boolean(input.screenshots?.length || input.attachedDocumentLabels?.length);
@@ -1634,6 +1644,8 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
   const responseMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor" ? "tutor" : "direct";
+  const minimumWords = requestedMinimumWordCount(input.question);
+  const markCount = requestedMarkCount(input.question);
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
     : "";
@@ -1652,8 +1664,23 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
 Mode rules:
 - The student wants a direct answer without entering a full tutoring session.
 - Answer the exact question first, then add the shortest useful explanation, example or method.
+- If the student asks for a SAC/exam answer or rewrite, the "Direct answer" section must be the actual response they can submit, not a comment about the response.
 - Do not force a full diagnosis, agenda or long "your turn" sequence in the main answer.
 - Still make follow_up_questions useful as tap-ready next actions, such as practice, marking or simplifying.\n`
+      : "";
+  const assessmentConstraintBlock =
+    minimumWords || markCount
+      ? `\nExplicit assessment constraints detected:
+${markCount ? `- Mark allocation: ${markCount} mark${markCount === 1 ? "" : "s"}. Match the density and command-term depth expected for that mark allocation.` : ""}
+${
+  minimumWords
+    ? `- Minimum word count: at least ${minimumWords} words. This is a hard requirement for the model answer itself.
+- Count only the student's final answer response, not the explanatory notes, headings, sources, key_points or tutor_plan.
+- To avoid undershooting, write roughly ${minimumWords + 10}-${minimumWords + 25} words in the final answer section unless the student requests an exact maximum.
+- Before returning JSON, mentally count the final answer words and revise if it is below ${minimumWords}.`
+    : ""
+}
+- Do not claim the answer satisfies a word or mark requirement unless it actually does.\n`
       : "";
   const tutorSessionBlock =
     responseMode === "tutor"
@@ -1712,6 +1739,7 @@ ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
 ${learningSignalsBlock}
 ${directModeBlock}
+${assessmentConstraintBlock}
 ${tutorSessionBlock}
 
 ${modeBehaviourBlock}

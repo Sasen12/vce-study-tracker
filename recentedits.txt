@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Timer navigation stays open
+Most recent edit: 2026-05-06 - Coach obeys word-count constraints
+
+Summary:
+- Tightened Ask Coach prompt handling for explicit assessment constraints.
+- The backend now detects direct requests such as "at least 75 words" and "2-mark".
+- Word-count requests are treated as hard requirements for the actual model answer section.
+- The coach is instructed to count only the final answer response, not explanations, headings, sources, key points or tutor plan.
+- The coach is instructed to overshoot minimum word counts by 10-25 words to avoid undershooting.
+- SAC/exam rewrite requests now tell the coach that the Direct answer section must be the submit-ready answer, not meta commentary.
+- Mark-count requests now tell the coach to match answer density and command-term depth to the marks.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Timer navigation stays open
 
 Summary:
 - Fixed the Study timer so it no longer traps the student on the Timer panel while running.
