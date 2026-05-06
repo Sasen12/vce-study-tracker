@@ -258,14 +258,18 @@ const smartSubjectForQuestion = (question: string, selectedSubject: UserSubject,
   return matchingSubject ?? selectedSubject;
 };
 
+const isPdfAttachment = (asset: TutorAttachment) =>
+  asset.name.toLowerCase().endsWith(".pdf") || asset.mimeType?.toLowerCase().includes("pdf");
+
 const appendTutorAttachment = (formData: FormData, asset: TutorAttachment) => {
+  const fieldName = isPdfAttachment(asset) ? "attachments" : "screenshots";
   const webFile = Platform.OS === "web" ? asset.file : null;
   if (webFile) {
-    formData.append("attachments", webFile, asset.name);
+    formData.append(fieldName, webFile, asset.name);
     return;
   }
 
-  formData.append("attachments", {
+  formData.append(fieldName, {
     uri: asset.uri,
     name: asset.name,
     type: asset.mimeType ?? "image/png"

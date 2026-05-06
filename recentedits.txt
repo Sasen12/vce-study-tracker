@@ -8,7 +8,7 @@ Most recent edit: 2026-05-06 - Tutor PDF attachments
 Summary:
 - Added PDF support to the Study > Coach tutor attachment flow.
 - The tutor attachment picker now accepts images and PDFs, while pasted screenshots still work on web.
-- Tutor requests now send files through a shared attachments field, with backend compatibility for older screenshot uploads.
+- Tutor requests keep images on the existing screenshots field and send PDFs through the attachments field, with backend compatibility for both upload names.
 - The backend Ask Coach route now validates tutor images and PDFs separately.
 - PDF attachments are text-extracted with the existing resource parser and added as primary attached-PDF context for the tutor turn.
 - Image attachments still use vision input, while PDF attachments use extracted text context and source labels.
