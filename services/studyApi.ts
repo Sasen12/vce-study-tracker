@@ -35,7 +35,7 @@ import type {
 export const studyApi = {
   subjects: () => apiFetch<{ subjects: UserSubject[] }>("/subjects"),
   createSubject: (body: Partial<UserSubject>) =>
-    apiFetch<{ subject: UserSubject }>("/subjects", { method: "POST", body }),
+    apiFetch<{ subject: UserSubject; gamification: Gamification }>("/subjects", { method: "POST", body }),
   deleteSubject: (id: string) => apiFetch<void>(`/subjects/${id}`, { method: "DELETE" }),
   sessions: () => apiFetch<{ sessions: StudySession[] }>("/sessions"),
   sessionStats: () =>

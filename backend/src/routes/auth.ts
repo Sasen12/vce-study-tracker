@@ -9,6 +9,7 @@ import {
   verifyRefreshToken,
   type AuthenticatedRequest
 } from "../middleware/authMiddleware.js";
+import { ensureGamification } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const authRouter = Router();
@@ -75,6 +76,7 @@ authRouter.post(
           }
         }
       });
+      await ensureGamification(user.id);
 
       res.status(201).json({
         user: publicUser(user),
@@ -106,11 +108,7 @@ authRouter.post(
       throw new HttpError(401, "Invalid email or password");
     }
 
-    await prisma.userGamification.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { userId: user.id }
-    });
+    await ensureGamification(user.id);
 
     res.json({
       user: publicUser(user),
@@ -144,16 +142,17 @@ authRouter.get(
     const authReq = req as AuthenticatedRequest;
     const user = await prisma.user.findUnique({
       where: { id: authReq.user.id },
-      include: { subjects: true, gamification: true }
+      include: { subjects: true }
     });
     if (!user) {
       throw new HttpError(404, "User not found");
     }
+    const gamification = await ensureGamification(authReq.user.id);
 
     res.json({
       user: publicUser(user),
       subjects: user.subjects,
-      gamification: user.gamification
+      gamification
     });
   })
 );

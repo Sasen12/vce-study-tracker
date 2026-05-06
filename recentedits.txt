@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Flashcard Forge topic input fix
+Most recent edit: 2026-05-06 - Starter title year guessing
+
+Summary:
+- Added backend year-level guessing for starter titles based on the student's saved subject units.
+- If a student has more Unit 1/2 subjects than Unit 3/4 subjects, the active starter title becomes Year 11 Rookie.
+- If a student has more Unit 3/4 subjects than Unit 1/2 subjects, the active starter title becomes Year 12 Rookie.
+- Ties or no subjects stay on the neutral VCE Rookie title.
+- The auto-guess only changes the free starter titles, so paid/custom title choices are not overwritten.
+- Registration, login, auth refresh, and gamification reads now normalize the starter title from the current subject mix.
+- Adding a subject now returns refreshed gamification so the frontend updates the title immediately.
+
+Validation run:
+- npm run build --prefix backend
+- npx tsc --noEmit
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Flashcard Forge topic input fix
 
 Summary:
 - Fixed Questions > Tools > Cards so students can type a topic before forging flashcards.

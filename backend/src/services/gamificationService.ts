@@ -15,6 +15,7 @@ export const LEVELS = [
 export const DEFAULT_THEME_ID = "midnight";
 export const DEFAULT_TITLE_ID = "vce_rookie";
 export const STARTER_TITLE_IDS = [DEFAULT_TITLE_ID, "year_11_rookie", "year_12_rookie"] as const;
+type StarterTitleId = (typeof STARTER_TITLE_IDS)[number];
 
 export const THEME_SHOP_ITEMS = [
   {
@@ -278,6 +279,27 @@ const mergeCosmetics = (current: unknown, incoming: string[]) =>
     ])
   );
 
+const starterTitleIds = new Set<string>(STARTER_TITLE_IDS);
+const isStarterTitle = (titleId: string) => starterTitleIds.has(titleId);
+
+export const inferStarterTitleFromSubjectCounts = (counts: {
+  unit12Count: number;
+  unit34Count: number;
+}): StarterTitleId => {
+  if (counts.unit12Count > counts.unit34Count) return "year_11_rookie";
+  if (counts.unit34Count > counts.unit12Count) return "year_12_rookie";
+  return DEFAULT_TITLE_ID;
+};
+
+const inferStarterTitleForUser = async (userId: string) => {
+  const [unit12Count, unit34Count] = await Promise.all([
+    prisma.userSubject.count({ where: { userId, unit: "1/2" } }),
+    prisma.userSubject.count({ where: { userId, unit: "3/4" } })
+  ]);
+
+  return inferStarterTitleFromSubjectCounts({ unit12Count, unit34Count });
+};
+
 export const ensureGamification = async (userId: string) => {
   const gamification = await prisma.userGamification.upsert({
     where: { userId },
@@ -290,9 +312,11 @@ export const ensureGamification = async (userId: string) => {
     }
   });
 
+  const inferredStarterTitle = await inferStarterTitleForUser(userId);
   const unlocked = cosmeticsAsArray(gamification.unlockedCosmetics);
   const nextUnlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
   const missingStarterTitles = nextUnlocked.some((cosmetic) => !unlocked.includes(cosmetic));
+  const shouldInferStarterTitle = isStarterTitle(gamification.activeTitle) && gamification.activeTitle !== inferredStarterTitle;
   const hasOnlyStarterTheme = unlocked.length <= 1 && (!unlocked.length || unlocked.includes(DEFAULT_THEME_ID));
   const shouldBackfillBalance = gamification.totalXp > 0 && gamification.xpBalance === 0 && hasOnlyStarterTheme;
   const lastStudyDate = gamification.lastStudyDate?.toISOString().slice(0, 10);
@@ -300,12 +324,13 @@ export const ensureGamification = async (userId: string) => {
   const streakExpired =
     gamification.currentStreak > 0 && (!lastStudyDate || (lastStudyDate !== today && !isYesterday(lastStudyDate, today)));
 
-  if (missingStarterTitles || shouldBackfillBalance || streakExpired) {
+  if (missingStarterTitles || shouldInferStarterTitle || shouldBackfillBalance || streakExpired) {
     return prisma.userGamification.update({
       where: { userId },
       data: {
         ...(shouldBackfillBalance ? { xpBalance: gamification.totalXp } : {}),
         ...(missingStarterTitles ? { unlockedCosmetics: nextUnlocked } : {}),
+        ...(shouldInferStarterTitle ? { activeTitle: inferredStarterTitle } : {}),
         ...(streakExpired ? { currentStreak: 0 } : {})
       }
     });

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { ensureGamification } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const subjectsRouter = Router();
@@ -49,7 +50,8 @@ subjectsRouter.post(
         color: payload.color
       }
     });
-    res.status(201).json({ subject });
+    const gamification = await ensureGamification(authReq.user.id);
+    res.status(201).json({ subject, gamification });
   })
 );
 

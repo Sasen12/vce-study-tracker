@@ -222,7 +222,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   createSubject: async (input) => {
     const data = await studyApi.createSubject(input);
     set({
-      subjects: [...get().subjects, data.subject].sort((a, b) => a.subjectName.localeCompare(b.subjectName))
+      subjects: [...get().subjects, data.subject].sort((a, b) => a.subjectName.localeCompare(b.subjectName)),
+      gamification: data.gamification
     });
   },
   deleteSubject: async (id) => {
