@@ -3,7 +3,33 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Coach direct mode and stronger tutor sessions
+Most recent edit: 2026-05-06 - Timer navigation stays open
+
+Summary:
+- Fixed the Study timer so it no longer traps the student on the Timer panel while running.
+- Students can now switch to Coach, Notes, Files or Chess while the timer keeps counting.
+- Added a running-timer banner outside the Timer panel with:
+  - elapsed time
+  - subject/topic label
+  - quick return to Timer
+  - quick Pause
+- Starting a normal timer no longer automatically enters browser fullscreen.
+- Focus lock/fullscreen behaviour is now tied to the optional Focus filter.
+- Leaving the browser tab only pauses the timer when fullscreen focus lock is actually active.
+- Turning Focus filter off releases fullscreen lock while keeping the timer running.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Coach direct mode and stronger tutor sessions
 
 Summary:
 - Split Study > Coach into two clear modes:

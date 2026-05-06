@@ -212,7 +212,7 @@ export default function StudyScreen() {
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "hidden" || !running) return;
+      if (document.visibilityState !== "hidden" || !running || !fullscreenLockActiveRef.current) return;
       setRunning(false);
       setMessage("Focus lock paused because the tab lost focus. Press Start to lock back in.");
       releaseFocusLock();
@@ -294,11 +294,33 @@ export default function StudyScreen() {
   }, [askCheckpoint, checkInsActive, checkpointGenerating, checkpointOpen, elapsed, nextCheckpointAt, running]);
 
   const changeMode = (value: string) => {
-    if (running && value !== "timer") {
-      setMessage("Pause or stop the timer before leaving focus mode.");
+    setMode(value);
+  };
+
+  const applyFocusLock = useCallback(async () => {
+    const fullscreenResult = await enterBrowserFullscreen();
+    fullscreenLockActiveRef.current = fullscreenResult === "active";
+    if (fullscreenResult === "blocked") {
+      return "Focus lock was blocked, but the timer is still running.";
+    }
+    if (fullscreenResult === "unsupported") {
+      return "This browser cannot use fullscreen focus lock, but the timer is still running.";
+    }
+    return null;
+  }, []);
+
+  const toggleFocusMode = async () => {
+    const nextFocusMode = !focusMode;
+    setFocusMode(nextFocusMode);
+    if (!nextFocusMode) {
+      releaseFocusLock();
+      setMessage(running ? "Focus lock off. Timer keeps running while you move around the app." : null);
       return;
     }
-    setMode(value);
+    if (running) {
+      const focusLockMessage = await applyFocusLock();
+      setMessage(focusLockMessage ?? "Focus lock on. Use Show tools when you need Coach or other study tools.");
+    }
   };
 
   const start = async () => {
@@ -315,16 +337,13 @@ export default function StudyScreen() {
     setMode("timer");
     setRunning(true);
     try {
-      const fullscreenResult = await enterBrowserFullscreen();
-      fullscreenLockActiveRef.current = fullscreenResult === "active";
-      const focusLockMessage =
-        fullscreenResult === "blocked"
-          ? "Focus lock was blocked, but the timer is running. Keep going here, or allow fullscreen next time for stricter focus."
-          : fullscreenResult === "unsupported"
-            ? "This browser cannot use fullscreen focus lock, but the timer is running."
-            : null;
+      const focusLockMessage = focusMode ? await applyFocusLock() : null;
+      if (!focusMode) {
+        fullscreenLockActiveRef.current = false;
+      }
+      const movementMessage = focusMode ? null : "Timer is running in the background. You can switch to Coach, Notes or Files.";
       const checkInMessage = checkInsActive ? null : "Check-ins are off for this session.";
-      setMessage([focusLockMessage, checkInMessage].filter(Boolean).join(" ") || null);
+      setMessage([focusLockMessage, movementMessage, checkInMessage].filter(Boolean).join(" ") || null);
     } finally {
       setStarting(false);
     }
@@ -472,7 +491,7 @@ export default function StudyScreen() {
             <Text style={styles.cardTitle}>Focus filter is on</Text>
             <Text style={styles.muted}>Chat, shop-style distractions and extra study tools are hidden until you pause or switch it off.</Text>
           </View>
-          <Button mode="outlined" icon="eye-outline" onPress={() => setFocusMode(false)}>
+          <Button mode="outlined" icon="eye-outline" onPress={() => void toggleFocusMode()}>
             Show tools
           </Button>
         </AppCard>
@@ -489,6 +508,26 @@ export default function StudyScreen() {
           ]}
         />
       )}
+
+      {running && mode !== "timer" ? (
+        <AppCard style={styles.runningTimerBanner}>
+          <View style={styles.runningTimerText}>
+            <Text style={styles.cardTitle}>Timer running</Text>
+            <Text style={styles.muted}>
+              {formatElapsed(elapsed)} on {selectedSubject?.subjectName ?? "study"}
+              {trimmedStudyTopic ? ` - ${trimmedStudyTopic}` : ""}
+            </Text>
+          </View>
+          <View style={styles.runningTimerActions}>
+            <Button mode="contained-tonal" compact icon="timer-outline" onPress={() => setMode("timer")}>
+              Timer
+            </Button>
+            <Button mode="outlined" compact icon="pause" onPress={pause}>
+              Pause
+            </Button>
+          </View>
+        </AppCard>
+      ) : null}
 
       {mode === "coach" ? (
         <StudyCoachPanel
@@ -588,7 +627,7 @@ export default function StudyScreen() {
               mode={focusMode ? "contained-tonal" : "outlined"}
               compact
               icon={focusMode ? "eye-off-outline" : "eye-outline"}
-              onPress={() => setFocusMode((value) => !value)}
+              onPress={() => void toggleFocusMode()}
             >
               {focusMode ? "Focus filter on" : "Focus filter"}
             </Button>
@@ -765,6 +804,25 @@ const styles = StyleSheet.create({
   focusBannerText: {
     flex: 1,
     minWidth: 0
+  },
+  runningTimerBanner: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderColor: `${palette.primary}44`,
+    backgroundColor: `${palette.primary}10`
+  },
+  runningTimerText: {
+    flex: 1,
+    minWidth: 0
+  },
+  runningTimerActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 8
   },
   timerCard: {
     alignItems: "center",
