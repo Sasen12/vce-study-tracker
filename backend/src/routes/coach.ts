@@ -117,7 +117,11 @@ const planSchema = z.object({
 
 const askSchema = z.object({
   subjectId: z.string().uuid().optional().nullable(),
-  question: z.string().min(2).max(6000)
+  question: z.string().min(2).max(6000),
+  sessionMode: z.enum(["tutor_session"]).optional().nullable(),
+  sessionTopic: z.string().max(180).optional().nullable(),
+  sessionGoal: z.string().max(1200).optional().nullable(),
+  sessionEventId: z.string().uuid().optional().nullable()
 });
 
 const supportedScreenshotTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -253,6 +257,11 @@ const isMistakeNote = (note: NoteForPlan) => {
   return note.noteType === "mistake_log" || tags.some((tag) => /mistake|weak|timer-check/i.test(tag));
 };
 
+const isTutorSessionNote = (note: NoteForPlan) => {
+  const tags = tagsAsArray(note.tags);
+  return tags.includes("tutor-session") || /^Tutor session:/i.test(note.title);
+};
+
 const compactText = (value: string, maxLength = 260) =>
   value
     .replace(/\s+/g, " ")
@@ -260,6 +269,11 @@ const compactText = (value: string, maxLength = 260) =>
     .slice(0, maxLength);
 
 const buildAskCoachLearningSignals = (reflections: ReflectionForPlan[], notes: NoteForPlan[]) => {
+  const tutorSessionSignals = notes
+    .filter(isTutorSessionNote)
+    .slice(0, 5)
+    .map((note) => `Previous tutor session in ${note.subject?.subjectName ?? "General"} (${note.title}): ${compactText(note.body, 360)}`);
+
   const confusionSignals = reflections
     .filter((reflection) => reflection.confused.trim())
     .slice(0, 3)
@@ -278,7 +292,7 @@ const buildAskCoachLearningSignals = (reflections: ReflectionForPlan[], notes: N
     .slice(0, 3)
     .map((note) => `Recent note in ${note.subject?.subjectName ?? "General"} (${note.title}): ${compactText(note.body, 180)}`);
 
-  return [...mistakeSignals, ...confusionSignals, ...contextSignals].slice(0, 8).join("\n");
+  return [...tutorSessionSignals, ...mistakeSignals, ...confusionSignals, ...contextSignals].slice(0, 10).join("\n");
 };
 
 const formatClassNoteBody = (draft: ClassNoteDraft, transcript: string) => {
@@ -740,6 +754,10 @@ coachRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = askSchema.parse(req.body);
     const subject = await ensureSubject(authReq.user.id, payload.subjectId);
+    const sessionEvent = payload.sessionEventId
+      ? await prisma.event.findFirst({ where: { id: payload.sessionEventId, userId: authReq.user.id } })
+      : null;
+    if (payload.sessionEventId && !sessionEvent) throw new HttpError(404, "Tutor session booking not found");
     const files = ((req.files ?? []) as Express.Multer.File[]).filter(Boolean);
 
     for (const file of files) {
@@ -763,7 +781,7 @@ coachRouter.post(
         where: { userId: authReq.user.id, ...subjectScope },
         include: { subject: true },
         orderBy: { updatedAt: "desc" },
-        take: 8
+        take: payload.sessionMode === "tutor_session" ? 18 : 8
       }),
       prisma.studyResource.findMany({
         where: { userId: authReq.user.id, ...subjectScope },
@@ -812,6 +830,10 @@ coachRouter.post(
       question: payload.question,
       context,
       learningSignals: buildAskCoachLearningSignals(reflections, notes),
+      sessionMode: payload.sessionMode ?? null,
+      sessionTopic: payload.sessionTopic ?? null,
+      sessionGoal: payload.sessionGoal ?? null,
+      sessionEventTitle: sessionEvent?.title ?? null,
       sourceLabels,
       screenshots: files.map((file) => ({
         fileName: file.originalname,

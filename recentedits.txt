@@ -3,7 +3,37 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Tutor-style Ask Coach upgrade
+Most recent edit: 2026-05-06 - Persistent tutor sessions
+
+Summary:
+- Added scheduled Tutor Sessions as a first-class calendar workflow without a database migration.
+- Calendar now has a Tutor session booking option alongside Assessment and Study time.
+- Tutor sessions are stored as STUDY_TIME events with source "tutor_session", so existing reminders can notify students before a booked tutor session.
+- Calendar tutor-session rows now show a Start action that opens Study > Coach directly into a tutor session.
+- Study > Coach now supports live tutor sessions with:
+  - session topic
+  - tutor goal
+  - active turn count
+  - calendar booking context
+  - End & save flow
+- Each tutor turn is saved as a note, and ending a session saves a full tutor-session transcript.
+- Saved tutor sessions are tagged so future tutor questions can remember previous sessions.
+- The backend Ask Coach route now accepts tutor-session context and pulls previous tutor-session notes into learning signals.
+- The AI tutor prompt now treats tutor-session requests as an ongoing human-style tutoring relationship: reconnect to previous sessions, set an agenda, diagnose, teach, give a student task and set the next checkpoint.
+- Calendar reminders now label tutor session reminders separately from normal study-time reminders.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Tutor-style Ask Coach upgrade
 
 Summary:
 - Upgraded Ask Coach so responses behave more like a VCE tutor than a chatbot.

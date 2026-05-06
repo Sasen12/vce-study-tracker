@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Calendar, type DateData } from "react-native-calendars";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Button, Dialog, Modal, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
@@ -18,13 +18,15 @@ import {
   addDays,
   expandEventOccurrences,
   isStudyTimeEvent,
+  isTutorSessionEvent,
   localDateKey,
   recurrenceLabel,
+  tutorTopicFromEvent,
   todayKey,
   type EventOccurrence
 } from "@/utils/studyEvents";
 
-type EventKind = "assessment" | "study";
+type EventKind = "assessment" | "study" | "tutor";
 
 const typeColor: Record<EventType, string> = {
   SAC: "#F59E0B",
@@ -77,6 +79,9 @@ const timeToMinutes = (value: string) => {
 
 const displayMeta = (occurrence: EventOccurrence) => {
   const { event, dateKey } = occurrence;
+  if (isTutorSessionEvent(event)) {
+    return `${event.subject?.subjectName ?? "Flexible"} · Tutor session · ${event.startTime}-${event.endTime} · ${recurrenceLabel(event.recurrence)}`;
+  }
   if (isStudyTimeEvent(event)) {
     return `${event.subject?.subjectName ?? "Flexible"} · Study time · ${event.startTime}-${event.endTime} · ${recurrenceLabel(event.recurrence)}`;
   }
@@ -89,14 +94,17 @@ function EventRow({
   occurrence,
   onComplete,
   onEdit,
-  onDelete
+  onDelete,
+  onStartTutor
 }: {
   occurrence: EventOccurrence;
   onComplete: (event: StudyEvent) => void;
   onEdit: (event: StudyEvent, dateKey: string) => void;
   onDelete: (event: StudyEvent) => void;
+  onStartTutor: (event: StudyEvent) => void;
 }) {
   const { event } = occurrence;
+  const isTutorSession = isTutorSessionEvent(event);
   const renderRightActions = () => (
     <Pressable style={styles.completeAction} onPress={() => onComplete(event)}>
       <Text style={styles.completeText}>Complete</Text>
@@ -105,7 +113,7 @@ function EventRow({
 
   const row = (
     <Pressable style={styles.eventRow} onPress={() => onEdit(event, occurrence.dateKey)}>
-      <View style={[styles.eventBar, { backgroundColor: typeColor[event.eventType] }]} />
+      <View style={[styles.eventBar, { backgroundColor: isTutorSession ? palette.primary : typeColor[event.eventType] }]} />
       <View style={styles.eventBody}>
         <Text style={[styles.eventTitle, event.completed && styles.completed]} numberOfLines={1}>
           {event.title}
@@ -116,6 +124,11 @@ function EventRow({
         {event.description ? <Text style={styles.description}>{event.description}</Text> : null}
       </View>
       <View style={styles.eventActions}>
+        {isTutorSession && !event.completed ? (
+          <Button mode="text" compact icon="school-outline" onPress={() => onStartTutor(event)}>
+            Start
+          </Button>
+        ) : null}
         <Button mode="text" compact icon="pencil" onPress={() => onEdit(event, occurrence.dateKey)}>
           Edit
         </Button>
@@ -132,6 +145,7 @@ function EventRow({
 
 export default function CalendarScreen() {
   useTrackScreen("calendar");
+  const router = useRouter();
   const { subjects, events, loading, fetchAll, createEvent, updateEvent, deleteEvent } = useAppStore();
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -222,22 +236,22 @@ export default function CalendarScreen() {
   const eventDateValid = isValidDateKey(eventDate);
   const recurrenceUntilValid = !recurrenceUntil.trim() || isValidDateKey(recurrenceUntil.trim());
   const studyTimesValid =
-    eventKind !== "study" || (isValidTime(startTime) && isValidTime(endTime) && timeToMinutes(endTime) > timeToMinutes(startTime));
+    eventKind === "assessment" || (isValidTime(startTime) && isValidTime(endTime) && timeToMinutes(endTime) > timeToMinutes(startTime));
   const canSubmitEvent =
     !saving && eventDateValid && recurrenceUntilValid && studyTimesValid && (eventKind === "study" || Boolean(subjectId));
 
   const resetForm = (kind: EventKind) => {
     const defaultDate = selectedDate >= todayKey() ? selectedDate : todayKey();
     setEventKind(kind);
-    setSubjectId(kind === "assessment" ? subjects[0]?.id ?? null : null);
+    setSubjectId(kind === "study" ? null : subjects[0]?.id ?? null);
     setEventType("SAC");
     setEventDate(defaultDate);
-    setTitle(kind === "study" ? "Study block" : "");
+    setTitle(kind === "study" ? "Study block" : kind === "tutor" ? "Tutor session" : "");
     setStartTime("15:30");
     setEndTime("16:30");
     setRecurrence("NONE");
     setRecurrenceUntil("");
-    setNotificationMinutes(kind === "study" ? "15" : "60");
+    setNotificationMinutes(kind === "study" || kind === "tutor" ? "15" : "60");
     setDescription("");
     setMessage(null);
     setEditingEventId(null);
@@ -253,8 +267,14 @@ export default function CalendarScreen() {
       setNotificationMinutes((current) => current || "15");
       return;
     }
+    if (nextKind === "tutor") {
+      setSubjectId((current) => current ?? subjects[0]?.id ?? null);
+      setTitle((current) => current.trim() || "Tutor session");
+      setNotificationMinutes((current) => current || "15");
+      return;
+    }
     setSubjectId((current) => current ?? subjects[0]?.id ?? null);
-    setTitle((current) => (current === "Study block" ? "" : current));
+    setTitle((current) => (current === "Study block" || current === "Tutor session" ? "" : current));
     setNotificationMinutes((current) => current || "60");
   };
 
@@ -265,8 +285,9 @@ export default function CalendarScreen() {
 
   const openEditDialog = (event: StudyEvent, dateKey: string) => {
     const isStudyTime = isStudyTimeEvent(event);
+    const isTutorSession = isTutorSessionEvent(event);
     setEditingEventId(event.id);
-    setEventKind(isStudyTime ? "study" : "assessment");
+    setEventKind(isTutorSession ? "tutor" : isStudyTime ? "study" : "assessment");
     setSubjectId(event.subjectId ?? null);
     setEventType(isStudyTime ? "SAC" : event.eventType);
     setEventDate(dateKey);
@@ -283,7 +304,8 @@ export default function CalendarScreen() {
   };
 
   const submitEvent = async () => {
-    const isStudyTime = eventKind === "study";
+    const isStudyTime = eventKind === "study" || eventKind === "tutor";
+    const isTutorSession = eventKind === "tutor";
     if (!eventDateValid) {
       setMessage("Use a real date like 2026-05-12.");
       return;
@@ -296,6 +318,10 @@ export default function CalendarScreen() {
       setMessage("Choose a subject for the assessment.");
       return;
     }
+    if (isTutorSession && !subjectId) {
+      setMessage("Choose a subject for the tutor session.");
+      return;
+    }
     if (!studyTimesValid) {
       setMessage("Use 24-hour times like 15:30, with the end after the start.");
       return;
@@ -305,7 +331,7 @@ export default function CalendarScreen() {
     try {
       const payload = {
         subjectId,
-        title: title.trim() || (isStudyTime ? "Study block" : "Assessment"),
+        title: title.trim() || (isTutorSession ? "Tutor session" : isStudyTime ? "Study block" : "Assessment"),
         eventType: isStudyTime ? "STUDY_TIME" : eventType,
         eventDate,
         startTime: isStudyTime ? startTime : null,
@@ -313,6 +339,7 @@ export default function CalendarScreen() {
         recurrence: isStudyTime ? recurrence : "NONE",
         recurrenceUntil: isStudyTime && recurrenceUntil.trim() ? recurrenceUntil.trim() : null,
         notificationMinutes: Number(notificationMinutes) || (isStudyTime ? 15 : 60),
+        source: isTutorSession ? "tutor_session" : "manual",
         description: description.trim() || null
       };
       if (editingEventId) {
@@ -327,6 +354,21 @@ export default function CalendarScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const startTutorSession = (event: StudyEvent) => {
+    setSheetOpen(false);
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "coach",
+        ...(event.subjectId ? { subjectId: event.subjectId } : {}),
+        tutorTopic: tutorTopicFromEvent(event),
+        tutorGoal: event.description ?? "",
+        tutorEventId: event.id,
+        tutorEventTitle: event.title
+      }
+    });
   };
 
   const completeEvent = async (event: StudyEvent) => {
@@ -376,6 +418,9 @@ export default function CalendarScreen() {
           ) : null}
           <Button mode="outlined" icon="calendar-clock" onPress={() => openAddDialog("study")}>
             Study time
+          </Button>
+          <Button mode="outlined" icon="school-outline" disabled={!subjects.length} onPress={() => openAddDialog("tutor")}>
+            Tutor session
           </Button>
           <Button mode="contained" icon="plus" disabled={!subjects.length} onPress={() => openAddDialog("assessment")}>
             Add
@@ -447,6 +492,7 @@ export default function CalendarScreen() {
               onComplete={completeEvent}
               onEdit={openEditDialog}
               onDelete={setDeletingEvent}
+              onStartTutor={startTutorSession}
             />
           ))
         ) : (
@@ -467,6 +513,7 @@ export default function CalendarScreen() {
                 onComplete={completeEvent}
                 onEdit={openEditDialog}
                 onDelete={setDeletingEvent}
+                onStartTutor={startTutorSession}
               />
             ))
           ) : (
@@ -476,6 +523,9 @@ export default function CalendarScreen() {
             <Button mode="outlined" icon="calendar-clock" onPress={() => openAddDialog("study")}>
               Study time
             </Button>
+            <Button mode="outlined" icon="school-outline" disabled={!subjects.length} onPress={() => openAddDialog("tutor")}>
+              Tutor session
+            </Button>
             <Button mode="contained" icon="plus" disabled={!subjects.length} onPress={() => openAddDialog("assessment")}>
               Add assessment
             </Button>
@@ -484,7 +534,7 @@ export default function CalendarScreen() {
 
         <Dialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>
-            {editingEventId ? "Edit event" : eventKind === "study" ? "Add study time" : "Add assessment"}
+            {editingEventId ? "Edit event" : eventKind === "study" ? "Add study time" : eventKind === "tutor" ? "Book tutor session" : "Add assessment"}
           </Dialog.Title>
           <Dialog.Content style={styles.dialogContent}>
             <SegmentedButtons
@@ -492,7 +542,8 @@ export default function CalendarScreen() {
               onValueChange={changeEventKind}
               buttons={[
                 { value: "assessment", label: "Assessment" },
-                { value: "study", label: "Study time" }
+                { value: "study", label: "Study time" },
+                { value: "tutor", label: "Tutor" }
               ]}
             />
             <TextInput mode="outlined" label="Title" value={title} onChangeText={setTitle} />
@@ -581,7 +632,7 @@ export default function CalendarScreen() {
               )
             ) : null}
 
-            {eventKind === "study" ? (
+            {eventKind !== "assessment" ? (
               <>
                 <View style={styles.timeRow}>
                   <TextInput
@@ -629,7 +680,7 @@ export default function CalendarScreen() {
             />
             <TextInput
               mode="outlined"
-              label={eventKind === "study" ? "Notes" : "Topic / description"}
+              label={eventKind === "tutor" ? "Topic / tutor goal" : eventKind === "study" ? "Notes" : "Topic / description"}
               value={description}
               multiline
               numberOfLines={3}
@@ -745,7 +796,7 @@ const styles = StyleSheet.create({
     gap: 3
   },
   eventActions: {
-    width: 112,
+    width: 128,
     alignItems: "flex-end",
     justifyContent: "center",
     paddingRight: 8,

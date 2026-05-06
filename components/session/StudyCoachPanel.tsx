@@ -16,6 +16,10 @@ type StudyCoachPanelProps = {
   subjects: UserSubject[];
   selectedSubjectId: string | null;
   onSelectSubject: (subject: UserSubject) => void;
+  initialTutorTopic?: string;
+  initialTutorGoal?: string;
+  initialTutorEventId?: string;
+  initialTutorEventTitle?: string;
 };
 
 const todayString = () => {
@@ -609,7 +613,15 @@ function ClassLogItem({
   );
 }
 
-export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }: StudyCoachPanelProps) {
+export function StudyCoachPanel({
+  subjects,
+  selectedSubjectId,
+  onSelectSubject,
+  initialTutorTopic,
+  initialTutorGoal,
+  initialTutorEventId,
+  initialTutorEventTitle
+}: StudyCoachPanelProps) {
   const { events, reflections, latestPlan, createReflection, generatePlan } = useAppStore();
   const [classDate, setClassDate] = useState(todayString());
   const [classSummary, setClassSummary] = useState("");
@@ -847,7 +859,13 @@ export function StudyCoachPanel({ subjects, selectedSubjectId, onSelectSubject }
     <View style={styles.stack}>
       <SubjectSelector subjects={subjects} selectedId={selectedSubjectId} onSelect={onSelectSubject} />
 
-      <StudyAskCard selectedSubject={selectedSubject} />
+      <StudyAskCard
+        selectedSubject={selectedSubject}
+        initialTutorTopic={initialTutorTopic}
+        initialTutorGoal={initialTutorGoal}
+        initialTutorEventId={initialTutorEventId}
+        initialTutorEventTitle={initialTutorEventTitle}
+      />
 
       <AppCard style={styles.card}>
         <View style={styles.cardHeader}>

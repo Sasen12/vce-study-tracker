@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { useAppStore } from "@/store/appStore";
-import { expandEventOccurrences, isAssessmentEvent, isStudyTimeEvent, localDateKey, addDays } from "@/utils/studyEvents";
+import { expandEventOccurrences, isAssessmentEvent, isStudyTimeEvent, isTutorSessionEvent, localDateKey, addDays } from "@/utils/studyEvents";
 
 const remindersKey = "vce_study_reminders_enabled";
 const sentKey = "vce_study_reminders_sent";
@@ -81,7 +81,11 @@ export function useStudyReminders() {
         if (sent.has(notificationId)) continue;
         sent.add(notificationId);
 
-        const title = isStudyTimeEvent(occurrence.event) ? "Study time soon" : `${occurrence.event.eventType} reminder`;
+        const title = isTutorSessionEvent(occurrence.event)
+          ? "Tutor session soon"
+          : isStudyTimeEvent(occurrence.event)
+            ? "Study time soon"
+            : `${occurrence.event.eventType} reminder`;
         const body = isStudyTimeEvent(occurrence.event)
           ? `${occurrence.event.title} starts at ${occurrence.event.startTime}.`
           : `${occurrence.event.title} is ${minutesUntil <= 0 ? "now" : `in ${minutesUntil} min`}.`;

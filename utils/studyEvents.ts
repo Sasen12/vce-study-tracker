@@ -27,6 +27,14 @@ export const eventDateKey = (event: StudyEvent) => event.eventDate.slice(0, 10);
 export const isStudyTimeEvent = (event: Pick<StudyEvent, "eventType">) => event.eventType === "STUDY_TIME";
 export const isAssessmentEvent = (event: Pick<StudyEvent, "eventType">) =>
   assessmentEventTypes.includes(event.eventType);
+export const isTutorSessionEvent = (event: Pick<StudyEvent, "eventType" | "source" | "title">) =>
+  isStudyTimeEvent(event) && (event.source === "tutor_session" || /^tutor session/i.test(event.title));
+
+export const tutorTopicFromEvent = (event: Pick<StudyEvent, "title" | "description">) => {
+  const titleTopic = event.title.replace(/^tutor session\s*:?\s*/i, "").trim();
+  const descriptionTopic = event.description?.split("\n")[0]?.replace(/^topic\s*:?\s*/i, "").trim();
+  return titleTopic || descriptionTopic || "Tutor session";
+};
 
 const parseLocalDate = (dateKey: string) => new Date(`${dateKey}T00:00:00`);
 

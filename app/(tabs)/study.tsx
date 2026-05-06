@@ -111,7 +111,14 @@ const exitBrowserFullscreen = async () => {
 
 export default function StudyScreen() {
   useTrackScreen("study");
-  const params = useLocalSearchParams<{ subjectId?: string }>();
+  const params = useLocalSearchParams<{
+    subjectId?: string;
+    mode?: string;
+    tutorTopic?: string;
+    tutorGoal?: string;
+    tutorEventId?: string;
+    tutorEventTitle?: string;
+  }>();
   const { subjects, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [studyTopic, setStudyTopic] = useState("");
@@ -161,6 +168,12 @@ export default function StudyScreen() {
       setSelectedSubjectId(subjects[0].id);
     }
   }, [params.subjectId, selectedSubjectId, subjects]);
+
+  useEffect(() => {
+    if (params.mode === "coach") {
+      setMode("coach");
+    }
+  }, [params.mode]);
 
   useEffect(() => {
     if (running) {
@@ -482,6 +495,10 @@ export default function StudyScreen() {
           subjects={subjects}
           selectedSubjectId={selectedSubjectId}
           onSelectSubject={(subject) => setSelectedSubjectId(subject.id)}
+          initialTutorTopic={params.tutorTopic}
+          initialTutorGoal={params.tutorGoal}
+          initialTutorEventId={params.tutorEventId}
+          initialTutorEventTitle={params.tutorEventTitle}
         />
       ) : null}
 

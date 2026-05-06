@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Button, Text, TextInput } from "react-native-paper";
@@ -10,6 +10,10 @@ import type { StudyAnswer, UserSubject } from "@/types";
 
 type StudyAskCardProps = {
   selectedSubject: UserSubject | null;
+  initialTutorTopic?: string;
+  initialTutorGoal?: string;
+  initialTutorEventId?: string;
+  initialTutorEventTitle?: string;
 };
 
 type ScreenshotAsset = {
@@ -26,6 +30,14 @@ type SubjectDomain = {
 };
 
 const coachAnswerTag = "coach-answer";
+const tutorSessionTag = "tutor-session";
+const tutorTurnTag = "tutor-turn";
+
+type TutorTurn = {
+  question: string;
+  answer: StudyAnswer;
+  createdAt: string;
+};
 
 const subjectDomains: SubjectDomain[] = [
   {
@@ -145,6 +157,59 @@ Next revision: ${answer.tutor_plan.next_revision}`
     .filter(Boolean)
     .join("\n\n");
 
+const tutorTurnNoteBody = (input: {
+  topic: string;
+  goal: string;
+  question: string;
+  answer: StudyAnswer;
+  screenshotCount: number;
+}) =>
+  [
+    "Tutor session turn",
+    `Topic: ${input.topic}`,
+    input.goal ? `Goal: ${input.goal}` : null,
+    coachNoteBody(input.question, input.answer, input.screenshotCount)
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const tutorSessionNoteBody = (input: {
+  topic: string;
+  goal: string;
+  startedAt: string | null;
+  endedAt: string;
+  eventTitle: string | null;
+  turns: TutorTurn[];
+}) =>
+  [
+    "Tutor session",
+    `Topic: ${input.topic}`,
+    input.goal ? `Goal: ${input.goal}` : null,
+    input.eventTitle ? `Calendar booking: ${input.eventTitle}` : null,
+    input.startedAt ? `Started: ${new Date(input.startedAt).toLocaleString()}` : null,
+    `Ended: ${new Date(input.endedAt).toLocaleString()}`,
+    `Turns: ${input.turns.length}`,
+    ...input.turns.map((turn, index) =>
+      [
+        `Turn ${index + 1}`,
+        `Student: ${turn.question}`,
+        "Tutor answer",
+        turn.answer.answer,
+        turn.answer.tutor_plan
+          ? `Tutor plan
+Diagnosis: ${turn.answer.tutor_plan.diagnosis}
+Your turn: ${turn.answer.tutor_plan.your_turn}
+Check question: ${turn.answer.tutor_plan.check_question}
+Next revision: ${turn.answer.tutor_plan.next_revision}`
+          : null
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    )
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
 const formatSavedDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -211,13 +276,28 @@ const SourceRow = ({ title, detail }: { title: string; detail?: string }) => (
   </View>
 );
 
-export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
+export function StudyAskCard({
+  selectedSubject,
+  initialTutorTopic,
+  initialTutorGoal,
+  initialTutorEventId,
+  initialTutorEventTitle
+}: StudyAskCardProps) {
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
   const createNote = useAppStore((state) => state.createNote);
   const deleteNote = useAppStore((state) => state.deleteNote);
+  const updateEvent = useAppStore((state) => state.updateEvent);
   const notes = useAppStore((state) => state.notes);
   const subjects = useAppStore((state) => state.subjects);
   const [question, setQuestion] = useState("");
+  const [sessionTopic, setSessionTopic] = useState("");
+  const [sessionGoal, setSessionGoal] = useState("");
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionTurns, setSessionTurns] = useState<TutorTurn[]>([]);
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
+  const [sessionEventId, setSessionEventId] = useState<string | null>(null);
+  const [sessionEventTitle, setSessionEventTitle] = useState<string | null>(null);
+  const [savingSession, setSavingSession] = useState(false);
   const [screenshots, setScreenshots] = useState<ScreenshotAsset[]>([]);
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
   const [asking, setAsking] = useState(false);
@@ -226,11 +306,19 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const selectedSubjectId = selectedSubject?.id ?? null;
+  const hydratedTutorEventRef = useRef<string | null>(null);
 
   const coachHistory = useMemo(
     () =>
       notes.filter(
         (note) => note.tags.includes(coachAnswerTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
+      ),
+    [notes, selectedSubjectId]
+  );
+  const tutorSessionHistory = useMemo(
+    () =>
+      notes.filter(
+        (note) => note.tags.includes(tutorSessionTag) && !note.tags.includes(tutorTurnTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
       ),
     [notes, selectedSubjectId]
   );
@@ -269,6 +357,26 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
   }, [addScreenshotAssets]);
+
+  useEffect(() => {
+    const key = initialTutorEventId || initialTutorTopic || "";
+    if (!key || hydratedTutorEventRef.current === key) return;
+    hydratedTutorEventRef.current = key;
+    const topic = initialTutorTopic?.trim() || "Tutor session";
+    setSessionTopic(topic);
+    setSessionGoal(initialTutorGoal?.trim() ?? "");
+    setSessionEventId(initialTutorEventId ?? null);
+    setSessionEventTitle(initialTutorEventTitle ?? null);
+    setSessionActive(true);
+    setSessionStartedAt(new Date().toISOString());
+    setSessionTurns([]);
+    setQuestion((current) =>
+      current.trim()
+        ? current
+        : `Start my tutor session on ${topic}. First, reconnect to any previous session memory, diagnose what I need, and ask me the first check question.`
+    );
+    setMessage("Tutor session opened from Calendar.");
+  }, [initialTutorEventId, initialTutorEventTitle, initialTutorGoal, initialTutorTopic]);
 
   const addScreenshots = async () => {
     setMessage(null);
@@ -309,6 +417,69 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
     }
   };
 
+  const startTutorSession = () => {
+    if (!selectedSubject) {
+      setMessage("Choose a subject before starting a tutor session.");
+      return;
+    }
+    const topic = sessionTopic.trim() || question.trim();
+    if (!topic) {
+      setMessage("Add the topic for this tutor session.");
+      return;
+    }
+    setSessionTopic(topic);
+    setSessionActive(true);
+    setSessionStartedAt(new Date().toISOString());
+    setSessionTurns([]);
+    setQuestion((current) =>
+      current.trim()
+        ? current
+        : `Start my tutor session on ${topic}. Diagnose what I know, teach the first step, then give me a check question.`
+    );
+    setMessage(`${tutorSessionHistory.length ? `${tutorSessionHistory.length} previous tutor session${tutorSessionHistory.length === 1 ? "" : "s"} will be remembered. ` : ""}Tutor session started.`);
+  };
+
+  const endTutorSession = async () => {
+    if (!selectedSubject || !sessionActive) return;
+    if (!sessionTurns.length) {
+      setSessionActive(false);
+      setMessage("Tutor session closed. Ask at least one question to save a session transcript.");
+      return;
+    }
+
+    const endedAt = new Date().toISOString();
+    const topic = sessionTopic.trim() || "Tutor session";
+    setSavingSession(true);
+    try {
+      await createNote({
+        subjectId: selectedSubject.id,
+        title: `Tutor session: ${topic}`.slice(0, 140),
+        body: tutorSessionNoteBody({
+          topic,
+          goal: sessionGoal.trim(),
+          startedAt: sessionStartedAt,
+          endedAt,
+          eventTitle: sessionEventTitle,
+          turns: sessionTurns
+        }),
+        noteType: "general",
+        tags: [coachAnswerTag, tutorSessionTag]
+      });
+      if (sessionEventId) {
+        await updateEvent(sessionEventId, { completed: true });
+      }
+      setSessionActive(false);
+      setSessionTurns([]);
+      setSessionEventId(null);
+      setSessionEventTitle(null);
+      setMessage("Tutor session saved. The next tutor session can use this as memory.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save this tutor session.");
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
   const ask = async () => {
     const askedQuestion = question.trim();
     if (!selectedSubject || !askedQuestion) {
@@ -324,19 +495,47 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
       const formData = new FormData();
       formData.append("subjectId", questionSubject.id);
       formData.append("question", askedQuestion);
+      if (sessionActive) {
+        formData.append("sessionMode", "tutor_session");
+        formData.append("sessionTopic", sessionTopic.trim() || askedQuestion);
+        formData.append("sessionGoal", sessionGoal.trim());
+        if (sessionEventId) formData.append("sessionEventId", sessionEventId);
+      }
       screenshots.forEach((asset) => appendScreenshot(formData, asset));
 
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
+      if (sessionActive) {
+        setSessionTurns((current) => [
+          ...current,
+          { question: askedQuestion, answer: nextAnswer, createdAt: new Date().toISOString() }
+        ]);
+      }
       try {
         await createNote({
           subjectId: questionSubject.id,
-          title: coachNoteTitle(askedQuestion),
-          body: coachNoteBody(askedQuestion, nextAnswer, screenshots.length),
+          title: sessionActive
+            ? `Tutor turn: ${sessionTopic.trim() || askedQuestion}`.slice(0, 140)
+            : coachNoteTitle(askedQuestion),
+          body: sessionActive
+            ? tutorTurnNoteBody({
+                topic: sessionTopic.trim() || askedQuestion,
+                goal: sessionGoal.trim(),
+                question: askedQuestion,
+                answer: nextAnswer,
+                screenshotCount: screenshots.length
+              })
+            : coachNoteBody(askedQuestion, nextAnswer, screenshots.length),
           noteType: "general",
-          tags: [coachAnswerTag]
+          tags: sessionActive ? [coachAnswerTag, tutorSessionTag, tutorTurnTag] : [coachAnswerTag]
         });
-        setMessage(routed ? `Routed to ${questionSubject.subjectName} and saved.` : "Tutor response saved.");
+        setMessage(
+          sessionActive
+            ? "Tutor turn saved. Keep going or end the session to save the full transcript."
+            : routed
+              ? `Routed to ${questionSubject.subjectName} and saved.`
+              : "Tutor response saved."
+        );
       } catch {
         setMessage("Answer shown, but it could not be saved.");
       }
@@ -360,6 +559,46 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
         <View style={[styles.confidence, answer?.confidence === "high" && styles.confidenceHigh]}>
           <Text style={styles.confidenceText}>{answer?.confidence ?? "ready"}</Text>
         </View>
+      </View>
+
+      <View style={[styles.sessionBox, sessionActive && styles.sessionBoxActive]}>
+        <View style={styles.sessionHeader}>
+          <View style={styles.sessionHeaderText}>
+            <Text style={styles.blockTitle}>{sessionActive ? "Tutor session running" : "Tutor session"}</Text>
+            <Text style={styles.muted}>
+              {sessionActive
+                ? `${sessionTurns.length} turn${sessionTurns.length === 1 ? "" : "s"} in this session`
+                : `${tutorSessionHistory.length} previous session${tutorSessionHistory.length === 1 ? "" : "s"} remembered`}
+            </Text>
+          </View>
+          <Button
+            mode={sessionActive ? "outlined" : "contained-tonal"}
+            compact
+            icon={sessionActive ? "content-save-check-outline" : "school-outline"}
+            loading={savingSession}
+            disabled={savingSession || !selectedSubject}
+            onPress={sessionActive ? endTutorSession : startTutorSession}
+          >
+            {sessionActive ? "End & save" : "Start session"}
+          </Button>
+        </View>
+        <TextInput
+          mode="outlined"
+          label="Session topic"
+          value={sessionTopic}
+          onChangeText={setSessionTopic}
+          disabled={sessionActive}
+        />
+        <TextInput
+          mode="outlined"
+          label="Goal for the tutor"
+          value={sessionGoal}
+          onChangeText={setSessionGoal}
+          disabled={sessionActive}
+          multiline
+          numberOfLines={2}
+        />
+        {sessionEventTitle ? <Text style={styles.sessionEvent}>Calendar: {sessionEventTitle}</Text> : null}
       </View>
 
       <TextInput
@@ -547,6 +786,33 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12,
     lineHeight: 18
+  },
+  sessionBox: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}33`,
+    backgroundColor: `${palette.info}0F`,
+    padding: 12
+  },
+  sessionBoxActive: {
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}10`
+  },
+  sessionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  sessionHeaderText: {
+    flex: 1,
+    minWidth: 0
+  },
+  sessionEvent: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
   },
   confidence: {
     minWidth: 68,

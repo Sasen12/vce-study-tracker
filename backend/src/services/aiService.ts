@@ -221,6 +221,10 @@ type AskStudyQuestionInput = {
   question: string;
   context: string;
   learningSignals?: string;
+  sessionMode?: "tutor_session" | null;
+  sessionTopic?: string | null;
+  sessionGoal?: string | null;
+  sessionEventTitle?: string | null;
   screenshots?: AskScreenshot[];
   sourceLabels?: string[];
 };
@@ -1595,6 +1599,19 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const learningSignalsBlock = input.learningSignals
     ? `\nRecent learning signals from the student's app history:\n${input.learningSignals}\n`
     : "\nRecent learning signals from the student's app history: none available.\n";
+  const tutorSessionBlock =
+    input.sessionMode === "tutor_session"
+      ? `\nTutor session mode is active.
+Session topic: ${input.sessionTopic || "Not specified"}
+Session goal: ${input.sessionGoal || "Help the student learn this topic properly."}
+Calendar booking: ${input.sessionEventTitle || "No calendar booking attached"}
+
+Session rules:
+- Treat this as one turn inside an ongoing human-style tutoring session.
+- Open by reconnecting to any previous tutor-session memory if it is present.
+- Keep a clear agenda: diagnose, teach, make the student attempt, then set the next checkpoint.
+- Do not end with "let me know if"; end with a concrete task or question for the student to answer next.\n`
+      : "";
 
   return `You are a precise, encouraging VCE tutor sitting beside the student. You are not a chatbot.
 
@@ -1608,6 +1625,7 @@ Student notes, reflections and uploaded textbook/resource context:
 ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
 ${learningSignalsBlock}
+${tutorSessionBlock}
 
 Tutor behaviour:
 - Diagnose what the student is likely stuck on before explaining.
