@@ -1555,22 +1555,22 @@ type WordCountRequest = {
 
 const requestedWordCount = (question: string): WordCountRequest | null => {
   const minimumMatch = question.match(
-    /\b(?:at\s+least|minimum|min\.?|no\s+less\s+than)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?\b/i
+    /\b(?:at\s+least|minimum|min\.?|no\s+less\s+than)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?d?\b/i
   );
   if (minimumMatch) return { count: Number(minimumMatch[1]), mode: "minimum" };
 
   const maximumMatch = question.match(
-    /\b(?:under|below|less\s+than|fewer\s+than|no\s+more\s+than|maximum|max\.?)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?\b/i
+    /\b(?:under|below|less\s+than|fewer\s+than|no\s+more\s+than|maximum|max\.?)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?d?\b/i
   );
   if (maximumMatch) return { count: Number(maximumMatch[1]), mode: "maximum" };
 
   const targetBeforeMatch = question.match(
-    /\b(?:exactly|about|around|roughly|approximately|approx\.?)?\s*(?:a|an)?\s*(\d{2,4})\s*[- ]?word\s+(?:response|answer|paragraph|explanation|summary|piece|version)\b/i
+    /\b(?:exactly|about|around|roughly|approximately|approx\.?)?\s*(?:a|an)?\s*(\d{2,4})\s*[- ]?words?d?\s+(?:response|answer|paragraph|explanation|summary|piece|version)\b/i
   );
   if (targetBeforeMatch) return { count: Number(targetBeforeMatch[1]), mode: "target" };
 
   const targetAfterMatch = question.match(
-    /\b(?:response|answer|paragraph|explanation|summary|piece|version)\s+(?:that\s+is\s+)?(?:of\s+)?(?:(?:around|about|roughly|approximately|approx\.?)\s+)?(\d{2,4})\s*[- ]?words?\b/i
+    /\b(?:response|answer|paragraph|explanation|summary|piece|version)\s+(?:that\s+is\s+)?(?:of\s+)?(?:(?:around|about|roughly|approximately|approx\.?)\s+)?(\d{2,4})\s*[- ]?words?d?\b/i
   );
   if (targetAfterMatch) return { count: Number(targetAfterMatch[1]), mode: "target" };
 
@@ -1580,6 +1580,37 @@ const requestedWordCount = (question: string): WordCountRequest | null => {
 const requestedMarkCount = (question: string) => {
   const match = question.match(/\b(\d{1,2})\s*[- ]?marks?\b/i);
   return match ? Number(match[1]) : null;
+};
+
+const countAnswerWords = (answer: string) => answer.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length ?? 0;
+
+const stripAnswerLabel = (answer: string) =>
+  answer
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(
+      /^\s*(?:direct answer|final answer|model answer|answer|version|\d{2,4}\s*[- ]?words?d?\s*(?:version|response|answer)?)\s*[:.-]?\s*/i,
+      ""
+    )
+    .trim();
+
+const wordCountCandidateScore = (wordCount: number, request: WordCountRequest) => {
+  if (request.mode === "minimum") return wordCount >= request.count ? wordCount - request.count : request.count * 10 - wordCount;
+  if (request.mode === "maximum") return wordCount <= request.count ? request.count - wordCount : wordCount * 10;
+  return Math.abs(wordCount - request.count);
+};
+
+const normaliseWordCountAnswer = (answer: string, request: WordCountRequest) => {
+  const sections = answer
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}|(?=^#{1,6}\s)|(?=^\s*(?:direct answer|final answer|model answer|answer|version|\d{2,4}\s*[- ]?words?d?\s*(?:version|response|answer)?)\s*[:.-])/gim)
+    .map(stripAnswerLabel)
+    .filter((section) => countAnswerWords(section) >= 5);
+  const candidates = [stripAnswerLabel(answer), ...sections].filter(Boolean);
+  const best = candidates
+    .map((candidate) => ({ candidate, wordCount: countAnswerWords(candidate) }))
+    .sort((a, b) => wordCountCandidateScore(a.wordCount, request) - wordCountCandidateScore(b.wordCount, request))[0];
+
+  return best?.candidate.trim() || answer;
 };
 
 const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
@@ -1762,6 +1793,11 @@ Session rules:
 - If the question is vague, ask one clarifying question but still give a useful provisional tutoring path.
 - Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
 - Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.`;
+  const answerFormattingRule = wordCountRequest
+    ? `answer must contain only the final student-ready answer text that obeys the word-count request. Do not include markdown headings, labels such as "Direct answer" or "${wordCountRequest.count}-word version", explanatory comments, multiple versions, word-count notes, sources, or coach commentary inside answer.`
+    : responseMode === "direct"
+      ? 'answer should use short markdown headings such as "Direct answer", "Why", "Example" and "Next move".'
+      : 'answer should use short markdown headings such as "Tutor read", "Mini lesson", "Worked together" and "Your turn".';
 
   return `You are ${
     responseMode === "direct"
@@ -1807,11 +1843,7 @@ For attached PDFs:
 - If the extracted text is partial or does not contain the answer, say that and tutor from the closest relevant evidence.
 
 Answer formatting rules:
-- ${
-    responseMode === "direct"
-      ? 'answer should use short markdown headings such as "Direct answer", "Why", "Example" and "Next move".'
-      : 'answer should use short markdown headings such as "Tutor read", "Mini lesson", "Worked together" and "Your turn".'
-  }
+- ${answerFormattingRule}
 - key_points should be practical coach/tutor takeaways, not a summary of generic content.
 - follow_up_questions must be short tap-ready prompts the student can click to ask next, such as marking an attempt, getting a hint, simplifying the idea, or generating a similar question.
 - tutor_plan.diagnosis should name the misconception, missing step, or study behaviour to correct.
@@ -1875,5 +1907,8 @@ export const answerStudyQuestion = async (input: AskStudyQuestionInput): Promise
     throw new Error("OpenAI returned an empty or unparseable study answer");
   }
 
-  return parsed;
+  const wordCountRequest = requestedWordCount(input.question);
+  return wordCountRequest
+    ? { ...parsed, answer: normaliseWordCountAnswer(parsed.answer, wordCountRequest) }
+    : parsed;
 };

@@ -3,7 +3,28 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Coach detects 75-word response requests
+Most recent edit: 2026-05-06 - Coach returns only the requested word-count answer
+
+Summary:
+- Fixed word-count Ask Coach responses that included both a general "Direct answer" and a separate "50-word version".
+- When a word-count request is detected, the main answer field now must contain only the final student-ready answer text.
+- Added backend cleanup that selects the candidate closest to the requested word count if the AI still returns multiple versions.
+- Expanded detection to tolerate common typo phrasing like "50 wordsd".
+- Word-count requests no longer allow markdown headings, duplicate versions, or labels like "Direct answer" inside the model answer.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- node regex/postprocess sanity check for "50 wordsd" and duplicate-version cleanup
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Coach detects 75-word response requests
 
 Summary:
 - Fixed the Ask Coach word-count detector for phrasing like "75-word response" and "75 word answer".
