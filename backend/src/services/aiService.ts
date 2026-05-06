@@ -1548,9 +1548,33 @@ const inferSubjectFromQuestion = (question: string) => {
   return null;
 };
 
-const requestedMinimumWordCount = (question: string) => {
-  const match = question.match(/\b(?:at\s+least|minimum|min\.?|no\s+less\s+than)\s+(\d{2,4})\s+words?\b/i);
-  return match ? Number(match[1]) : null;
+type WordCountRequest = {
+  count: number;
+  mode: "minimum" | "target" | "maximum";
+};
+
+const requestedWordCount = (question: string): WordCountRequest | null => {
+  const minimumMatch = question.match(
+    /\b(?:at\s+least|minimum|min\.?|no\s+less\s+than)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?\b/i
+  );
+  if (minimumMatch) return { count: Number(minimumMatch[1]), mode: "minimum" };
+
+  const maximumMatch = question.match(
+    /\b(?:under|below|less\s+than|fewer\s+than|no\s+more\s+than|maximum|max\.?)\s+(?:about\s+|around\s+|roughly\s+)?(\d{2,4})\s*[- ]?words?\b/i
+  );
+  if (maximumMatch) return { count: Number(maximumMatch[1]), mode: "maximum" };
+
+  const targetBeforeMatch = question.match(
+    /\b(?:exactly|about|around|roughly|approximately|approx\.?)?\s*(?:a|an)?\s*(\d{2,4})\s*[- ]?word\s+(?:response|answer|paragraph|explanation|summary|piece|version)\b/i
+  );
+  if (targetBeforeMatch) return { count: Number(targetBeforeMatch[1]), mode: "target" };
+
+  const targetAfterMatch = question.match(
+    /\b(?:response|answer|paragraph|explanation|summary|piece|version)\s+(?:that\s+is\s+)?(?:of\s+)?(?:(?:around|about|roughly|approximately|approx\.?)\s+)?(\d{2,4})\s*[- ]?words?\b/i
+  );
+  if (targetAfterMatch) return { count: Number(targetAfterMatch[1]), mode: "target" };
+
+  return null;
 };
 
 const requestedMarkCount = (question: string) => {
@@ -1646,7 +1670,7 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
   const responseMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor" ? "tutor" : "direct";
-  const minimumWords = requestedMinimumWordCount(input.question);
+  const wordCountRequest = requestedWordCount(input.question);
   const markCount = requestedMarkCount(input.question);
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
@@ -1678,15 +1702,24 @@ Mode rules:
 - Still make follow_up_questions useful as tap-ready next actions, such as practice, marking or simplifying.\n`
       : "";
   const assessmentConstraintBlock =
-    minimumWords || markCount
+    wordCountRequest || markCount
       ? `\nExplicit assessment constraints detected:
 ${markCount ? `- Mark allocation: ${markCount} mark${markCount === 1 ? "" : "s"}. Match the density and command-term depth expected for that mark allocation.` : ""}
 ${
-  minimumWords
-    ? `- Minimum word count: at least ${minimumWords} words. This is a hard requirement for the model answer itself.
+  wordCountRequest
+    ? wordCountRequest.mode === "minimum"
+      ? `- Minimum word count: at least ${wordCountRequest.count} words. This is a hard requirement for the model answer itself.
 - Count only the student's final answer response, not the explanatory notes, headings, sources, key_points or tutor_plan.
-- To avoid undershooting, write roughly ${minimumWords + 10}-${minimumWords + 25} words in the final answer section unless the student requests an exact maximum.
-- Before returning JSON, mentally count the final answer words and revise if it is below ${minimumWords}.`
+- To avoid undershooting, write roughly ${wordCountRequest.count + 10}-${wordCountRequest.count + 25} words in the final answer section unless the student requests an exact maximum.
+- Before returning JSON, mentally count the final answer words and revise if it is below ${wordCountRequest.count}.`
+      : wordCountRequest.mode === "maximum"
+        ? `- Maximum word count: no more than ${wordCountRequest.count} words in the model answer itself.
+- Count only the student's final answer response, not explanatory notes, headings, sources, key_points or tutor_plan.
+- Before returning JSON, mentally count the final answer words and revise if it is above ${wordCountRequest.count}.`
+        : `- Target word count: about ${wordCountRequest.count} words in the model answer itself.
+- Count only the student's final answer response, not explanatory notes, headings, sources, key_points or tutor_plan.
+- The final answer should be within ${Math.max(1, wordCountRequest.count - 5)}-${wordCountRequest.count + 5} words unless the student explicitly asks for a minimum or maximum.
+- Before returning JSON, mentally count the final answer words and revise if it is far below or above ${wordCountRequest.count}.`
     : ""
 }
 - Do not claim the answer satisfies a word or mark requirement unless it actually does.\n`

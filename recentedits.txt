@@ -3,7 +3,27 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Ask Coach saves chat sessions
+Most recent edit: 2026-05-06 - Coach detects 75-word response requests
+
+Summary:
+- Fixed the Ask Coach word-count detector for phrasing like "75-word response" and "75 word answer".
+- Added target word-count handling separate from minimum word-count handling.
+- A request like "turn this into a 75-word response" now tells the coach to make the actual model answer roughly 70-80 words.
+- Existing "at least 75 words" requests still enforce a minimum and overshoot slightly to avoid undershooting.
+- Added maximum word-count detection for phrasing like "under 50 words" or "no more than 50 words".
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Ask Coach saves chat sessions
 
 Summary:
 - Changed direct Ask Coach saving from one note per question to one saved coach chat per subject/thread.
