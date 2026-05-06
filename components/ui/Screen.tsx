@@ -39,11 +39,11 @@ export function Screen({ children, scroll = true, scrollRef }: ScreenProps) {
     </Animated.View>
   );
   const content = scroll ? (
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.viewport} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {stack}
     </ScrollView>
   ) : (
-    <View style={styles.content}>{stack}</View>
+    <View style={[styles.viewport, styles.content]}>{stack}</View>
   );
 
   return (
@@ -57,7 +57,12 @@ export function Screen({ children, scroll = true, scrollRef }: ScreenProps) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    overflow: "hidden"
+    overflow: "hidden",
+    position: "relative"
+  },
+  viewport: {
+    flex: 1,
+    zIndex: 1
   },
   content: {
     padding: 20,

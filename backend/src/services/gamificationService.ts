@@ -105,42 +105,49 @@ export const THEME_SHOP_ITEMS = [
     id: "cherry_blossom",
     name: "Cherry Blossom",
     price: 880,
+    motion: "blossom",
     colors: { primary: "#F9A8D4", secondary: "#A7F3D0", background: "#160D15", surface: "#251822" }
   },
   {
     id: "spring_picnic",
     name: "Spring Picnic",
     price: 940,
+    motion: "spring",
     colors: { primary: "#86EFAC", secondary: "#F9A8D4", background: "#08130F", surface: "#13221A" }
   },
   {
     id: "summer_glow",
     name: "Summer Glow",
     price: 1000,
+    motion: "glow",
     colors: { primary: "#38BDF8", secondary: "#FBBF24", background: "#081018", surface: "#132231" }
   },
   {
     id: "easter_pastel",
     name: "Easter Pastel",
     price: 1060,
+    motion: "pastel",
     colors: { primary: "#C4B5FD", secondary: "#F9A8D4", background: "#111022", surface: "#1D1A33" }
   },
   {
     id: "christmas_lights",
     name: "Christmas Lights",
     price: 1120,
+    motion: "lights",
     colors: { primary: "#EF4444", secondary: "#FACC15", background: "#07110C", surface: "#121F17" }
   },
   {
     id: "snow_day",
     name: "Snow Day",
     price: 1180,
+    motion: "snow",
     colors: { primary: "#BAE6FD", secondary: "#C4B5FD", background: "#071118", surface: "#10202A" }
   },
   {
     id: "pink_cloud",
     name: "Pink Cloud",
     price: 1240,
+    motion: "blossom",
     colors: { primary: "#F0ABFC", secondary: "#FDA4AF", background: "#150F1A", surface: "#241929" }
   }
 ] as const;

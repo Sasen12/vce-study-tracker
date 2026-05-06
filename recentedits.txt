@@ -3,7 +3,30 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-05 - Home cleanup and Insights screen
+Most recent edit: 2026-05-06 - Animated theme motion fix
+
+Summary:
+- Rebuilt components/ui/ThemeAmbientMotion.tsx so animated themes use a reliable React Native Animated loop instead of the previous nearly-invisible edge-line Reanimated effect.
+- Added distinct ambient motion marks for each animated theme family:
+  - Cherry Blossom / Pink Cloud: drifting petal-style marks.
+  - Spring Picnic: soft moving leaf/dash marks.
+  - Summer Glow: slow horizontal glow bands.
+  - Easter Pastel: drifting pastel confetti marks.
+  - Christmas Lights: pulsing light dashes.
+  - Snow Day: falling snowflake-style marks.
+- Made components/ui/Screen.tsx explicitly layer the animated theme background behind screen content with stable z-indexing.
+- Added motion metadata to the backend theme shop catalogue and frontend ThemeShopItem API type so animated theme data stays synced wherever the shop catalogue is served.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- npm run build:web
+
+Deployment status:
+- Not pushed or deployed in this turn.
+
+Previous edit: 2026-05-05 - Home cleanup and Insights screen
 
 Summary:
 - Simplified the Home page so it follows Sasen's requested order:

@@ -231,6 +231,7 @@ export type ThemeShopItem = {
   id: string;
   name: string;
   price: number;
+  motion?: "blossom" | "spring" | "glow" | "pastel" | "lights" | "snow";
   colors: {
     primary: string;
     secondary: string;
