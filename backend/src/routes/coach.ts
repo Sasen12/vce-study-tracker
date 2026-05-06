@@ -63,6 +63,8 @@ type SessionForPlan = {
 type NoteForPlan = {
   title: string;
   body: string;
+  noteType?: string;
+  tags?: unknown;
   subject: SubjectLabel;
 };
 
@@ -243,6 +245,41 @@ const resourceDto = (resource: {
 });
 
 const bullets = (items: string[]) => (items.length ? items.map((item) => `- ${item}`).join("\n") : "- Nothing flagged.");
+const tagsAsArray = (tags: unknown): string[] =>
+  Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [];
+
+const isMistakeNote = (note: NoteForPlan) => {
+  const tags = tagsAsArray(note.tags);
+  return note.noteType === "mistake_log" || tags.some((tag) => /mistake|weak|timer-check/i.test(tag));
+};
+
+const compactText = (value: string, maxLength = 260) =>
+  value
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+const buildAskCoachLearningSignals = (reflections: ReflectionForPlan[], notes: NoteForPlan[]) => {
+  const confusionSignals = reflections
+    .filter((reflection) => reflection.confused.trim())
+    .slice(0, 3)
+    .map(
+      (reflection) =>
+        `Confusion from ${reflection.subject?.subjectName ?? "General"}: ${compactText(reflection.confused, 220)}`
+    );
+
+  const mistakeSignals = notes
+    .filter(isMistakeNote)
+    .slice(0, 4)
+    .map((note) => `Recent mistake in ${note.subject?.subjectName ?? "General"} (${note.title}): ${compactText(note.body)}`);
+
+  const contextSignals = notes
+    .filter((note) => !isMistakeNote(note))
+    .slice(0, 3)
+    .map((note) => `Recent note in ${note.subject?.subjectName ?? "General"} (${note.title}): ${compactText(note.body, 180)}`);
+
+  return [...mistakeSignals, ...confusionSignals, ...contextSignals].slice(0, 8).join("\n");
+};
 
 const formatClassNoteBody = (draft: ClassNoteDraft, transcript: string) => {
   const body = [
@@ -771,8 +808,10 @@ coachRouter.post(
 
     const answer = await answerStudyQuestion({
       subject: subject?.subjectName,
+      subjectUnit: subject?.unit,
       question: payload.question,
       context,
+      learningSignals: buildAskCoachLearningSignals(reflections, notes),
       sourceLabels,
       screenshots: files.map((file) => ({
         fileName: file.originalname,

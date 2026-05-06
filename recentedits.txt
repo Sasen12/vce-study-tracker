@@ -3,7 +3,40 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Study timer optional check-ins
+Most recent edit: 2026-05-06 - Tutor-style Ask Coach upgrade
+
+Summary:
+- Upgraded Ask Coach so responses behave more like a VCE tutor than a chatbot.
+- Backend AI responses now include a structured tutor_plan with:
+  - diagnosis
+  - teaching move
+  - guided steps
+  - your turn task
+  - check question
+  - next revision action
+- Rewrote the Ask Coach prompt to require tutoring behaviour:
+  - diagnose what the student is stuck on
+  - teach the next useful step
+  - use guided reasoning, hints and checking questions
+  - avoid generic chatbot filler
+  - adapt the tutoring pattern for maths/science/accounting vs English/humanities/business/legal
+- Ask Coach now passes the selected subject unit and recent learning signals from mistakes, reflections and notes into the tutor prompt.
+- Updated the Study > Coach UI from "Ask coach" to "Ask tutor" with a dedicated Tutor plan card.
+- Saved tutor responses now preserve the tutor plan in the saved note body.
+- Formatted saved answers now recognise Tutor plan / Guided steps as section headings.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Study timer optional check-ins
 
 Summary:
 - Fixed the Study timer start flow so the timer begins immediately and the browser fullscreen request is treated as optional focus lock.

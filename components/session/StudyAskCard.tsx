@@ -113,7 +113,7 @@ const subjectDomains: SubjectDomain[] = [
   }
 ];
 
-const coachNoteTitle = (question: string) => `Coach: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
+const coachNoteTitle = (question: string) => `Tutor: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
 
 const coachNoteBody = (question: string, answer: StudyAnswer, screenshotCount: number) =>
   [
@@ -122,6 +122,16 @@ const coachNoteBody = (question: string, answer: StudyAnswer, screenshotCount: n
     screenshotCount ? `Screenshots attached: ${screenshotCount}` : null,
     "Answer",
     answer.answer,
+    answer.tutor_plan
+      ? `Tutor plan
+Diagnosis: ${answer.tutor_plan.diagnosis}
+Teaching move: ${answer.tutor_plan.teaching_move}
+Guided steps
+${answer.tutor_plan.guided_steps.map((step) => `- ${step}`).join("\n")}
+Your turn: ${answer.tutor_plan.your_turn}
+Check question: ${answer.tutor_plan.check_question}
+Next revision: ${answer.tutor_plan.next_revision}`
+      : null,
     answer.key_points.length ? `Key points\n${answer.key_points.map((point) => `- ${point}`).join("\n")}` : null,
     answer.sources_used.length
       ? `Sources\n${answer.sources_used
@@ -326,7 +336,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
           noteType: "general",
           tags: [coachAnswerTag]
         });
-        setMessage(routed ? `Routed to ${questionSubject.subjectName} and saved.` : "Coach answer saved.");
+        setMessage(routed ? `Routed to ${questionSubject.subjectName} and saved.` : "Tutor response saved.");
       } catch {
         setMessage("Answer shown, but it could not be saved.");
       }
@@ -342,7 +352,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text variant="titleLarge" style={styles.title}>
-            Ask coach
+            Ask tutor
           </Text>
           <Text style={styles.muted}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
           <Text style={styles.pasteHint}>Upload images or paste screenshots with Ctrl+V</Text>
@@ -354,7 +364,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
 
       <TextInput
         mode="outlined"
-        label="Question"
+        label="What are you stuck on?"
         value={question}
         multiline
         numberOfLines={5}
@@ -379,7 +389,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
           Image
         </Button>
         <Button mode="contained" icon="send" loading={asking} disabled={asking || !selectedSubject || !question.trim()} onPress={ask}>
-          Ask
+          Tutor me
         </Button>
       </View>
 
@@ -387,9 +397,46 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
         <View style={styles.answerStack}>
           <FormattedStudyText value={answer.answer} />
 
+          {answer.tutor_plan ? (
+            <View style={styles.tutorPlan}>
+              <View style={styles.tutorPlanHeader}>
+                <Text style={styles.blockTitle}>Tutor plan</Text>
+                <Text style={styles.tutorBadge}>your turn</Text>
+              </View>
+              <View style={styles.tutorCallout}>
+                <Text style={styles.tutorLabel}>Diagnosis</Text>
+                <Text style={styles.tutorText}>{answer.tutor_plan.diagnosis}</Text>
+              </View>
+              <View style={styles.tutorCallout}>
+                <Text style={styles.tutorLabel}>Teaching move</Text>
+                <Text style={styles.tutorText}>{answer.tutor_plan.teaching_move}</Text>
+              </View>
+              <View style={styles.guidedSteps}>
+                {answer.tutor_plan.guided_steps.map((step, index) => (
+                  <View key={`${step}-${index}`} style={styles.guidedStep}>
+                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                    <Text style={styles.tutorText}>{step}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.tutorCalloutStrong}>
+                <Text style={styles.tutorLabel}>Your turn</Text>
+                <Text style={styles.tutorText}>{answer.tutor_plan.your_turn}</Text>
+              </View>
+              <View style={styles.tutorCallout}>
+                <Text style={styles.tutorLabel}>Check</Text>
+                <Text style={styles.tutorText}>{answer.tutor_plan.check_question}</Text>
+              </View>
+              <View style={styles.tutorCallout}>
+                <Text style={styles.tutorLabel}>Next revision</Text>
+                <Text style={styles.tutorText}>{answer.tutor_plan.next_revision}</Text>
+              </View>
+            </View>
+          ) : null}
+
           {answer.key_points.length ? (
             <View style={styles.block}>
-              <Text style={styles.blockTitle}>Key points</Text>
+              <Text style={styles.blockTitle}>Tutor focus</Text>
               {answer.key_points.map((point, index) => (
                 <Text key={`${point}-${index}`} style={styles.listText}>
                   - {point}
@@ -422,7 +469,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
       {coachHistory.length ? (
         <View style={styles.historyStack}>
           <View style={styles.historyHeader}>
-            <Text style={styles.blockTitle}>Saved coach answers</Text>
+            <Text style={styles.blockTitle}>Saved tutor answers</Text>
             <Text style={styles.muted}>
               {coachHistory.length} saved{selectedSubject ? "" : " total"}
             </Text>
@@ -433,7 +480,7 @@ export function StudyAskCard({ selectedSubject }: StudyAskCardProps) {
               <View key={note.id} style={styles.historyItem}>
                 <View style={styles.historyRow}>
                   <View style={styles.historyText}>
-                    <Text style={styles.historyTitle}>{note.title.replace(/^Coach:\s*/, "")}</Text>
+                    <Text style={styles.historyTitle}>{note.title.replace(/^(Coach|Tutor):\s*/, "")}</Text>
                     <Text style={styles.muted}>
                       {note.subject?.subjectName ?? "General"} - {formatSavedDate(note.createdAt)}
                     </Text>
@@ -569,6 +616,82 @@ const styles = StyleSheet.create({
   blockTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  tutorPlan: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}44`,
+    backgroundColor: `${palette.primary}0F`,
+    padding: 12
+  },
+  tutorPlanHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  tutorBadge: {
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}16`,
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    textTransform: "uppercase"
+  },
+  tutorCallout: {
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10
+  },
+  tutorCalloutStrong: {
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}12`,
+    padding: 10
+  },
+  tutorLabel: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  tutorText: {
+    flex: 1,
+    color: palette.text,
+    lineHeight: 20
+  },
+  guidedSteps: {
+    gap: 8
+  },
+  guidedStep: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9
+  },
+  stepNumber: {
+    width: 22,
+    height: 22,
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}55`,
+    backgroundColor: `${palette.primary}18`,
+    color: palette.primary,
+    textAlign: "center",
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
   },
   listText: {
     color: palette.muted,

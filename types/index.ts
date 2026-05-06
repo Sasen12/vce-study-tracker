@@ -289,6 +289,14 @@ export type StudyAnswer = {
   key_points: string[];
   sources_used: StudyAnswerSource[];
   follow_up_questions: string[];
+  tutor_plan?: {
+    diagnosis: string;
+    teaching_move: string;
+    guided_steps: string[];
+    your_turn: string;
+    check_question: string;
+    next_revision: string;
+  };
   confidence: "low" | "medium" | "high";
 };
 

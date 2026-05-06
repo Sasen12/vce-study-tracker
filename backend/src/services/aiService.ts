@@ -100,11 +100,21 @@ const studyAnswerSourceSchema = z.object({
   detail: z.string()
 });
 
+const tutorPlanSchema = z.object({
+  diagnosis: z.string(),
+  teaching_move: z.string(),
+  guided_steps: z.array(z.string()),
+  your_turn: z.string(),
+  check_question: z.string(),
+  next_revision: z.string()
+});
+
 const studyAnswerSchema = z.object({
   answer: z.string(),
   key_points: z.array(z.string()),
   sources_used: z.array(studyAnswerSourceSchema),
   follow_up_questions: z.array(z.string()),
+  tutor_plan: tutorPlanSchema,
   confidence: z.enum(["low", "medium", "high"])
 });
 
@@ -207,8 +217,10 @@ type AskScreenshot = {
 
 type AskStudyQuestionInput = {
   subject?: string | null;
+  subjectUnit?: string | null;
   question: string;
   context: string;
+  learningSignals?: string;
   screenshots?: AskScreenshot[];
   sourceLabels?: string[];
 };
@@ -1532,20 +1544,39 @@ const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
 
   return {
-    answer: `For ${subject}, I would start by turning the question into a VCE-style explanation: define the key term, connect it to the specific scenario, then finish with the exact consequence or judgement. ${
-      input.screenshots?.length ? "I can see a screenshot was attached; with a real OpenAI key, I would read the image and use it directly in the answer." : ""
+    answer: `## Tutor read
+You are probably not missing the whole topic; you need a clearer method for turning the question into marks.
+
+## Guided explanation
+Start by naming the key idea in ${subject}. Then link it to the exact evidence, scenario, data or wording in the question. Finish with the consequence, judgement or final interpreted result.
+
+## Your turn
+Write one sentence that uses a subject term and one sentence that applies it to the question. ${
+      input.screenshots?.length ? "A real OpenAI key would let me read the attached screenshot and tutor from the exact visible question." : ""
     }`,
     key_points: [
-      "Use subject-specific terminology before you explain the example.",
-      "Link each sentence back to the question instead of listing facts.",
-      "If this is exam practice, finish with a clear final judgement or calculation."
+      "Identify the exact skill the question is testing before answering.",
+      "Explain one step, then make the student apply that step.",
+      "End with a check question so the student has to retrieve, not just read."
     ],
     sources_used: input.sourceLabels?.slice(0, 4).map((label) => ({ title: label, source_type: "local", detail: "Available app context" })) ?? [],
     follow_up_questions: [
-      "Can you turn this into a 4-mark exam response?",
-      "What would the marking criteria be?",
-      "Can you give me one similar practice question?"
+      "Can you quiz me on this with one hint at a time?",
+      "Can you mark my attempt and show the next fix?",
+      "Can you give me a similar question without showing the answer first?"
     ],
+    tutor_plan: {
+      diagnosis: "The student needs a guided method, not just a final answer.",
+      teaching_move: "Model the first move, then hand one small task back to the student.",
+      guided_steps: [
+        "Name the command word or skill being tested.",
+        "Choose the exact formula, term, evidence or rule that matches the question.",
+        "Apply it to the scenario and finish with an interpreted conclusion."
+      ],
+      your_turn: "Write a two-sentence attempt using one subject term and one application sentence.",
+      check_question: "Which word or piece of data in the question tells you what method to use?",
+      next_revision: "Save the check question as a flashcard or redo one similar question tomorrow."
+    },
     confidence: input.context || input.screenshots?.length ? "medium" : "low"
   };
 };
@@ -1554,16 +1585,20 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question);
   const studyDesign = subject ? getStudyDesignContext(subject) : null;
   const studyDesignBlock = buildStudyDesignBlock(studyDesign);
+  const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
     : "";
   const sourceBlock = input.sourceLabels?.length
     ? `\nAvailable local source labels:\n${input.sourceLabels.map((label) => `- ${label}`).join("\n")}\n`
     : "";
+  const learningSignalsBlock = input.learningSignals
+    ? `\nRecent learning signals from the student's app history:\n${input.learningSignals}\n`
+    : "\nRecent learning signals from the student's app history: none available.\n";
 
-  return `You are a precise, encouraging VCE study tutor.
+  return `You are a precise, encouraging VCE tutor sitting beside the student. You are not a chatbot.
 
-Subject: ${subject ?? "General VCE study"}
+Subject: ${subjectLabel}
 
 Student question:
 ${input.question}
@@ -1572,8 +1607,20 @@ ${studyDesignBlock}
 Student notes, reflections and uploaded textbook/resource context:
 ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
+${learningSignalsBlock}
 
-Answer the student directly. Use the subject's study design and uploaded materials where they are relevant. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
+Tutor behaviour:
+- Diagnose what the student is likely stuck on before explaining.
+- Teach the next useful step, not everything you know.
+- Prefer hints, worked thinking, checking questions and "your turn" tasks over giving a finished answer only.
+- If the student asks for the answer, give a model only after showing the method and explain why it earns marks.
+- If the student is doing maths/science/accounting, show setup, one guided step, final interpretation and a quick error check.
+- If the student is doing English/humanities/health/business/legal, show command-term unpacking, evidence/application, a stronger sentence and marker cues.
+- If the question is vague, ask one clarifying question but still give a useful provisional tutoring path.
+- Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
+- Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.
+
+Use the subject's study design and uploaded materials where they are relevant. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
 ${studyDesignReliabilityRules(studyDesign)}
 
 Confidence rules:
@@ -1587,11 +1634,23 @@ For screenshots:
 - Explain what it means for the selected subject.
 - If the screenshot is unclear, say what you can and cannot read.
 
+Answer formatting rules:
+- answer should use short markdown headings: "Tutor read", "Guided explanation", "Worked move" when useful, and "Your turn".
+- key_points should be tutoring takeaways, not a summary of generic content.
+- follow_up_questions should be phrased as actions the student can tap next, such as marking an attempt, getting a hint, or generating a similar question.
+- tutor_plan.diagnosis should name the misconception, missing step, or study behaviour to correct.
+- tutor_plan.teaching_move should name the specific tutoring move used.
+- tutor_plan.guided_steps should contain 3 to 5 short steps the student can follow.
+- tutor_plan.your_turn must be a concrete task the student can do now.
+- tutor_plan.check_question must be a retrieval question that checks understanding.
+- tutor_plan.next_revision must say what to review or practise next.
+
 Return only valid JSON with:
 - answer: a clear answer in student-friendly prose
 - key_points: short strings with the main takeaways
 - sources_used: objects with title, source_type and detail
 - follow_up_questions: short suggested follow-up questions the student could ask
+- tutor_plan: diagnosis, teaching_move, guided_steps, your_turn, check_question and next_revision
 - confidence: low, medium or high`;
 };
 
@@ -1626,7 +1685,7 @@ export const answerStudyQuestion = async (input: AskStudyQuestionInput): Promise
   const response = await openai.responses.parse({
     model,
     input: responseInput,
-    max_output_tokens: 2200,
+    max_output_tokens: 2800,
     store: false,
     reasoning: modelSupportsReasoning(model) ? { effort: "low" } : undefined,
     text: {

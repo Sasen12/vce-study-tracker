@@ -14,7 +14,15 @@ type FormattedBlock = {
   text: string;
 };
 
-const labelHeadings = new Set(["question", "answer", "key points", "sources", "follow-up questions"]);
+const labelHeadings = new Set([
+  "question",
+  "answer",
+  "tutor plan",
+  "guided steps",
+  "key points",
+  "sources",
+  "follow-up questions"
+]);
 
 const replaceSimpleCommand = (value: string, command: string, replacement: string) =>
   value.replace(new RegExp(`\\\\${command}\\b`, "g"), replacement);
