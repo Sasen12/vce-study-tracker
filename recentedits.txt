@@ -8,6 +8,7 @@ Most recent edit: 2026-05-06 - Stale streak reset fix
 Summary:
 - Fixed streaks that stayed visible after a missed day when the nightly reset job had not run.
 - backend/src/services/gamificationService.ts now normalizes expired streaks inside ensureGamification whenever gamification is read.
+- Added utils/streaks.ts and switched Home/Insights to display the active streak from lastStudyDate, so the UI also hides stale streaks if the backend host is still catching up to the latest push.
 - A streak remains active if the last study date is today or yesterday, so studying today after studying yesterday still extends the streak correctly.
 - If the last study date is older than yesterday, the current streak resets to 0 on the next app data refresh.
 

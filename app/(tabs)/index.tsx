@@ -24,6 +24,7 @@ import {
   globalStudySearch,
   sacPanicTag
 } from "@/utils/vceCoach";
+import { getActiveStreak } from "@/utils/streaks";
 
 const daysUntil = (eventDate: string) => {
   const today = new Date();
@@ -160,6 +161,7 @@ export default function DashboardScreen() {
   const showThemeRequestThankYou =
     user?.email?.trim().toLowerCase() === themeRequestThankYouEmail &&
     Boolean(gamification?.unlockedCosmetics.includes(themeRequestThankYouThemeId));
+  const activeStreak = getActiveStreak(gamification);
   const weaknessSummary = useMemo(
     () => buildWeaknessSummary({ subjects, sessions, goals, notes, savedQuestions, events }),
     [events, goals, notes, savedQuestions, sessions, subjects]
@@ -255,7 +257,7 @@ export default function DashboardScreen() {
             Hey {user?.displayName ?? "there"}
           </Text>
         </View>
-        <StreakWidget streak={gamification?.currentStreak ?? 0} />
+        <StreakWidget streak={activeStreak} />
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

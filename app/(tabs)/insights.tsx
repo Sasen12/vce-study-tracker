@@ -16,6 +16,7 @@ import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import { buildWeeklyReport, isFlashcardNote, isMistakeNote, isSacPanicNote } from "@/utils/vceCoach";
+import { getActiveStreak } from "@/utils/streaks";
 
 const startOfWeek = () => {
   const date = new Date();
@@ -44,6 +45,7 @@ export default function InsightsScreen() {
   const todayMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
   const weekMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
   const monthMinutes = Math.round((stats?.monthSeconds ?? 0) / 60);
+  const activeStreak = getActiveStreak(gamification);
   const dailyTargetMinutes = useMemo(() => {
     const weeklyHours = goals.reduce((sum, goal) => sum + Number(goal.weeklyHoursTarget ?? 0), 0);
     return weeklyHours ? Math.round((weeklyHours * 60) / 7) : 120;
@@ -164,7 +166,7 @@ export default function InsightsScreen() {
                 <Text style={styles.statLabel}>total XP</Text>
               </View>
               <View style={styles.statTile}>
-                <Text style={styles.statValue}>{gamification?.currentStreak ?? 0}</Text>
+                <Text style={styles.statValue}>{activeStreak}</Text>
                 <Text style={styles.statLabel}>day streak</Text>
               </View>
             </View>
