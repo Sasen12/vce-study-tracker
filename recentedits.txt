@@ -3,7 +3,28 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Stale streak reset fix
+Most recent edit: 2026-05-06 - Spaced review and break guidance
+
+Summary:
+- Added a lightweight spaced-repetition scheduler for saved questions and flashcards without a database migration.
+- New utils/spacedReview.ts persists local review state with AsyncStorage and schedules review intervals of 1, 3, 7, 14, 30, and 60 days.
+- Questions > Saved now sorts saved questions by due status and adds Again / Good / Easy review buttons.
+- Questions > Tools > Cards now shows due-now and total-card counts, sorts cards by due status, and adds Again / Good / Easy review buttons to move cards through the schedule.
+- Study > Timer now shows a purposeful break card with duration and activity suggestions that adapt to the target/session length.
+- The timer break card changes tone when the target is reached and lets students mark the reset locally with a short confirmation message.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Stale streak reset fix
 
 Summary:
 - Fixed streaks that stayed visible after a missed day when the nightly reset job had not run.

@@ -34,6 +34,44 @@ const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (secon
 const checkpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
 
+const breakPlanFor = (elapsedSeconds: number, targetSeconds: number) => {
+  const plannedMinutes = Math.max(Math.round(Math.max(elapsedSeconds, targetSeconds) / 60), 1);
+
+  if (plannedMinutes >= 70) {
+    return {
+      duration: "15-25 min",
+      title: "Long reset",
+      action: "Walk outside, eat something real, then come back for one light review.",
+      tone: "Your brain has done enough heavy lifting for now."
+    };
+  }
+
+  if (plannedMinutes >= 50) {
+    return {
+      duration: "10-15 min",
+      title: "Full reset",
+      action: "Stand up, refill water, stretch hips and shoulders, then do three slow breaths.",
+      tone: "Protect the next block by actually stepping away."
+    };
+  }
+
+  if (plannedMinutes >= 25) {
+    return {
+      duration: "5-10 min",
+      title: "Purposeful break",
+      action: "Move away from the screen, stretch wrists and neck, then review the next tiny task.",
+      tone: "A clean pause beats drifting into half-work."
+    };
+  }
+
+  return {
+    duration: "3-5 min",
+    title: "Micro reset",
+    action: "Stand, breathe slowly, look away from the screen, and return to one clear question.",
+    tone: "Short blocks still deserve a real reset."
+  };
+};
+
 const fallbackOptions = (question: GeneratedQuestion): GeneratedAnswerOption[] => [
   { text: question.model_answer, correct: true },
   { text: "Define the key term only, without applying it to the exact scenario.", correct: false },
@@ -193,6 +231,8 @@ export default function StudyScreen() {
   const overtimeSeconds = Math.max(0, elapsed - targetSeconds);
   const countdownLabel =
     elapsed >= targetSeconds && elapsed > 0 ? `+${formatElapsed(overtimeSeconds)} over target` : formatElapsed(remainingSeconds);
+  const breakPlan = useMemo(() => breakPlanFor(elapsed, targetSeconds), [elapsed, targetSeconds]);
+  const breakReady = elapsed >= targetSeconds && elapsed > 0;
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
@@ -544,6 +584,25 @@ export default function StudyScreen() {
             </View>
           </AppCard>
 
+          <AppCard style={[styles.breakCard, breakReady && styles.breakCardReady]}>
+            <View style={styles.breakHeader}>
+              <View style={styles.breakHeaderText}>
+                <Text style={styles.breakTitle}>{breakReady ? breakPlan.title : "Planned reset"}</Text>
+                <Text style={styles.muted}>{breakPlan.tone}</Text>
+              </View>
+              <Text style={styles.breakDuration}>{breakPlan.duration}</Text>
+            </View>
+            <Text style={styles.breakAction}>{breakPlan.action}</Text>
+            <Button
+              mode={breakReady ? "contained" : "outlined"}
+              compact
+              icon="meditation"
+              onPress={() => setMessage(`Reset done: ${breakPlan.action}`)}
+            >
+              Mark reset
+            </Button>
+          </AppCard>
+
           {message ? (
             <AppCard style={styles.messageCard}>
               <Text style={styles.message}>{message}</Text>
@@ -775,6 +834,46 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 12
+  },
+  breakCard: {
+    gap: 12,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}10`
+  },
+  breakCardReady: {
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}12`
+  },
+  breakHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  breakHeaderText: {
+    flex: 1,
+    minWidth: 0
+  },
+  breakTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontFamily: "Outfit_700Bold"
+  },
+  breakDuration: {
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}55`,
+    backgroundColor: `${palette.info}16`,
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  breakAction: {
+    color: palette.text,
+    lineHeight: 20
   },
   messageCard: {
     borderColor: `${palette.success}55`,

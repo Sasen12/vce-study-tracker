@@ -23,6 +23,16 @@ import {
   parseFlashcardNote,
   parseMistakeNote
 } from "@/utils/vceCoach";
+import {
+  getReviewStatus,
+  loadReviewStates,
+  nextReviewState,
+  reviewKeyFor,
+  saveReviewStates,
+  type ReviewQuality,
+  type ReviewStateMap,
+  type ReviewStatus
+} from "@/utils/spacedReview";
 
 const width = Dimensions.get("window").width;
 
@@ -162,7 +172,15 @@ function QuestionCard({
   );
 }
 
-function SavedQuestionCard({ item }: { item: SavedQuestion }) {
+function SavedQuestionCard({
+  item,
+  reviewStatus,
+  onReview
+}: {
+  item: SavedQuestion;
+  reviewStatus: ReviewStatus;
+  onReview: (quality: ReviewQuality) => void;
+}) {
   return (
     <AppCard style={styles.savedCard}>
       <View style={styles.questionHeader}>
@@ -171,6 +189,23 @@ function SavedQuestionCard({ item }: { item: SavedQuestion }) {
       </View>
       <Text style={styles.questionText}>{item.question}</Text>
       <Text style={styles.answer}>{item.modelAnswer}</Text>
+      <View style={styles.reviewMetaBox}>
+        <View>
+          <Text style={reviewStatus.due ? styles.reviewDueText : styles.reviewNextText}>{reviewStatus.label}</Text>
+          <Text style={styles.muted}>{reviewStatus.intervalLabel}</Text>
+        </View>
+        <View style={styles.reviewButtons}>
+          <Button mode="outlined" compact onPress={() => onReview("again")}>
+            Again
+          </Button>
+          <Button mode="contained-tonal" compact onPress={() => onReview("good")}>
+            Good
+          </Button>
+          <Button mode="contained" compact onPress={() => onReview("easy")}>
+            Easy
+          </Button>
+        </View>
+      </View>
     </AppCard>
   );
 }
@@ -214,14 +249,18 @@ function MistakeCard({
 
 function FlashcardReview({
   note,
+  reviewStatus,
   revealed,
   onFlip,
-  onDelete
+  onDelete,
+  onReview
 }: {
   note: StudyNote;
+  reviewStatus: ReviewStatus;
   revealed: boolean;
   onFlip: () => void;
   onDelete: (id: string) => void;
+  onReview: (quality: ReviewQuality) => void;
 }) {
   const card = parseFlashcardNote(note);
   return (
@@ -232,6 +271,23 @@ function FlashcardReview({
       </View>
       <Text style={styles.flashcardFace}>{revealed ? card.back : card.front}</Text>
       <Text style={styles.muted}>Source: {card.sourceTitle}</Text>
+      <View style={styles.reviewMetaBox}>
+        <View>
+          <Text style={reviewStatus.due ? styles.reviewDueText : styles.reviewNextText}>{reviewStatus.label}</Text>
+          <Text style={styles.muted}>{reviewStatus.intervalLabel}</Text>
+        </View>
+        <View style={styles.reviewButtons}>
+          <Button mode="outlined" compact onPress={() => onReview("again")}>
+            Again
+          </Button>
+          <Button mode="contained-tonal" compact onPress={() => onReview("good")}>
+            Good
+          </Button>
+          <Button mode="contained" compact onPress={() => onReview("easy")}>
+            Easy
+          </Button>
+        </View>
+      </View>
       <View style={styles.cardActions}>
         <Button mode="contained" icon={revealed ? "eye-off" : "eye"} onPress={onFlip}>
           {revealed ? "Hide" : "Reveal"}
@@ -299,12 +355,26 @@ export default function QuestionsScreen() {
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [flashcardSourceId, setFlashcardSourceId] = useState<string | null>(null);
   const [creatingFlashcards, setCreatingFlashcards] = useState(false);
+  const [reviewStates, setReviewStates] = useState<ReviewStateMap>({});
 
   useFocusEffect(
     useCallback(() => {
       fetchAll();
     }, [fetchAll])
   );
+
+  useEffect(() => {
+    let active = true;
+    loadReviewStates()
+      .then((states) => {
+        if (active) setReviewStates(states);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const selectedSubject = subjects.find((subject) => subject.id === subjectId) ?? subjects[0];
   const commandTermPrompts = useMemo(
@@ -345,6 +415,22 @@ export default function QuestionsScreen() {
     () => [...filteredSaved].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, 3),
     [filteredSaved]
   );
+  const savedReviewDeck = useMemo(
+    () =>
+      filteredSaved
+        .map((item) => ({
+          item,
+          key: reviewKeyFor("question", item.id),
+          status: getReviewStatus(reviewKeyFor("question", item.id), item.createdAt, reviewStates)
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.status.due) - Number(a.status.due) ||
+            new Date(a.status.dueAt).getTime() - new Date(b.status.dueAt).getTime()
+        ),
+    [filteredSaved, reviewStates]
+  );
+  const dueSavedCount = savedReviewDeck.filter((item) => item.status.due).length;
   const mistakeNotes = useMemo(
     () =>
       notes
@@ -359,6 +445,22 @@ export default function QuestionsScreen() {
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [filterSubjectId, notes]
   );
+  const flashcardReviewDeck = useMemo(
+    () =>
+      flashcardNotes
+        .map((note) => ({
+          note,
+          key: reviewKeyFor("flashcard", note.id),
+          status: getReviewStatus(reviewKeyFor("flashcard", note.id), note.createdAt, reviewStates)
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.status.due) - Number(a.status.due) ||
+            new Date(a.status.dueAt).getTime() - new Date(b.status.dueAt).getTime()
+        ),
+    [flashcardNotes, reviewStates]
+  );
+  const dueFlashcardCount = flashcardReviewDeck.filter((item) => item.status.due).length;
   const flashcardSources = useMemo(
     () =>
       notes
@@ -367,7 +469,8 @@ export default function QuestionsScreen() {
         .slice(0, 12),
     [filterSubjectId, notes]
   );
-  const currentFlashcard = flashcardNotes[flashcardIndex] ?? flashcardNotes[0] ?? null;
+  const currentFlashcardItem = flashcardReviewDeck[flashcardIndex] ?? flashcardReviewDeck[0] ?? null;
+  const currentFlashcard = currentFlashcardItem?.note ?? null;
   const selectedCommandPrompt = commandTermPrompts.find((prompt) => prompt.term === commandTerm) ?? commandTermPrompts[0];
 
   const currentGameQuestion = generatedQuestions[gameIndex];
@@ -673,6 +776,16 @@ export default function QuestionsScreen() {
     setCreatingFlashcards(true);
     await createFlashcardsFromNote(source);
     setCreatingFlashcards(false);
+  };
+
+  const recordReview = async (key: string, quality: ReviewQuality, label: string) => {
+    const next = {
+      ...reviewStates,
+      [key]: nextReviewState(reviewStates[key], quality)
+    };
+    setReviewStates(next);
+    await saveReviewStates(next);
+    setToolMessage(`${label} scheduled: ${getReviewStatus(key, new Date().toISOString(), next).label}.`);
   };
 
   const removeNote = async (id: string) => {
@@ -1127,8 +1240,10 @@ export default function QuestionsScreen() {
             />
             <View style={styles.reviewQueue}>
               <View>
-                <Text style={styles.answerTitle}>Review queue</Text>
-                <Text style={styles.muted}>{filteredSaved.length} matching saved questions</Text>
+                <Text style={styles.answerTitle}>Spaced question queue</Text>
+                <Text style={styles.muted}>
+                  {dueSavedCount} due now - {filteredSaved.length} saved
+                </Text>
               </View>
               {oldestSaved.length ? (
                 <Text style={styles.reviewHint} numberOfLines={2}>
@@ -1143,7 +1258,14 @@ export default function QuestionsScreen() {
               <Skeleton style={styles.skeletonBody} />
             </AppCard>
           ) : filteredSaved.length ? (
-            filteredSaved.map((item) => <SavedQuestionCard key={item.id} item={item} />)
+            savedReviewDeck.map(({ item, key, status }) => (
+              <SavedQuestionCard
+                key={item.id}
+                item={item}
+                reviewStatus={status}
+                onReview={(quality) => void recordReview(key, quality, item.topic || item.subject?.subjectName || "Saved question")}
+              />
+            ))
           ) : (
             <EmptyState title="No saved questions" body="Save generated questions here for future revision." />
           )}
@@ -1420,6 +1542,16 @@ export default function QuestionsScreen() {
               <AppCard style={styles.form}>
                 <Text style={styles.battleKicker}>Flashcard Forge</Text>
                 <Text style={styles.muted}>Turn notes, coach answers, class notes, or mistake logs into review cards.</Text>
+                <View style={styles.reviewSummaryGrid}>
+                  <View style={styles.reviewSummaryTile}>
+                    <Text style={styles.statNumber}>{dueFlashcardCount}</Text>
+                    <Text style={styles.statLabel}>due now</Text>
+                  </View>
+                  <View style={styles.reviewSummaryTile}>
+                    <Text style={styles.statNumber}>{flashcardNotes.length}</Text>
+                    <Text style={styles.statLabel}>cards</Text>
+                  </View>
+                </View>
                 {flashcardSources.length ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicRow}>
                     {flashcardSources.map((source) => {
@@ -1446,27 +1578,33 @@ export default function QuestionsScreen() {
                 <>
                   <FlashcardReview
                     note={currentFlashcard}
+                    reviewStatus={currentFlashcardItem!.status}
                     revealed={flashcardRevealed}
                     onFlip={() => setFlashcardRevealed((value) => !value)}
                     onDelete={removeNote}
+                    onReview={(quality) => {
+                      void recordReview(currentFlashcardItem!.key, quality, parseFlashcardNote(currentFlashcard).sourceTitle);
+                      setFlashcardRevealed(false);
+                      setFlashcardIndex((value) => (value + 1) % Math.max(1, flashcardReviewDeck.length));
+                    }}
                   />
                   <View style={styles.cardActions}>
                     <Button
                       mode="outlined"
-                      disabled={!flashcardNotes.length}
+                      disabled={!flashcardReviewDeck.length}
                       onPress={() => {
                         setFlashcardRevealed(false);
-                        setFlashcardIndex((value) => (value <= 0 ? Math.max(0, flashcardNotes.length - 1) : value - 1));
+                        setFlashcardIndex((value) => (value <= 0 ? Math.max(0, flashcardReviewDeck.length - 1) : value - 1));
                       }}
                     >
                       Previous
                     </Button>
                     <Button
                       mode="contained"
-                      disabled={!flashcardNotes.length}
+                      disabled={!flashcardReviewDeck.length}
                       onPress={() => {
                         setFlashcardRevealed(false);
-                        setFlashcardIndex((value) => (value + 1) % Math.max(1, flashcardNotes.length));
+                        setFlashcardIndex((value) => (value + 1) % Math.max(1, flashcardReviewDeck.length));
                       }}
                     >
                       Next card
@@ -1873,6 +2011,46 @@ const styles = StyleSheet.create({
     fontSize: 21,
     lineHeight: 29,
     fontFamily: "Outfit_700Bold"
+  },
+  reviewMetaBox: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}10`,
+    padding: 10
+  },
+  reviewButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  reviewDueText: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold"
+  },
+  reviewNextText: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold"
+  },
+  reviewSummaryGrid: {
+    flexDirection: "row",
+    gap: 8
+  },
+  reviewSummaryTile: {
+    flex: 1,
+    minHeight: 62,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8
   },
   savedTools: {
     gap: 12
