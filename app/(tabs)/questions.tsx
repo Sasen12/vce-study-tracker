@@ -354,6 +354,7 @@ export default function QuestionsScreen() {
   const [flashcardRevealed, setFlashcardRevealed] = useState(false);
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [flashcardSourceId, setFlashcardSourceId] = useState<string | null>(null);
+  const [flashcardTopic, setFlashcardTopic] = useState("");
   const [creatingFlashcards, setCreatingFlashcards] = useState(false);
   const [reviewStates, setReviewStates] = useState<ReviewStateMap>({});
 
@@ -469,6 +470,14 @@ export default function QuestionsScreen() {
         .slice(0, 12),
     [filterSubjectId, notes]
   );
+  const flashcardSourceOptions = useMemo(() => {
+    const query = flashcardTopic.trim().toLowerCase();
+    if (!query) return flashcardSources;
+
+    return flashcardSources.filter((note) =>
+      [note.title, note.body, note.subject?.subjectName ?? ""].join(" ").toLowerCase().includes(query)
+    );
+  }, [flashcardSources, flashcardTopic]);
   const currentFlashcardItem = flashcardReviewDeck[flashcardIndex] ?? flashcardReviewDeck[0] ?? null;
   const currentFlashcard = currentFlashcardItem?.note ?? null;
   const selectedCommandPrompt = commandTermPrompts.find((prompt) => prompt.term === commandTerm) ?? commandTermPrompts[0];
@@ -736,7 +745,7 @@ export default function QuestionsScreen() {
     }
   };
 
-  const createFlashcardsFromNote = async (note: StudyNote) => {
+  const createFlashcardsFromNote = async (note: StudyNote, topicLabel = "") => {
     if (!note.subjectId) {
       setToolMessage("Pick a subject-specific note or mistake first.");
       return;
@@ -748,17 +757,21 @@ export default function QuestionsScreen() {
     }
     setBusyNoteId(note.id);
     setToolMessage(null);
+    const cleanTopic = topicLabel.trim();
     try {
       for (const card of cards) {
+        const labelledCard = cleanTopic ? { ...card, sourceTitle: `${cleanTopic} (${card.sourceTitle})` } : card;
         await createNote({
           subjectId: note.subjectId,
-          title: `Flashcard: ${card.sourceTitle}`.slice(0, 140),
+          title: `Flashcard: ${cleanTopic || card.sourceTitle}`.slice(0, 140),
           noteType: "general",
-          tags: [flashcardTag, card.cardType, card.sourceTitle.toLowerCase()],
-          body: formatFlashcardNoteBody(card)
+          tags: Array.from(
+            new Set([flashcardTag, card.cardType, cleanTopic.toLowerCase(), card.sourceTitle.toLowerCase()].filter(Boolean))
+          ),
+          body: formatFlashcardNoteBody(labelledCard)
         });
       }
-      setToolMessage(`${cards.length} flashcard${cards.length === 1 ? "" : "s"} forged.`);
+      setToolMessage(`${cards.length} ${cleanTopic ? `${cleanTopic} ` : ""}flashcard${cards.length === 1 ? "" : "s"} forged.`);
       await fetchAll();
     } catch (error) {
       setToolMessage(error instanceof Error ? error.message : "Could not create flashcards.");
@@ -768,13 +781,17 @@ export default function QuestionsScreen() {
   };
 
   const createFlashcardsFromSelectedSource = async () => {
-    const source = flashcardSources.find((note) => note.id === flashcardSourceId) ?? flashcardSources[0];
+    const source = flashcardSourceOptions.find((note) => note.id === flashcardSourceId) ?? flashcardSourceOptions[0];
     if (!source) {
-      setToolMessage("Create a note, class note, coach answer or mistake first.");
+      setToolMessage(
+        flashcardTopic.trim()
+          ? `No source matches "${flashcardTopic.trim()}" yet. Try a broader topic or make a note first.`
+          : "Create a note, class note, coach answer or mistake first."
+      );
       return;
     }
     setCreatingFlashcards(true);
-    await createFlashcardsFromNote(source);
+    await createFlashcardsFromNote(source, flashcardTopic);
     setCreatingFlashcards(false);
   };
 
@@ -1542,6 +1559,14 @@ export default function QuestionsScreen() {
               <AppCard style={styles.form}>
                 <Text style={styles.battleKicker}>Flashcard Forge</Text>
                 <Text style={styles.muted}>Turn notes, coach answers, class notes, or mistake logs into review cards.</Text>
+                <TextInput
+                  mode="outlined"
+                  label="Card topic"
+                  placeholder="e.g. Business objectives, calculus, argument analysis"
+                  value={flashcardTopic}
+                  onChangeText={setFlashcardTopic}
+                  style={styles.answerInput}
+                />
                 <View style={styles.reviewSummaryGrid}>
                   <View style={styles.reviewSummaryTile}>
                     <Text style={styles.statNumber}>{dueFlashcardCount}</Text>
@@ -1552,10 +1577,10 @@ export default function QuestionsScreen() {
                     <Text style={styles.statLabel}>cards</Text>
                   </View>
                 </View>
-                {flashcardSources.length ? (
+                {flashcardSourceOptions.length ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicRow}>
-                    {flashcardSources.map((source) => {
-                      const selected = (flashcardSourceId ?? flashcardSources[0]?.id) === source.id;
+                    {flashcardSourceOptions.map((source) => {
+                      const selected = (flashcardSourceId ?? flashcardSourceOptions[0]?.id) === source.id;
                       return (
                         <Pressable
                           key={source.id}
@@ -1569,6 +1594,8 @@ export default function QuestionsScreen() {
                       );
                     })}
                   </ScrollView>
+                ) : flashcardTopic.trim() ? (
+                  <Text style={styles.muted}>No note or mistake source matches this topic yet.</Text>
                 ) : null}
                 <Button mode="contained" icon="cards-outline" loading={creatingFlashcards} disabled={creatingFlashcards} onPress={createFlashcardsFromSelectedSource}>
                   Forge cards

@@ -3,7 +3,27 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Spaced review and break guidance
+Most recent edit: 2026-05-06 - Flashcard Forge topic input fix
+
+Summary:
+- Fixed Questions > Tools > Cards so students can type a topic before forging flashcards.
+- Added a "Card topic" input to Flashcard Forge.
+- The card topic filters note/mistake source chips so students can find the right material.
+- Forged flashcards now use the typed topic in the flashcard title, source label and tags.
+- If no source matches the topic, the UI now explains that the student should broaden the topic or make a note first.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Spaced review and break guidance
 
 Summary:
 - Added a lightweight spaced-repetition scheduler for saved questions and flashcards without a database migration.
