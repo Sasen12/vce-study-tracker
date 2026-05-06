@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Button, Dialog, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
@@ -115,6 +115,7 @@ export default function StudyScreen() {
   const { subjects, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [studyTopic, setStudyTopic] = useState("");
+  const [checkInsEnabled, setCheckInsEnabled] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [targetMinutes, setTargetMinutes] = useState("25");
   const [running, setRunning] = useState(false);
@@ -137,8 +138,10 @@ export default function StudyScreen() {
   const scale = useSharedValue(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intentionalFullscreenExitRef = useRef(false);
+  const fullscreenLockActiveRef = useRef(false);
 
   const releaseFocusLock = useCallback(() => {
+    fullscreenLockActiveRef.current = false;
     intentionalFullscreenExitRef.current = true;
     void exitBrowserFullscreen().finally(() => {
       intentionalFullscreenExitRef.current = false;
@@ -187,6 +190,8 @@ export default function StudyScreen() {
         intentionalFullscreenExitRef.current = false;
         return;
       }
+      if (!fullscreenLockActiveRef.current) return;
+      fullscreenLockActiveRef.current = false;
       if (running) {
         setRunning(false);
         setMessage("Focus lock paused because fullscreen was exited. Press Start to lock back in.");
@@ -223,6 +228,8 @@ export default function StudyScreen() {
   }, [releaseFocusLock]);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const trimmedStudyTopic = studyTopic.trim();
+  const checkInsActive = checkInsEnabled && Boolean(trimmedStudyTopic);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const xp = calculateXp(elapsed) + timerBonusXp;
   const targetSeconds = Number(targetMinutes) * 60;
@@ -236,10 +243,10 @@ export default function StudyScreen() {
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
-    if (running) return `Focusing on ${selectedSubject.subjectName}${studyTopic.trim() ? ` - ${studyTopic.trim()}` : ""}`;
+    if (running) return `Focusing on ${selectedSubject.subjectName}${trimmedStudyTopic ? ` - ${trimmedStudyTopic}` : ""}`;
     if (elapsed > 0) return "Paused";
     return "Ready when you are";
-  }, [elapsed, running, selectedSubject, studyTopic]);
+  }, [elapsed, running, selectedSubject, trimmedStudyTopic]);
 
   const checkpointOptions = useMemo(
     () => (checkpointQuestion ? optionsFor(checkpointQuestion) : []),
@@ -248,12 +255,12 @@ export default function StudyScreen() {
   const minutesUntilCheckpoint = Math.max(0, Math.ceil((nextCheckpointAt - elapsed) / 60));
 
   const askCheckpoint = useCallback(async () => {
-    if (!selectedSubject || !studyTopic.trim() || checkpointGenerating || checkpointOpen) return;
+    if (!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen) return;
     setCheckpointGenerating(true);
     try {
       const question = await timerCheckQuestion({
         subjectId: selectedSubject.id,
-        topic: studyTopic.trim(),
+        topic: trimmedStudyTopic,
         difficulty: elapsed >= 30 * 60 ? "hard" : elapsed >= 15 * 60 ? "medium" : "easy"
       });
       setCheckpointQuestion(question);
@@ -266,12 +273,12 @@ export default function StudyScreen() {
     } finally {
       setCheckpointGenerating(false);
     }
-  }, [checkpointGenerating, checkpointOpen, elapsed, selectedSubject, studyTopic, timerCheckQuestion]);
+  }, [checkInsActive, checkpointGenerating, checkpointOpen, elapsed, selectedSubject, timerCheckQuestion, trimmedStudyTopic]);
 
   useEffect(() => {
-    if (!running || checkpointOpen || checkpointGenerating || elapsed < nextCheckpointAt) return;
+    if (!running || !checkInsActive || checkpointOpen || checkpointGenerating || elapsed < nextCheckpointAt) return;
     askCheckpoint();
-  }, [askCheckpoint, checkpointGenerating, checkpointOpen, elapsed, nextCheckpointAt, running]);
+  }, [askCheckpoint, checkInsActive, checkpointGenerating, checkpointOpen, elapsed, nextCheckpointAt, running]);
 
   const changeMode = (value: string) => {
     if (running && value !== "timer") {
@@ -283,26 +290,28 @@ export default function StudyScreen() {
 
   const start = async () => {
     if (!selectedSubject) return;
-    if (!studyTopic.trim()) {
-      setMessage("Add the topic before starting so timer check-ins know what to ask.");
-      return;
-    }
     setStarting(true);
+    if (elapsed === 0) {
+      setTimerBonusXp(0);
+      setNextCheckpointAt(checkpointIntervalSeconds);
+      setCheckpointQuestion(null);
+      setCheckpointOpen(false);
+      setSelectedCheckpointOption(null);
+      setCheckpointResult(null);
+    }
+    setMode("timer");
+    setRunning(true);
     try {
       const fullscreenResult = await enterBrowserFullscreen();
-      if (elapsed === 0) {
-        setTimerBonusXp(0);
-        setNextCheckpointAt(checkpointIntervalSeconds);
-      }
-      setMode("timer");
-      setMessage(
+      fullscreenLockActiveRef.current = fullscreenResult === "active";
+      const focusLockMessage =
         fullscreenResult === "blocked"
           ? "Focus lock was blocked, but the timer is running. Keep going here, or allow fullscreen next time for stricter focus."
           : fullscreenResult === "unsupported"
             ? "This browser cannot use fullscreen focus lock, but the timer is running."
-            : null
-      );
-      setRunning(true);
+            : null;
+      const checkInMessage = checkInsActive ? null : "Check-ins are off for this session.";
+      setMessage([focusLockMessage, checkInMessage].filter(Boolean).join(" ") || null);
     } finally {
       setStarting(false);
     }
@@ -510,13 +519,27 @@ export default function StudyScreen() {
             <Text style={styles.status}>{statusLabel}</Text>
             <TextInput
               mode="outlined"
-              label="Topic for this session"
+              label="Topic for this session (optional)"
               value={studyTopic}
               onChangeText={setStudyTopic}
               disabled={running}
               style={styles.topicInput}
               textColor={palette.text}
             />
+            <View style={styles.checkInRow}>
+              <View style={styles.checkInText}>
+                <Text style={styles.checkInTitle}>Check-in questions</Text>
+                <Text style={styles.checkInStatus}>
+                  {checkInsActive ? `On - ${trimmedStudyTopic}` : checkInsEnabled ? "Waiting for a topic" : "Off for this session"}
+                </Text>
+              </View>
+              <Switch
+                value={checkInsEnabled}
+                disabled={running}
+                onValueChange={setCheckInsEnabled}
+                color={palette.primary}
+              />
+            </View>
             <View style={styles.targetBlock}>
               <Text style={styles.targetLabel}>Target length</Text>
               <SegmentedButtons
@@ -555,7 +578,11 @@ export default function StudyScreen() {
             {elapsed >= targetSeconds && elapsed > 0 ? <Text style={styles.targetReached}>Target reached. Save now or keep going.</Text> : null}
             {running ? (
               <Text style={styles.checkInMeta}>
-                {checkpointGenerating ? "Building check-in..." : `Next check-in in ${minutesUntilCheckpoint} min`}
+                {checkInsActive
+                  ? checkpointGenerating
+                    ? "Building check-in..."
+                    : `Next check-in in ${minutesUntilCheckpoint} min`
+                  : "Check-ins off for this session"}
               </Text>
             ) : null}
 
@@ -573,7 +600,7 @@ export default function StudyScreen() {
                 mode="outlined"
                 icon="help-circle"
                 loading={checkpointGenerating}
-                disabled={!selectedSubject || !studyTopic.trim() || checkpointGenerating || checkpointOpen}
+                disabled={!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen}
                 onPress={askCheckpoint}
               >
                 Ask now
@@ -731,6 +758,33 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 520,
     backgroundColor: palette.surface
+  },
+  checkInRow: {
+    width: "100%",
+    maxWidth: 520,
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  checkInText: {
+    flex: 1,
+    minWidth: 0
+  },
+  checkInTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  checkInStatus: {
+    color: palette.muted,
+    fontSize: 12
   },
   targetBlock: {
     width: "100%",

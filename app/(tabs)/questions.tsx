@@ -836,7 +836,7 @@ export default function QuestionsScreen() {
   const checkExamAnswer = async (item: GeneratedQuestion, index: number) => {
     if (!selectedSubject || !examAnswers[index]?.trim()) return;
     setExamCheckingIndex(index);
-    setToolMessage(null);
+    setToolMessage("Marking exam answer...");
     try {
       const result = await checkAnswer({
         subjectId: selectedSubject.id,
@@ -848,6 +848,9 @@ export default function QuestionsScreen() {
         markingCriteria: item.marking_criteria
       });
       setExamFeedback((current) => ({ ...current, [index]: result }));
+      setToolMessage(
+        `Question ${index + 1} marked: ${VERDICT_COPY[result.feedback.verdict]} (${result.feedback.awarded_marks}/${result.feedback.max_marks}).`
+      );
     } catch (err) {
       setToolMessage(err instanceof Error ? err.message : "Could not mark exam answer.");
     } finally {

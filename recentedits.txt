@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Starter title year guessing
+Most recent edit: 2026-05-06 - Study timer optional check-ins
+
+Summary:
+- Fixed the Study timer start flow so the timer begins immediately and the browser fullscreen request is treated as optional focus lock.
+- Added a safer fullscreen-lock state so blocked or unsupported fullscreen does not pause the timer right after Start.
+- Made the Study timer topic optional.
+- Added a Check-in questions toggle to the Study timer.
+- Timer check-ins now only generate when the toggle is on and a topic is present, so note-writing sessions can run without questions.
+- Updated the running timer status text and Ask now button state to reflect when check-ins are off.
+- Added visible Exam Mode marking feedback so "Mark like examiner" confirms when a response has been marked.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Starter title year guessing
 
 Summary:
 - Added backend year-level guessing for starter titles based on the student's saved subject units.
