@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Coach obeys word-count constraints
+Most recent edit: 2026-05-06 - Ask Coach saves chat sessions
+
+Summary:
+- Changed direct Ask Coach saving from one note per question to one saved coach chat per subject/thread.
+- Added a New chat control so students can intentionally start a separate saved direct-coach session.
+- Ask Coach now defaults to the latest saved coach chat for the selected subject when the student comes back later.
+- Continuing a direct coach chat appends the new student question and coach answer to the same saved transcript.
+- Added Open/View/Delete controls for saved coach chats and hides old one-question coach answers behind an Older saved answers section when no chats exist yet.
+- Exposed note updates through the frontend store so saved chat transcripts can be appended instead of recreated.
+- Sent the active direct-coach chat transcript to the backend prompt so follow-up questions use the current thread as conversation memory.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Coach obeys word-count constraints
 
 Summary:
 - Tightened Ask Coach prompt handling for explicit assessment constraints.

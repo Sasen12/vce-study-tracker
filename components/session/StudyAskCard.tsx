@@ -6,7 +6,7 @@ import { FormattedStudyText } from "@/components/session/FormattedStudyText";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
-import type { StudyAnswer, UserSubject } from "@/types";
+import type { StudyAnswer, StudyNote, UserSubject } from "@/types";
 
 type StudyAskCardProps = {
   selectedSubject: UserSubject | null;
@@ -32,6 +32,7 @@ type SubjectDomain = {
 type CoachMode = "coach" | "tutor";
 
 const coachAnswerTag = "coach-answer";
+const coachChatTag = "coach-chat";
 const tutorSessionTag = "tutor-session";
 const tutorTurnTag = "tutor-turn";
 const maxTutorAttachments = 6;
@@ -41,6 +42,14 @@ type TutorTurn = {
   answer: StudyAnswer;
   createdAt: string;
   attachmentNames: string[];
+};
+
+type CoachChatTurn = {
+  question: string;
+  answer: StudyAnswer;
+  createdAt: string;
+  attachmentNames: string[];
+  turnNumber: number;
 };
 
 const subjectDomains: SubjectDomain[] = [
@@ -129,9 +138,6 @@ const subjectDomains: SubjectDomain[] = [
   }
 ];
 
-const coachNoteTitle = (question: string, mode: CoachMode) =>
-  `${mode === "tutor" ? "Tutor" : "Coach"}: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
-
 const attachmentSummary = (attachmentNames: string[]) =>
   attachmentNames.length ? `Attachments\n${attachmentNames.map((name) => `- ${name}`).join("\n")}` : null;
 
@@ -169,6 +175,41 @@ Next revision: ${answer.tutor_plan.next_revision}`
   ]
     .filter(Boolean)
     .join("\n\n");
+
+const coachChatTitle = (question: string) =>
+  `Coach chat: ${question.replace(/\s+/g, " ").trim() || "New question"}`.slice(0, 140);
+
+const countCoachChatTurns = (body: string) => body.match(/^Turn \d+/gm)?.length ?? 0;
+
+const coachChatTurnBody = (input: CoachChatTurn) =>
+  [
+    `Turn ${input.turnNumber} - ${new Date(input.createdAt).toLocaleString()}`,
+    "Student",
+    input.question,
+    attachmentSummary(input.attachmentNames),
+    "Coach",
+    input.answer.answer,
+    input.answer.key_points.length ? `Coach takeaways\n${input.answer.key_points.map((point) => `- ${point}`).join("\n")}` : null,
+    input.answer.sources_used.length
+      ? `Sources\n${input.answer.sources_used
+          .map((source) => `- ${source.title}${source.detail || source.source_type ? ` (${source.detail || source.source_type})` : ""}`)
+          .join("\n")}`
+      : null,
+    input.answer.follow_up_questions.length
+      ? `Follow-up questions\n${input.answer.follow_up_questions.map((followUp) => `- ${followUp}`).join("\n")}`
+      : null
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const appendCoachChatTurn = (currentBody: string | null | undefined, turn: CoachChatTurn) =>
+  [currentBody?.trim() || "Coach chat", coachChatTurnBody(turn)].filter(Boolean).join("\n\n---\n\n");
+
+const sortNotesByUpdatedDesc = (notes: StudyNote[]) =>
+  [...notes].sort(
+    (a, b) =>
+      new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+  );
 
 const tutorTurnNoteBody = (input: {
   topic: string;
@@ -303,6 +344,7 @@ export function StudyAskCard({
 }: StudyAskCardProps) {
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
   const createNote = useAppStore((state) => state.createNote);
+  const updateNote = useAppStore((state) => state.updateNote);
   const deleteNote = useAppStore((state) => state.deleteNote);
   const updateEvent = useAppStore((state) => state.updateEvent);
   const notes = useAppStore((state) => state.notes);
@@ -325,20 +367,50 @@ export function StudyAskCard({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [activeCoachChatId, setActiveCoachChatId] = useState<string | null>(null);
+  const [newCoachChatPending, setNewCoachChatPending] = useState(false);
   const selectedSubjectId = selectedSubject?.id ?? null;
   const hydratedTutorEventRef = useRef<string | null>(null);
 
-  const coachHistory = useMemo(
+  const coachChatHistory = useMemo(
     () =>
-      notes.filter(
-        (note) => note.tags.includes(coachAnswerTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
+      sortNotesByUpdatedDesc(
+        notes.filter(
+          (note) => note.tags.includes(coachChatTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
+        )
       ),
     [notes, selectedSubjectId]
   );
+  const legacyCoachHistory = useMemo(
+    () =>
+      sortNotesByUpdatedDesc(
+        notes.filter(
+          (note) =>
+            note.tags.includes(coachAnswerTag) &&
+            !note.tags.includes(coachChatTag) &&
+            !note.tags.includes(tutorSessionTag) &&
+            (!selectedSubjectId || note.subjectId === selectedSubjectId)
+        )
+      ),
+    [notes, selectedSubjectId]
+  );
+  const activeCoachChat = useMemo(() => {
+    if (newCoachChatPending) return null;
+    const selectedChat = activeCoachChatId
+      ? coachChatHistory.find((note) => note.id === activeCoachChatId)
+      : null;
+    return selectedChat || coachChatHistory[0] || null;
+  }, [activeCoachChatId, coachChatHistory, newCoachChatPending]);
+  const activeCoachChatTurnCount = activeCoachChat ? countCoachChatTurns(activeCoachChat.body) : 0;
   const tutorSessionHistory = useMemo(
     () =>
-      notes.filter(
-        (note) => note.tags.includes(tutorSessionTag) && !note.tags.includes(tutorTurnTag) && (!selectedSubjectId || note.subjectId === selectedSubjectId)
+      sortNotesByUpdatedDesc(
+        notes.filter(
+          (note) =>
+            note.tags.includes(tutorSessionTag) &&
+            !note.tags.includes(tutorTurnTag) &&
+            (!selectedSubjectId || note.subjectId === selectedSubjectId)
+        )
       ),
     [notes, selectedSubjectId]
   );
@@ -404,6 +476,12 @@ export function StudyAskCard({
     setMessage("Tutor session opened from Calendar.");
   }, [initialTutorEventId, initialTutorEventTitle, initialTutorGoal, initialTutorTopic]);
 
+  useEffect(() => {
+    setActiveCoachChatId(null);
+    setNewCoachChatPending(false);
+    setExpandedHistoryId(null);
+  }, [selectedSubjectId]);
+
   const addAttachments = async () => {
     setMessage(null);
     const result = await DocumentPicker.getDocumentAsync({
@@ -437,10 +515,90 @@ export function StudyAskCard({
     setMessage("Follow-up loaded. You can select the text or tap Ask.");
   };
 
+  const startNewCoachChat = () => {
+    setCoachMode("coach");
+    setActiveCoachChatId(null);
+    setNewCoachChatPending(true);
+    setExpandedHistoryId(null);
+    setQuestion("");
+    setAnswer(null);
+    setAttachments([]);
+    setMessage("New coach chat ready.");
+  };
+
+  const openCoachChat = (note: StudyNote) => {
+    setCoachMode("coach");
+    setActiveCoachChatId(note.id);
+    setNewCoachChatPending(false);
+    setExpandedHistoryId(note.id);
+    setAnswer(null);
+    setMessage("Coach chat opened.");
+  };
+
+  const findCoachChatForSubject = useCallback(
+    (subjectId: string) => {
+      if (newCoachChatPending) return null;
+      const currentChat = activeCoachChatId
+        ? notes.find(
+            (note) =>
+              note.id === activeCoachChatId &&
+              note.subjectId === subjectId &&
+              note.tags.includes(coachChatTag)
+          )
+        : null;
+      if (currentChat) return currentChat;
+      return (
+        sortNotesByUpdatedDesc(
+          notes.filter((note) => note.subjectId === subjectId && note.tags.includes(coachChatTag))
+        )[0] ?? null
+      );
+    },
+    [activeCoachChatId, newCoachChatPending, notes]
+  );
+
+  const saveCoachTurnToChat = async (input: {
+    subjectId: string;
+    question: string;
+    answer: StudyAnswer;
+    attachmentNames: string[];
+  }) => {
+    const currentChat = findCoachChatForSubject(input.subjectId);
+    const createdAt = new Date().toISOString();
+    const turnNumber = (currentChat ? countCoachChatTurns(currentChat.body) : 0) + 1;
+    const body = appendCoachChatTurn(currentChat?.body, {
+      question: input.question,
+      answer: input.answer,
+      attachmentNames: input.attachmentNames,
+      createdAt,
+      turnNumber
+    });
+
+    if (currentChat) {
+      const updated = await updateNote(currentChat.id, {
+        body,
+        tags: Array.from(new Set([...currentChat.tags, coachAnswerTag, coachChatTag]))
+      });
+      setActiveCoachChatId(updated.id);
+      setNewCoachChatPending(false);
+      return { note: updated, created: false };
+    }
+
+    const created = await createNote({
+      subjectId: input.subjectId,
+      title: coachChatTitle(input.question),
+      body,
+      noteType: "general",
+      tags: [coachAnswerTag, coachChatTag]
+    });
+    setActiveCoachChatId(created.id);
+    setNewCoachChatPending(false);
+    return { note: created, created: true };
+  };
+
   const removeCoachAnswer = async (id: string) => {
     if (confirmDeleteId !== id) {
       setConfirmDeleteId(id);
-      setMessage("Tap confirm to delete that coach answer.");
+      setMessage("Tap confirm to delete that saved coach item.");
       return;
     }
 
@@ -450,10 +608,13 @@ export function StudyAskCard({
       if (expandedHistoryId === id) {
         setExpandedHistoryId(null);
       }
+      if (activeCoachChatId === id) {
+        setActiveCoachChatId(null);
+      }
       setConfirmDeleteId(null);
-      setMessage("Saved coach answer deleted.");
+      setMessage("Saved coach item deleted.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not delete that coach answer.");
+      setMessage(error instanceof Error ? error.message : "Could not delete that saved coach item.");
     } finally {
       setDeletingId(null);
     }
@@ -547,6 +708,11 @@ export function StudyAskCard({
       formData.append("subjectId", questionSubject.id);
       formData.append("question", askedQuestion);
       formData.append("responseMode", requestMode === "tutor" ? "tutor" : "direct");
+      const requestCoachChat = requestMode === "coach" ? findCoachChatForSubject(questionSubject.id) : null;
+      if (requestCoachChat) {
+        formData.append("coachChatTitle", requestCoachChat.title);
+        formData.append("coachChatTranscript", requestCoachChat.body.slice(-24_000));
+      }
       if (requestMode === "tutor" && sessionActive) {
         formData.append("sessionMode", "tutor_session");
         formData.append("sessionTopic", sessionTopic.trim() || askedQuestion);
@@ -565,30 +731,36 @@ export function StudyAskCard({
         ]);
       }
       try {
-        await createNote({
-          subjectId: questionSubject.id,
-          title: requestMode === "tutor"
-            ? `Tutor turn: ${sessionTopic.trim() || askedQuestion}`.slice(0, 140)
-            : coachNoteTitle(askedQuestion, "coach"),
-          body: requestMode === "tutor"
-            ? tutorTurnNoteBody({
-                topic: sessionTopic.trim() || askedQuestion,
-                goal: sessionGoal.trim(),
-                question: askedQuestion,
-                answer: nextAnswer,
-                attachmentNames
-              })
-            : coachNoteBody(askedQuestion, nextAnswer, attachmentNames, { includeTutorPlan: false }),
-          noteType: "general",
-          tags: requestMode === "tutor" ? [coachAnswerTag, tutorSessionTag, tutorTurnTag] : [coachAnswerTag]
-        });
-        setMessage(
-          requestMode === "tutor"
-            ? "Tutor turn saved. Keep going or end the session to save the full transcript."
-            : routed
-              ? `Routed to ${questionSubject.subjectName} and saved.`
-              : "Coach response saved."
-        );
+        if (requestMode === "tutor") {
+          await createNote({
+            subjectId: questionSubject.id,
+            title: `Tutor turn: ${sessionTopic.trim() || askedQuestion}`.slice(0, 140),
+            body: tutorTurnNoteBody({
+              topic: sessionTopic.trim() || askedQuestion,
+              goal: sessionGoal.trim(),
+              question: askedQuestion,
+              answer: nextAnswer,
+              attachmentNames
+            }),
+            noteType: "general",
+            tags: [coachAnswerTag, tutorSessionTag, tutorTurnTag]
+          });
+          setMessage("Tutor turn saved. Keep going or end the session to save the full transcript.");
+        } else {
+          const chatResult = await saveCoachTurnToChat({
+            subjectId: questionSubject.id,
+            question: askedQuestion,
+            answer: nextAnswer,
+            attachmentNames
+          });
+          setMessage(
+            routed
+              ? `Routed to ${questionSubject.subjectName} and saved in ${chatResult.created ? "a new coach chat" : "that coach chat"}.`
+              : chatResult.created
+                ? "Coach chat started and saved."
+                : "Coach turn saved to this chat."
+          );
+        }
       } catch {
         setMessage("Answer shown, but it could not be saved.");
       }
@@ -622,6 +794,24 @@ export function StudyAskCard({
           { value: "tutor", label: "Tutor session", icon: "school-outline" }
         ]}
       />
+
+      {coachMode === "coach" ? (
+        <View style={styles.coachChatBox}>
+          <View style={styles.sessionHeader}>
+            <View style={styles.sessionHeaderText}>
+              <Text style={styles.blockTitle}>{activeCoachChat ? activeCoachChat.title : "New coach chat"}</Text>
+              <Text style={styles.muted}>
+                {activeCoachChat
+                  ? `${activeCoachChatTurnCount} turn${activeCoachChatTurnCount === 1 ? "" : "s"} saved - last updated ${formatSavedDate(activeCoachChat.updatedAt)}`
+                  : "Next answer starts a separate saved chat"}
+              </Text>
+            </View>
+            <Button mode="outlined" compact icon="plus" disabled={!selectedSubject} onPress={startNewCoachChat}>
+              New chat
+            </Button>
+          </View>
+        </View>
+      ) : null}
 
       {coachMode === "tutor" || sessionActive ? (
         <View style={[styles.sessionBox, sessionActive && styles.sessionBoxActive]}>
@@ -797,26 +987,49 @@ export function StudyAskCard({
         </View>
       ) : null}
 
-      {coachHistory.length ? (
+      {(coachMode === "coach" && (coachChatHistory.length || legacyCoachHistory.length)) ||
+      (coachMode === "tutor" && tutorSessionHistory.length) ? (
         <View style={styles.historyStack}>
           <View style={styles.historyHeader}>
-            <Text style={styles.blockTitle}>Saved coach/tutor answers</Text>
+            <Text style={styles.blockTitle}>
+              {coachMode === "coach"
+                ? coachChatHistory.length
+                  ? "Coach chats"
+                  : "Older saved answers"
+                : "Tutor session transcripts"}
+            </Text>
             <Text style={styles.muted}>
-              {coachHistory.length} saved{selectedSubject ? "" : " total"}
+              {(coachMode === "coach"
+                ? coachChatHistory.length || legacyCoachHistory.length
+                : tutorSessionHistory.length)}{" "}
+              saved{selectedSubject ? "" : " total"}
             </Text>
           </View>
-          {coachHistory.map((note) => {
+          {(coachMode === "coach"
+            ? coachChatHistory.length
+              ? coachChatHistory
+              : legacyCoachHistory
+            : tutorSessionHistory
+          ).map((note) => {
             const expanded = expandedHistoryId === note.id;
+            const isCoachChat = note.tags.includes(coachChatTag);
+            const turnCount = isCoachChat ? countCoachChatTurns(note.body) : 0;
             return (
               <View key={note.id} style={styles.historyItem}>
                 <View style={styles.historyRow}>
                   <View style={styles.historyText}>
-                    <Text style={styles.historyTitle}>{note.title.replace(/^(Coach|Tutor):\s*/, "")}</Text>
+                    <Text style={styles.historyTitle}>{note.title.replace(/^(Coach chat|Coach|Tutor):\s*/, "")}</Text>
                     <Text style={styles.muted}>
-                      {note.subject?.subjectName ?? "General"} - {formatSavedDate(note.createdAt)}
+                      {isCoachChat ? `${turnCount} turn${turnCount === 1 ? "" : "s"} - ` : ""}
+                      {note.subject?.subjectName ?? "General"} - {formatSavedDate(note.updatedAt || note.createdAt)}
                     </Text>
                   </View>
                   <View style={styles.historyActions}>
+                    {isCoachChat ? (
+                      <Button mode="text" compact icon="chat-outline" onPress={() => openCoachChat(note)}>
+                        Open
+                      </Button>
+                    ) : null}
                     <Button
                       mode="text"
                       compact
@@ -885,6 +1098,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${palette.info}33`,
     backgroundColor: `${palette.info}0F`,
+    padding: 12
+  },
+  coachChatBox: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.primary}33`,
+    backgroundColor: `${palette.primary}0F`,
     padding: 12
   },
   sessionBoxActive: {

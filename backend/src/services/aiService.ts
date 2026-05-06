@@ -222,6 +222,8 @@ type AskStudyQuestionInput = {
   context: string;
   learningSignals?: string;
   responseMode?: "direct" | "tutor";
+  coachChatTitle?: string | null;
+  coachChatTranscript?: string | null;
   sessionMode?: "tutor_session" | null;
   sessionTopic?: string | null;
   sessionGoal?: string | null;
@@ -1658,12 +1660,19 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const learningSignalsBlock = input.learningSignals
     ? `\nRecent learning signals from the student's app history:\n${input.learningSignals}\n`
     : "\nRecent learning signals from the student's app history: none available.\n";
+  const coachChatBlock =
+    responseMode === "direct" && input.coachChatTranscript?.trim()
+      ? `\nCurrent Ask Coach chat memory${input.coachChatTitle ? ` (${input.coachChatTitle})` : ""}:\n${input.coachChatTranscript.slice(-18_000)}\nUse this as the active chat thread. Continue from earlier turns when relevant, but answer the newest question directly.\n`
+      : responseMode === "direct"
+        ? "\nCurrent Ask Coach chat memory: new chat or no prior turns.\n"
+        : "";
   const directModeBlock =
     responseMode === "direct"
       ? `\nDirect Ask Coach mode is active.
 Mode rules:
 - The student wants a direct answer without entering a full tutoring session.
 - Answer the exact question first, then add the shortest useful explanation, example or method.
+- If current chat memory is present, use it like ChatGPT-style conversation history so follow-up questions make sense.
 - If the student asks for a SAC/exam answer or rewrite, the "Direct answer" section must be the actual response they can submit, not a comment about the response.
 - Do not force a full diagnosis, agenda or long "your turn" sequence in the main answer.
 - Still make follow_up_questions useful as tap-ready next actions, such as practice, marking or simplifying.\n`
@@ -1738,6 +1747,7 @@ Student notes, reflections and uploaded textbook/resource context:
 ${input.context || "No matching uploaded text context was found."}
 ${sourceBlock}
 ${learningSignalsBlock}
+${coachChatBlock}
 ${directModeBlock}
 ${assessmentConstraintBlock}
 ${tutorSessionBlock}

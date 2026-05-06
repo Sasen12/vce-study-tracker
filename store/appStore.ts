@@ -126,7 +126,11 @@ type AppState = {
     body: string;
     noteType?: StudyNote["noteType"];
     tags?: string[];
-  }) => Promise<void>;
+  }) => Promise<StudyNote>;
+  updateNote: (
+    id: string,
+    input: Partial<Pick<StudyNote, "subjectId" | "title" | "body" | "noteType" | "tags">>
+  ) => Promise<StudyNote>;
   deleteNote: (id: string) => Promise<void>;
   uploadResources: (formData: FormData) => Promise<void>;
   deleteResource: (id: string) => Promise<void>;
@@ -311,6 +315,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   createNote: async (input) => {
     const data = await studyApi.createNote(input);
     set({ notes: [data.note, ...get().notes] });
+    return data.note;
+  },
+  updateNote: async (id, input) => {
+    const data = await studyApi.updateNote(id, input);
+    set({
+      notes: get()
+        .notes.map((note) => (note.id === id ? data.note : note))
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    });
+    return data.note;
   },
   deleteNote: async (id) => {
     await studyApi.deleteNote(id);
