@@ -24,7 +24,8 @@ Validation run:
 - npm run build:web
 
 Deployment status:
-- Not pushed or deployed in this turn.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
 
 Previous edit: 2026-05-05 - Home cleanup and Insights screen
 
