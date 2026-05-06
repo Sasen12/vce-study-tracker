@@ -3,7 +3,30 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Persistent tutor sessions
+Most recent edit: 2026-05-06 - Tutor PDF attachments
+
+Summary:
+- Added PDF support to the Study > Coach tutor attachment flow.
+- The tutor attachment picker now accepts images and PDFs, while pasted screenshots still work on web.
+- Tutor requests now send files through a shared attachments field, with backend compatibility for older screenshot uploads.
+- The backend Ask Coach route now validates tutor images and PDFs separately.
+- PDF attachments are text-extracted with the existing resource parser and added as primary attached-PDF context for the tutor turn.
+- Image attachments still use vision input, while PDF attachments use extracted text context and source labels.
+- Saved tutor answers, tutor turns and full tutor-session transcripts now record attached file names.
+- The AI tutor prompt and study-design reliability wording now explicitly allow attached PDFs as supporting evidence when they are present.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Persistent tutor sessions
 
 Summary:
 - Added scheduled Tutor Sessions as a first-class calendar workflow without a database migration.

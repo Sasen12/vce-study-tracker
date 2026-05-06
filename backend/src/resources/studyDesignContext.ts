@@ -729,7 +729,7 @@ const profileStudyDesignContext = (subject: string): StudyDesignContext | null =
     return {
       source: officialSubjectSource(subject),
       detailLevel: "generic",
-      context: `For ${program} ${subject}, use the current VCAA study design or program requirements as the authority. Local subject-specific coaching context: ${exactProfile.focus} Prefer ${exactProfile.prefer}.${exactProfile.avoid ? ` Avoid ${exactProfile.avoid}.` : ""} Keep advice active and assessable, and do not invent exact dot points unless the student's uploaded notes, screenshots or resources support them.`
+      context: `For ${program} ${subject}, use the current VCAA study design or program requirements as the authority. Local subject-specific coaching context: ${exactProfile.focus} Prefer ${exactProfile.prefer}.${exactProfile.avoid ? ` Avoid ${exactProfile.avoid}.` : ""} Keep advice active and assessable, and do not invent exact dot points unless the student's uploaded notes, screenshots, PDFs or resources support them.`
     };
   }
 

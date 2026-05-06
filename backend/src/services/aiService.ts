@@ -226,6 +226,7 @@ type AskStudyQuestionInput = {
   sessionGoal?: string | null;
   sessionEventTitle?: string | null;
   screenshots?: AskScreenshot[];
+  attachedDocumentLabels?: string[];
   sourceLabels?: string[];
 };
 
@@ -293,11 +294,11 @@ const studyDesignReliabilityRules = (studyDesign?: StudyDesignLookup | null) => 
     studyDesign?.detailLevel === "detailed"
       ? "- You may make study-design alignment claims only when the supplied detailed context supports them."
       : studyDesign?.detailLevel === "generic"
-        ? "- The app only has a generic fallback for this subject right now. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes/screenshots prove them."
-        : "- No subject-specific study-design context was supplied. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes/screenshots prove them.";
+        ? "- The app only has a generic fallback for this subject right now. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes, screenshots, PDFs or resources prove them."
+        : "- No subject-specific study-design context was supplied. Do not claim exact VCAA dot points, Areas of Study, unit boundaries, required terminology or prescribed content unless uploaded notes, screenshots, PDFs or resources prove them.";
 
   return `Reliability rules:
-- Treat the study design context as the first authority, then uploaded notes/resources/screenshots, then general VCE knowledge.
+- Treat the study design context as the first authority, then uploaded notes/resources/screenshots/PDF attachments, then general VCE knowledge.
 ${coverageRule}
 - Do not invent VCAA dot points, dates, areas of study, formulas, statistics, teacher requirements or prescribed content.
 - If the evidence is weak, say what is uncertain in the answer/source detail/task wording instead of sounding certain.
@@ -1546,6 +1547,7 @@ const inferSubjectFromQuestion = (question: string) => {
 
 const mockStudyAnswer = (input: AskStudyQuestionInput): StudyAnswer => {
   const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
+  const hasAttachments = Boolean(input.screenshots?.length || input.attachedDocumentLabels?.length);
 
   return {
     answer: `## Tutor read
@@ -1556,7 +1558,7 @@ Start by naming the key idea in ${subject}. Then link it to the exact evidence, 
 
 ## Your turn
 Write one sentence that uses a subject term and one sentence that applies it to the question. ${
-      input.screenshots?.length ? "A real OpenAI key would let me read the attached screenshot and tutor from the exact visible question." : ""
+      hasAttachments ? "A real OpenAI key would let me tutor from the attached image or PDF context." : ""
     }`,
     key_points: [
       "Identify the exact skill the question is testing before answering.",
@@ -1581,7 +1583,7 @@ Write one sentence that uses a subject term and one sentence that applies it to 
       check_question: "Which word or piece of data in the question tells you what method to use?",
       next_revision: "Save the check question as a flashcard or redo one similar question tomorrow."
     },
-    confidence: input.context || input.screenshots?.length ? "medium" : "low"
+    confidence: input.context || hasAttachments ? "medium" : "low"
   };
 };
 
@@ -1592,6 +1594,9 @@ const buildStudyAnswerPrompt = (input: AskStudyQuestionInput) => {
   const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
   const screenshotBlock = input.screenshots?.length
     ? `\nThe student attached ${input.screenshots.length} screenshot${input.screenshots.length === 1 ? "" : "s"}. Read them carefully and use them as primary context when relevant.\n`
+    : "";
+  const attachedDocumentBlock = input.attachedDocumentLabels?.length
+    ? `\nThe student attached PDF context extracted from:\n${input.attachedDocumentLabels.map((label) => `- ${label}`).join("\n")}\nTreat attached PDFs as primary uploaded material when they are relevant to the question.\n`
     : "";
   const sourceBlock = input.sourceLabels?.length
     ? `\nAvailable local source labels:\n${input.sourceLabels.map((label) => `- ${label}`).join("\n")}\n`
@@ -1620,6 +1625,7 @@ Subject: ${subjectLabel}
 Student question:
 ${input.question}
 ${screenshotBlock}
+${attachedDocumentBlock}
 ${studyDesignBlock}
 Student notes, reflections and uploaded textbook/resource context:
 ${input.context || "No matching uploaded text context was found."}
@@ -1638,11 +1644,11 @@ Tutor behaviour:
 - Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
 - Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.
 
-Use the subject's study design and uploaded materials where they are relevant. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
+Use the subject's study design and uploaded materials where they are relevant, including attached PDFs and screenshots. If the context does not prove something, say what is uncertain and answer from VCE-safe general knowledge.
 ${studyDesignReliabilityRules(studyDesign)}
 
 Confidence rules:
-- Use high confidence only when the answer is backed by detailed study-design context, uploaded resources, screenshots, or clearly standard subject knowledge.
+- Use high confidence only when the answer is backed by detailed study-design context, uploaded resources, screenshots, attached PDFs, or clearly standard subject knowledge.
 - Use medium confidence when the answer is mostly general VCE knowledge and does not rely on exact study-design claims.
 - Use low confidence when no subject is selected, only generic fallback context is available for a precise syllabus question, screenshots are unclear, or the student asks whether something is definitely in the study design and the supplied context does not prove it.
 - If you use study-design context, include it in sources_used with source_type "study_design" and detail saying whether it was detailed local context or generic fallback.
@@ -1651,6 +1657,11 @@ For screenshots:
 - Extract the important visible question, diagram, table, working or feedback.
 - Explain what it means for the selected subject.
 - If the screenshot is unclear, say what you can and cannot read.
+
+For attached PDFs:
+- Use the extracted PDF context as the student's supplied worksheet, notes, textbook or assessment material.
+- Name the attached PDF in sources_used when it influences the answer.
+- If the extracted text is partial or does not contain the answer, say that and tutor from the closest relevant evidence.
 
 Answer formatting rules:
 - answer should use short markdown headings: "Tutor read", "Guided explanation", "Worked move" when useful, and "Your turn".

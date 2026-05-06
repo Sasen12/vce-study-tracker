@@ -125,6 +125,7 @@ const askSchema = z.object({
 });
 
 const supportedScreenshotTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const supportedTutorPdfTypes = new Set(["application/pdf", "application/x-pdf"]);
 const supportedAudioTypes = new Set([
   "audio/aac",
   "audio/flac",
@@ -139,6 +140,20 @@ const supportedAudioTypes = new Set([
   "video/mp4",
   "video/webm"
 ]);
+
+const uploadedFilesFrom = (files: unknown): Express.Multer.File[] => {
+  if (Array.isArray(files)) return files.filter(Boolean) as Express.Multer.File[];
+  if (files && typeof files === "object") {
+    return Object.values(files as Record<string, Express.Multer.File[]>)
+      .flat()
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const normalizedMimeType = (file: Express.Multer.File) => file.mimetype.toLowerCase().split(";")[0];
+const isTutorPdfFile = (file: Express.Multer.File) =>
+  supportedTutorPdfTypes.has(normalizedMimeType(file)) || file.originalname.toLowerCase().endsWith(".pdf");
 
 const notetakerSchema = z.object({
   subjectId: z.string().uuid(),
@@ -748,8 +763,17 @@ coachRouter.post(
 
 coachRouter.post(
   "/ask",
-  upload.array("screenshots", 4),
-  limitAiUsage({ cost: (req) => (((req.files ?? []) as Express.Multer.File[]).length ? 3 : 1) }),
+  upload.fields([
+    { name: "attachments", maxCount: 6 },
+    { name: "screenshots", maxCount: 4 }
+  ]),
+  limitAiUsage({
+    cost: (req) => {
+      const files = uploadedFilesFrom(req.files);
+      if (files.some(isTutorPdfFile)) return 4;
+      return files.length ? 3 : 1;
+    }
+  }),
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = askSchema.parse(req.body);
@@ -758,19 +782,46 @@ coachRouter.post(
       ? await prisma.event.findFirst({ where: { id: payload.sessionEventId, userId: authReq.user.id } })
       : null;
     if (payload.sessionEventId && !sessionEvent) throw new HttpError(404, "Tutor session booking not found");
-    const files = ((req.files ?? []) as Express.Multer.File[]).filter(Boolean);
+    const files = uploadedFilesFrom(req.files);
+    const imageFiles: Express.Multer.File[] = [];
+    const documentFiles: Express.Multer.File[] = [];
 
     for (const file of files) {
-      if (!supportedScreenshotTypes.has(file.mimetype)) {
-        throw new HttpError(400, "Screenshots must be PNG, JPEG, WEBP or GIF images.");
+      const mimeType = normalizedMimeType(file);
+      if (supportedScreenshotTypes.has(mimeType)) {
+        if (file.size > 8 * 1024 * 1024) {
+          throw new HttpError(400, "Each image must be smaller than 8MB.");
+        }
+        imageFiles.push(file);
+        continue;
       }
-      if (file.size > 8 * 1024 * 1024) {
-        throw new HttpError(400, "Each screenshot must be smaller than 8MB.");
+
+      if (isTutorPdfFile(file)) {
+        if (file.size > 25 * 1024 * 1024) {
+          throw new HttpError(400, "Each PDF must be smaller than 25MB.");
+        }
+        documentFiles.push(file);
+        continue;
       }
+
+      throw new HttpError(400, "Tutor attachments must be PNG, JPEG, WEBP, GIF or PDF files.");
     }
 
     const subjectScope = subject ? { OR: [{ subjectId: subject.id }, { subjectId: null }] } : {};
-    const [reflections, notes, resources] = await Promise.all([
+    const [attachedDocuments, reflections, notes, resources] = await Promise.all([
+      Promise.all(
+        documentFiles.map(async (file) => {
+          const extracted = await extractResourceText(file);
+          if (!extracted.text.trim()) {
+            throw new HttpError(422, `I could not read text from ${file.originalname || "that PDF"}. Try a text-based PDF.`);
+          }
+          return {
+            fileName: file.originalname || `attached-pdf-${Date.now()}.pdf`,
+            fileType: extracted.fileType,
+            text: extracted.text
+          };
+        })
+      ),
       prisma.studyReflection.findMany({
         where: { userId: authReq.user.id, ...subjectScope },
         include: { subject: true },
@@ -791,7 +842,9 @@ coachRouter.post(
       })
     ]);
 
+    const attachedDocumentLabels = attachedDocuments.map((document) => `Attached PDF: ${document.fileName}`);
     const sourceLabels = [
+      ...attachedDocumentLabels,
       ...notes.map((note: NoteForPlan) => `${note.subject?.subjectName ?? "General"} note: ${note.title}`),
       ...resources.map(
         (resource: ResourceForAsk) =>
@@ -800,6 +853,9 @@ coachRouter.post(
     ];
 
     const context = [
+      ...attachedDocuments.map((document) =>
+        contextSnippetForQuery(`Attached PDF: ${document.fileName}`, document.text, payload.question, 4500)
+      ),
       ...reflections.map((reflection: ReflectionForPlan) =>
         contextSnippetForQuery(
           `${reflection.subject?.subjectName ?? "General"} reflection ${reflection.classDate.toISOString().slice(0, 10)}`,
@@ -822,7 +878,7 @@ coachRouter.post(
     ]
       .filter(Boolean)
       .join("\n\n")
-      .slice(0, 16_000);
+      .slice(0, 24_000);
 
     const answer = await answerStudyQuestion({
       subject: subject?.subjectName,
@@ -834,10 +890,11 @@ coachRouter.post(
       sessionTopic: payload.sessionTopic ?? null,
       sessionGoal: payload.sessionGoal ?? null,
       sessionEventTitle: sessionEvent?.title ?? null,
+      attachedDocumentLabels,
       sourceLabels,
-      screenshots: files.map((file) => ({
+      screenshots: imageFiles.map((file) => ({
         fileName: file.originalname,
-        mimeType: file.mimetype,
+        mimeType: normalizedMimeType(file),
         base64: file.buffer.toString("base64")
       }))
     });

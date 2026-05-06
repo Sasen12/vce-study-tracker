@@ -16,7 +16,7 @@ type StudyAskCardProps = {
   initialTutorEventTitle?: string;
 };
 
-type ScreenshotAsset = {
+type TutorAttachment = {
   uri: string;
   name: string;
   mimeType?: string;
@@ -32,11 +32,13 @@ type SubjectDomain = {
 const coachAnswerTag = "coach-answer";
 const tutorSessionTag = "tutor-session";
 const tutorTurnTag = "tutor-turn";
+const maxTutorAttachments = 6;
 
 type TutorTurn = {
   question: string;
   answer: StudyAnswer;
   createdAt: string;
+  attachmentNames: string[];
 };
 
 const subjectDomains: SubjectDomain[] = [
@@ -127,11 +129,14 @@ const subjectDomains: SubjectDomain[] = [
 
 const coachNoteTitle = (question: string) => `Tutor: ${question.replace(/\s+/g, " ").trim()}`.slice(0, 140);
 
-const coachNoteBody = (question: string, answer: StudyAnswer, screenshotCount: number) =>
+const attachmentSummary = (attachmentNames: string[]) =>
+  attachmentNames.length ? `Attachments\n${attachmentNames.map((name) => `- ${name}`).join("\n")}` : null;
+
+const coachNoteBody = (question: string, answer: StudyAnswer, attachmentNames: string[]) =>
   [
     "Question",
     question,
-    screenshotCount ? `Screenshots attached: ${screenshotCount}` : null,
+    attachmentSummary(attachmentNames),
     "Answer",
     answer.answer,
     answer.tutor_plan
@@ -162,13 +167,13 @@ const tutorTurnNoteBody = (input: {
   goal: string;
   question: string;
   answer: StudyAnswer;
-  screenshotCount: number;
+  attachmentNames: string[];
 }) =>
   [
     "Tutor session turn",
     `Topic: ${input.topic}`,
     input.goal ? `Goal: ${input.goal}` : null,
-    coachNoteBody(input.question, input.answer, input.screenshotCount)
+    coachNoteBody(input.question, input.answer, input.attachmentNames)
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -193,6 +198,7 @@ const tutorSessionNoteBody = (input: {
       [
         `Turn ${index + 1}`,
         `Student: ${turn.question}`,
+        attachmentSummary(turn.attachmentNames),
         "Tutor answer",
         turn.answer.answer,
         turn.answer.tutor_plan
@@ -252,14 +258,14 @@ const smartSubjectForQuestion = (question: string, selectedSubject: UserSubject,
   return matchingSubject ?? selectedSubject;
 };
 
-const appendScreenshot = (formData: FormData, asset: ScreenshotAsset) => {
+const appendTutorAttachment = (formData: FormData, asset: TutorAttachment) => {
   const webFile = Platform.OS === "web" ? asset.file : null;
   if (webFile) {
-    formData.append("screenshots", webFile, asset.name);
+    formData.append("attachments", webFile, asset.name);
     return;
   }
 
-  formData.append("screenshots", {
+  formData.append("attachments", {
     uri: asset.uri,
     name: asset.name,
     type: asset.mimeType ?? "image/png"
@@ -298,7 +304,7 @@ export function StudyAskCard({
   const [sessionEventId, setSessionEventId] = useState<string | null>(null);
   const [sessionEventTitle, setSessionEventTitle] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
-  const [screenshots, setScreenshots] = useState<ScreenshotAsset[]>([]);
+  const [attachments, setAttachments] = useState<TutorAttachment[]>([]);
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
   const [asking, setAsking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -323,11 +329,16 @@ export function StudyAskCard({
     [notes, selectedSubjectId]
   );
 
-  const addScreenshotAssets = useCallback((assets: ScreenshotAsset[]) => {
+  const addTutorAttachments = useCallback((assets: TutorAttachment[]) => {
     if (!assets.length) return;
-    setScreenshots((current) => {
-      const next = [...current, ...assets].slice(0, 4);
-      setMessage(current.length + assets.length > 4 ? "Up to 4 screenshots can be attached." : `${assets.length} screenshot${assets.length === 1 ? "" : "s"} attached.`);
+    setAttachments((current) => {
+      const nextAssets = assets.slice(0, Math.max(0, maxTutorAttachments - current.length));
+      const next = [...current, ...nextAssets];
+      setMessage(
+        nextAssets.length < assets.length
+          ? `Up to ${maxTutorAttachments} tutor files can be attached.`
+          : `${nextAssets.length} file${nextAssets.length === 1 ? "" : "s"} attached.`
+      );
       return next;
     });
   }, []);
@@ -344,7 +355,7 @@ export function StudyAskCard({
 
       if (!files.length) return;
       event.preventDefault();
-      addScreenshotAssets(
+      addTutorAttachments(
         files.map((file, index) => ({
           uri: URL.createObjectURL(file),
           name: file.name || `pasted-screenshot-${Date.now()}-${index + 1}.png`,
@@ -356,7 +367,7 @@ export function StudyAskCard({
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [addScreenshotAssets]);
+  }, [addTutorAttachments]);
 
   useEffect(() => {
     const key = initialTutorEventId || initialTutorTopic || "";
@@ -378,21 +389,21 @@ export function StudyAskCard({
     setMessage("Tutor session opened from Calendar.");
   }, [initialTutorEventId, initialTutorEventTitle, initialTutorGoal, initialTutorTopic]);
 
-  const addScreenshots = async () => {
+  const addAttachments = async () => {
     setMessage(null);
     const result = await DocumentPicker.getDocumentAsync({
-      type: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/*"],
+      type: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/*", "application/pdf"],
       multiple: true,
       copyToCacheDirectory: true
     });
 
     if (result.canceled) return;
 
-    addScreenshotAssets(result.assets as ScreenshotAsset[]);
+    addTutorAttachments(result.assets as TutorAttachment[]);
   };
 
-  const removeScreenshot = (index: number) => {
-    setScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  const removeAttachment = (index: number) => {
+    setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const removeCoachAnswer = async (id: string) => {
@@ -492,6 +503,7 @@ export function StudyAskCard({
     try {
       const questionSubject = smartSubjectForQuestion(askedQuestion, selectedSubject, subjects);
       const routed = questionSubject.id !== selectedSubject.id;
+      const attachmentNames = attachments.map((asset) => asset.name);
       const formData = new FormData();
       formData.append("subjectId", questionSubject.id);
       formData.append("question", askedQuestion);
@@ -501,14 +513,14 @@ export function StudyAskCard({
         formData.append("sessionGoal", sessionGoal.trim());
         if (sessionEventId) formData.append("sessionEventId", sessionEventId);
       }
-      screenshots.forEach((asset) => appendScreenshot(formData, asset));
+      attachments.forEach((asset) => appendTutorAttachment(formData, asset));
 
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
       if (sessionActive) {
         setSessionTurns((current) => [
           ...current,
-          { question: askedQuestion, answer: nextAnswer, createdAt: new Date().toISOString() }
+          { question: askedQuestion, answer: nextAnswer, createdAt: new Date().toISOString(), attachmentNames }
         ]);
       }
       try {
@@ -523,9 +535,9 @@ export function StudyAskCard({
                 goal: sessionGoal.trim(),
                 question: askedQuestion,
                 answer: nextAnswer,
-                screenshotCount: screenshots.length
+                attachmentNames
               })
-            : coachNoteBody(askedQuestion, nextAnswer, screenshots.length),
+            : coachNoteBody(askedQuestion, nextAnswer, attachmentNames),
           noteType: "general",
           tags: sessionActive ? [coachAnswerTag, tutorSessionTag, tutorTurnTag] : [coachAnswerTag]
         });
@@ -554,7 +566,7 @@ export function StudyAskCard({
             Ask tutor
           </Text>
           <Text style={styles.muted}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
-          <Text style={styles.pasteHint}>Upload images or paste screenshots with Ctrl+V</Text>
+          <Text style={styles.pasteHint}>Upload images/PDFs or paste screenshots with Ctrl+V</Text>
         </View>
         <View style={[styles.confidence, answer?.confidence === "high" && styles.confidenceHigh]}>
           <Text style={styles.confidenceText}>{answer?.confidence ?? "ready"}</Text>
@@ -610,11 +622,11 @@ export function StudyAskCard({
         onChangeText={setQuestion}
       />
 
-      {screenshots.length ? (
-        <View style={styles.screenshotList}>
-          {screenshots.map((asset, index) => (
-            <Pressable key={`${asset.uri}-${index}`} onPress={() => removeScreenshot(index)} style={styles.screenshotPill}>
-              <Text numberOfLines={1} style={styles.screenshotText}>
+      {attachments.length ? (
+        <View style={styles.attachmentList}>
+          {attachments.map((asset, index) => (
+            <Pressable key={`${asset.uri}-${index}`} onPress={() => removeAttachment(index)} style={styles.attachmentPill}>
+              <Text numberOfLines={1} style={styles.attachmentText}>
                 {asset.name}
               </Text>
               <Text style={styles.removeText}>x</Text>
@@ -624,8 +636,13 @@ export function StudyAskCard({
       ) : null}
 
       <View style={styles.actions}>
-        <Button mode="outlined" icon="image-plus" disabled={asking || screenshots.length >= 4} onPress={addScreenshots}>
-          Image
+        <Button
+          mode="outlined"
+          icon="file-document-plus-outline"
+          disabled={asking || attachments.length >= maxTutorAttachments}
+          onPress={addAttachments}
+        >
+          Attach file
         </Button>
         <Button mode="contained" icon="send" loading={asking} disabled={asking || !selectedSubject || !question.trim()} onPress={ask}>
           Tutor me
@@ -840,12 +857,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: 10
   },
-  screenshotList: {
+  attachmentList: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
   },
-  screenshotPill: {
+  attachmentPill: {
     maxWidth: 210,
     minHeight: 34,
     flexDirection: "row",
@@ -857,7 +874,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surfaceRaised,
     paddingHorizontal: 10
   },
-  screenshotText: {
+  attachmentText: {
     flex: 1,
     color: palette.text,
     fontSize: 12
