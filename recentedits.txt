@@ -3,7 +3,25 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Animated theme motion fix
+Most recent edit: 2026-05-06 - Stale streak reset fix
+
+Summary:
+- Fixed streaks that stayed visible after a missed day when the nightly reset job had not run.
+- backend/src/services/gamificationService.ts now normalizes expired streaks inside ensureGamification whenever gamification is read.
+- A streak remains active if the last study date is today or yesterday, so studying today after studying yesterday still extends the streak correctly.
+- If the last study date is older than yesterday, the current streak resets to 0 on the next app data refresh.
+
+Validation run:
+- npm run build --prefix backend
+- npx tsc --noEmit
+- npm run lint
+- npm run build:web
+
+Deployment status:
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Animated theme motion fix
 
 Summary:
 - Rebuilt components/ui/ThemeAmbientMotion.tsx so animated themes use a reliable React Native Animated loop instead of the previous nearly-invisible edge-line Reanimated effect.

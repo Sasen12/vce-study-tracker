@@ -295,12 +295,18 @@ export const ensureGamification = async (userId: string) => {
   const missingStarterTitles = nextUnlocked.some((cosmetic) => !unlocked.includes(cosmetic));
   const hasOnlyStarterTheme = unlocked.length <= 1 && (!unlocked.length || unlocked.includes(DEFAULT_THEME_ID));
   const shouldBackfillBalance = gamification.totalXp > 0 && gamification.xpBalance === 0 && hasOnlyStarterTheme;
-  if (missingStarterTitles || shouldBackfillBalance) {
+  const lastStudyDate = gamification.lastStudyDate?.toISOString().slice(0, 10);
+  const today = todayMelbourne();
+  const streakExpired =
+    gamification.currentStreak > 0 && (!lastStudyDate || (lastStudyDate !== today && !isYesterday(lastStudyDate, today)));
+
+  if (missingStarterTitles || shouldBackfillBalance || streakExpired) {
     return prisma.userGamification.update({
       where: { userId },
       data: {
         ...(shouldBackfillBalance ? { xpBalance: gamification.totalXp } : {}),
-        ...(missingStarterTitles ? { unlockedCosmetics: nextUnlocked } : {})
+        ...(missingStarterTitles ? { unlockedCosmetics: nextUnlocked } : {}),
+        ...(streakExpired ? { currentStreak: 0 } : {})
       }
     });
   }
