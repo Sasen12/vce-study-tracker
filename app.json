@@ -7,6 +7,9 @@
     "scheme": "vcestudy",
     "userInterfaceStyle": "dark",
     "assetBundlePatterns": ["**/*"],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -18,4 +21,3 @@
     "plugins": ["expo-router", "expo-secure-store"]
   }
 }
-
