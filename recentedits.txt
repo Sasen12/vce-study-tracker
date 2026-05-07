@@ -3,7 +3,26 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Keep study music playing across tabs
+Most recent edit: 2026-05-07 - Route Data Analytics coach prompts correctly
+
+Summary:
+- Added a Data Analytics subject domain to the Ask Coach smart router so prompts about infographics, evaluation criteria, charts, BOM data, trends, cleaning and visualisation route to Data Analytics instead of falling back to English.
+- When Ask Coach auto-routes a prompt to another subject, the Study Coach subject selector now switches to that subject too, so the saved chat stays visible in the right subject.
+- Added a backend fallback that infers Data Analytics from infographic/data/evaluation wording when no subject is supplied.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Keep study music playing across tabs
 
 Summary:
 - Moved the Study music Audio.Sound instance and playback state into a global Zustand store.

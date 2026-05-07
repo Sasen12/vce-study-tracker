@@ -10,6 +10,7 @@ import type { StudyAnswer, StudyNote, UserSubject } from "@/types";
 
 type StudyAskCardProps = {
   selectedSubject: UserSubject | null;
+  onRouteSubject?: (subject: UserSubject) => void;
   initialTutorTopic?: string;
   initialTutorGoal?: string;
   initialTutorEventId?: string;
@@ -70,6 +71,18 @@ const subjectDomains: SubjectDomain[] = [
       { pattern: /\bbusiness management|management style|management skill|stakeholder|corporate culture\b/i, weight: 5 },
       { pattern: /\boperations management|human resources|marketing|employee|motivation|kpi|key performance indicator\b/i, weight: 4 },
       { pattern: /\bswot|porter|change management|leadership|business objective|strategy\b/i, weight: 4 }
+    ]
+  },
+  {
+    id: "data-analytics",
+    subjectTerms: ["data analytics", "data analysis", "applied computing", "analytics"],
+    questionSignals: [
+      { pattern: /\bdata analytics|data analysis|applied computing\b/i, weight: 8 },
+      { pattern: /\binfographic|data visuali[sz]ation|dashboard|chart|graph|axis|axes|visual hierarchy\b/i, weight: 5 },
+      { pattern: /\bevaluation criteria|efficiency|effectiveness|target audience|research question\b/i, weight: 5 },
+      { pattern: /\bBOM\b|Climate Data Online|Melbourne Airport Station|cleaned BOM|temperature data\b/i, weight: 6 },
+      { pattern: /\bdata acquisition|data cleansing|data cleaning|cleaned data|data manipulation|data dictionary|metadata|data integrity\b/i, weight: 4 },
+      { pattern: /\bsummary statistics|trend chart|trend|pattern|outlier|correlation|statistical analysis|source data\b/i, weight: 3 }
     ]
   },
   {
@@ -337,6 +350,7 @@ const SourceRow = ({ title, detail }: { title: string; detail?: string }) => (
 
 export function StudyAskCard({
   selectedSubject,
+  onRouteSubject,
   initialTutorTopic,
   initialTutorGoal,
   initialTutorEventId,
@@ -724,6 +738,9 @@ export function StudyAskCard({
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
       setAnswerMode(requestMode);
+      if (routed) {
+        onRouteSubject?.(questionSubject);
+      }
       if (requestMode === "tutor" && sessionActive) {
         setSessionTurns((current) => [
           ...current,

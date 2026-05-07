@@ -861,6 +861,7 @@ export function StudyCoachPanel({
 
       <StudyAskCard
         selectedSubject={selectedSubject}
+        onRouteSubject={onSelectSubject}
         initialTutorTopic={initialTutorTopic}
         initialTutorGoal={initialTutorGoal}
         initialTutorEventId={initialTutorEventId}

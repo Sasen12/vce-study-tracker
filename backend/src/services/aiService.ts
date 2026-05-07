@@ -1540,6 +1540,16 @@ const inferSubjectFromQuestion = (question: string) => {
   if (/\bbusiness management\b|\bbusman\b/i.test(question)) return "Business Management";
   if (/\bsoftware development\b|\bsoft(ware)? dev\b/i.test(question)) return "Software Development";
   if (/\bdata analytics\b|\bdata analysis\b/i.test(question)) return "Data Analytics";
+  if (
+    /\binfographic|data visuali[sz]ation|dashboard|chart|graph|axis|axes|evaluation criteria|efficiency|effectiveness|target audience|research question\b/i.test(
+      question
+    ) &&
+    /\bdata|dataset|BOM|Climate Data Online|Melbourne Airport Station|temperature|trend|summary statistics|visualisation|visualization\b/i.test(
+      question
+    )
+  ) {
+    return "Data Analytics";
+  }
   if (/\bgeneral math(s|ematics)?\b/i.test(question)) return "General Mathematics";
   if (/\bmath(ematical)? methods\b|\bmethods\b/i.test(question)) return "Mathematical Methods";
   if (/\bspecialist math(s|ematics)?\b|\bspesh\b/i.test(question)) return "Specialist Mathematics";
