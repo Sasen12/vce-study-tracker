@@ -21,9 +21,10 @@ Validation run:
 - npm run build:web
 
 Deployment status:
-- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
-- GitHub target: origin/main
-- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+- GitHub push completed on origin/main.
+- Netlify production deploy was attempted after npm run build:web, but the Netlify CLI returned JSONHTTPError: Forbidden.
+- Current production build-info still reports 12fc0f8, so the live Netlify site has not picked up this commit yet.
+- Netlify production target once deploy permissions are working again: https://vce-study-tracker-sasen.netlify.app
 
 Previous edit: 2026-05-07 - Route Data Analytics coach prompts correctly
 
