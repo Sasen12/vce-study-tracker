@@ -78,7 +78,7 @@ type AppState = {
     difficulty: "easy" | "medium" | "hard";
     count: 1 | 3 | 5;
     sourceMode?: "balanced" | "exam_bank";
-  }) => Promise<void>;
+  }) => Promise<GeneratedQuestion[]>;
   timerCheckQuestion: (input: {
     subjectId: string;
     topic: string;
@@ -273,6 +273,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   generateQuestions: async (input) => {
     const data = await studyApi.generateQuestions(input);
     set({ generatedQuestions: data.questions, gamification: data.gamification });
+    return data.questions;
   },
   timerCheckQuestion: async (input) => {
     const data = await studyApi.timerCheckQuestion(input);

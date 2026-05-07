@@ -780,14 +780,60 @@ export default function QuestionsScreen() {
     }
   };
 
+  const createFlashcardsFromTopic = async () => {
+    const cleanTopic = flashcardTopic.trim();
+    if (!selectedSubject || !cleanTopic) {
+      setToolMessage("Pick a subject and enter a topic first.");
+      return;
+    }
+
+    setCreatingFlashcards(true);
+    setToolMessage(null);
+    try {
+      const questions = await generateQuestions({
+        subjectId: selectedSubject.id,
+        topic: cleanTopic,
+        difficulty: "medium",
+        count: 3,
+        sourceMode: "balanced"
+      });
+
+      for (const question of questions) {
+        await createNote({
+          subjectId: selectedSubject.id,
+          title: `Flashcard: ${cleanTopic}`.slice(0, 140),
+          noteType: "general",
+          tags: Array.from(new Set([flashcardTag, "ai-topic", cleanTopic.toLowerCase(), selectedSubject.subjectName.toLowerCase()])),
+          body: formatFlashcardNoteBody({
+            cardType: "normal",
+            sourceTitle: `${cleanTopic} (${selectedSubject.subjectName} topic support)`,
+            front: question.question,
+            back: [
+              question.model_answer,
+              question.marking_criteria.length ? "" : null,
+              ...question.marking_criteria.map((criterion) => `- ${criterion}`)
+            ]
+              .filter(Boolean)
+              .join("\n")
+          })
+        });
+      }
+
+      setToolMessage(
+        `${questions.length} ${cleanTopic} flashcards forged from topic support. Add class notes later if you want source-specific cards.`
+      );
+      await fetchAll();
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "Could not create topic flashcards.");
+    } finally {
+      setCreatingFlashcards(false);
+    }
+  };
+
   const createFlashcardsFromSelectedSource = async () => {
     const source = flashcardSourceOptions.find((note) => note.id === flashcardSourceId) ?? flashcardSourceOptions[0];
     if (!source) {
-      setToolMessage(
-        flashcardTopic.trim()
-          ? `No source matches "${flashcardTopic.trim()}" yet. Try a broader topic or make a note first.`
-          : "Create a note, class note, coach answer or mistake first."
-      );
+      await createFlashcardsFromTopic();
       return;
     }
     setCreatingFlashcards(true);
@@ -1561,7 +1607,7 @@ export default function QuestionsScreen() {
             <>
               <AppCard style={styles.form}>
                 <Text style={styles.battleKicker}>Flashcard Forge</Text>
-                <Text style={styles.muted}>Turn notes, coach answers, class notes, or mistake logs into review cards.</Text>
+                <Text style={styles.muted}>Turn notes into source cards, or enter any topic to forge starter cards.</Text>
                 <TextInput
                   mode="outlined"
                   label="Card topic"
@@ -1598,10 +1644,10 @@ export default function QuestionsScreen() {
                     })}
                   </ScrollView>
                 ) : flashcardTopic.trim() ? (
-                  <Text style={styles.muted}>No note or mistake source matches this topic yet.</Text>
+                  <Text style={styles.muted}>No local note matches yet. Forge will use topic support for {selectedSubject?.subjectName ?? "this subject"}.</Text>
                 ) : null}
                 <Button mode="contained" icon="cards-outline" loading={creatingFlashcards} disabled={creatingFlashcards} onPress={createFlashcardsFromSelectedSource}>
-                  Forge cards
+                  {flashcardSourceOptions.length ? "Forge cards" : "Forge topic cards"}
                 </Button>
               </AppCard>
               {currentFlashcard ? (
