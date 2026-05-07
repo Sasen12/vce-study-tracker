@@ -24,7 +24,7 @@ export function StudyMusicPanel() {
   const [playing, setPlaying] = useState(false);
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
-  const [looping, setLooping] = useState(true);
+  const [looping, setLooping] = useState(false);
   const [positionMillis, setPositionMillis] = useState(0);
   const [durationMillis, setDurationMillis] = useState(STUDY_MUSIC_TRACKS[0]?.durationMillis ?? 0);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +35,12 @@ export function StudyMusicPanel() {
     () => STUDY_MUSIC_TRACKS.find((track) => track.id === selectedTrackId) ?? STUDY_MUSIC_TRACKS[0],
     [selectedTrackId]
   );
+
+  const nextTrackAfter = (track: StudyMusicTrack) => {
+    const currentIndex = STUDY_MUSIC_TRACKS.findIndex((item) => item.id === track.id);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % STUDY_MUSIC_TRACKS.length : 0;
+    return STUDY_MUSIC_TRACKS[nextIndex];
+  };
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -66,6 +72,13 @@ export function StudyMusicPanel() {
     setPlaying(status.isPlaying);
     setPositionMillis(status.positionMillis);
     setDurationMillis(status.durationMillis ?? track.durationMillis);
+
+    if (status.didJustFinish && !status.isLooping) {
+      const nextTrack = nextTrackAfter(track);
+      if (nextTrack) {
+        void loadAndPlay(nextTrack);
+      }
+    }
   };
 
   const unloadSound = async (sound: Audio.Sound | null) => {
@@ -192,10 +205,10 @@ export function StudyMusicPanel() {
         </View>
         <View style={styles.headerText}>
           <Text style={styles.cardTitle}>Study music</Text>
-          <Text style={styles.muted}>Copyright-safe tracks with credits kept in the app.</Text>
+          <Text style={styles.muted}>Copyright-safe tracks that continue through the playlist.</Text>
         </View>
         <View style={styles.loopControl}>
-          <Text style={styles.loopLabel}>Loop</Text>
+          <Text style={styles.loopLabel}>Repeat</Text>
           <Switch value={looping} onValueChange={(value) => void changeLooping(value)} color={palette.info} />
         </View>
       </View>
