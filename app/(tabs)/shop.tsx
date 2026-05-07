@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Button, SegmentedButtons, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
@@ -113,6 +113,21 @@ export default function ShopScreen() {
           <Text style={styles.coinLabel}>coins</Text>
         </View>
       </View>
+
+      <AppCard style={styles.proWaitlistCard}>
+        <View style={styles.summaryTop}>
+          <View style={styles.proWaitlistIcon}>
+            <MaterialCommunityIcons name="star-four-points-outline" color={palette.warning} size={24} />
+          </View>
+          <View style={styles.flexText}>
+            <Text style={styles.cardTitle}>VCE Study Tracker Pro</Text>
+            <Text style={styles.muted}>Coming soon. Join the waitlist to test interest before payments exist.</Text>
+          </View>
+        </View>
+        <Button mode="contained" icon="email-plus-outline" onPress={() => router.push("/(tabs)/pro")}>
+          View Pro
+        </Button>
+      </AppCard>
 
       <AppCard style={styles.summaryCard}>
         <View style={styles.summaryTop}>
@@ -333,10 +348,23 @@ const styles = StyleSheet.create({
   summaryCard: {
     gap: 12
   },
+  proWaitlistCard: {
+    gap: 12,
+    borderColor: `${palette.warning}44`,
+    backgroundColor: `${palette.warning}10`
+  },
   summaryTop: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12
+  },
+  proWaitlistIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.warning}18`
   },
   summaryIcon: {
     width: 44,

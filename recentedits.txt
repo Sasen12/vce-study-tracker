@@ -3,7 +3,31 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-06 - Coach returns only the requested word-count answer
+Most recent edit: 2026-05-07 - Pro waitlist demand test
+
+Summary:
+- Added a hidden VCE Study Tracker Pro screen that keeps the free app promise clear.
+- Added Student Pro feature copy for AI weekly plans, SAC/exam countdown planning, advanced analytics, weak area tracking, themes, reports, tutor tools, and private leaderboards.
+- Added a Pro waitlist form that records interest through the existing Community feedback API instead of adding payments or subscriptions.
+- Added price intent options for A$2.99/month, A$14.99/term, A$24.99/year, and not-now interest.
+- Added audience selection for students, parents, and tutors so demand can be measured by buyer type.
+- Added a Shop card linking to the Pro waitlist without cluttering the bottom tab bar.
+- Added Pro screen usage tracking so admin analytics can show whether students are opening the page.
+- Updated Community analytics labels and shared UsageScreen types for the new Pro screen.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-06 - Coach returns only the requested word-count answer
 
 Summary:
 - Fixed word-count Ask Coach responses that included both a general "Direct answer" and a separate "50-word version".

@@ -83,6 +83,7 @@ const usageScreenLabels: Record<UsageScreen, string> = {
   questions: "Questions",
   community: "Community",
   shop: "Shop",
+  pro: "Pro",
   profile: "Profile"
 };
 

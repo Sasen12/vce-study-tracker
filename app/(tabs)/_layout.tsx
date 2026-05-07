@@ -80,6 +80,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="pro"
+        options={{
+          href: null,
+          title: "Pro"
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
