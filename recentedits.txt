@@ -3,7 +3,27 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Topic-only flashcard forging
+Most recent edit: 2026-05-07 - Hide Pro plan
+
+Summary:
+- Added a small PRO_PLAN_VISIBLE flag so the Pro plan can be paused without deleting the waitlist screen.
+- Hid the VCE Study Tracker Pro card from the Shop screen while the flag is off.
+- Direct visits to the hidden Pro route now redirect back to Shop.
+- Kept the Pro waitlist code dormant so it can be re-enabled later by flipping the flag.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Topic-only flashcard forging
 
 Summary:
 - Fixed Flashcard Forge so students can enter a topic even when no local note, coach answer, class note, or mistake source exists yet.

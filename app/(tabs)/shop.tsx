@@ -7,6 +7,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { BADGE_SHOP_ITEMS, DEFAULT_TITLE_ID, STARTER_TITLE_IDS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
+import { PRO_PLAN_VISIBLE } from "@/constants/proPlan";
 import { palette, themeShopItems } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
@@ -114,20 +115,22 @@ export default function ShopScreen() {
         </View>
       </View>
 
-      <AppCard style={styles.proWaitlistCard}>
-        <View style={styles.summaryTop}>
-          <View style={styles.proWaitlistIcon}>
-            <MaterialCommunityIcons name="star-four-points-outline" color={palette.warning} size={24} />
+      {PRO_PLAN_VISIBLE ? (
+        <AppCard style={styles.proWaitlistCard}>
+          <View style={styles.summaryTop}>
+            <View style={styles.proWaitlistIcon}>
+              <MaterialCommunityIcons name="star-four-points-outline" color={palette.warning} size={24} />
+            </View>
+            <View style={styles.flexText}>
+              <Text style={styles.cardTitle}>VCE Study Tracker Pro</Text>
+              <Text style={styles.muted}>Coming soon. Join the waitlist to test interest before payments exist.</Text>
+            </View>
           </View>
-          <View style={styles.flexText}>
-            <Text style={styles.cardTitle}>VCE Study Tracker Pro</Text>
-            <Text style={styles.muted}>Coming soon. Join the waitlist to test interest before payments exist.</Text>
-          </View>
-        </View>
-        <Button mode="contained" icon="email-plus-outline" onPress={() => router.push("/(tabs)/pro")}>
-          View Pro
-        </Button>
-      </AppCard>
+          <Button mode="contained" icon="email-plus-outline" onPress={() => router.push("/(tabs)/pro")}>
+            View Pro
+          </Button>
+        </AppCard>
+      ) : null}
 
       <AppCard style={styles.summaryCard}>
         <View style={styles.summaryTop}>

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { Redirect } from "expo-router";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
+import { PRO_PLAN_VISIBLE } from "@/constants/proPlan";
 import { palette } from "@/constants/theme";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import { studyApi } from "@/services/studyApi";
@@ -95,6 +97,10 @@ export default function ProScreen() {
       setSaving(false);
     }
   };
+
+  if (!PRO_PLAN_VISIBLE) {
+    return <Redirect href="/(tabs)/shop" />;
+  }
 
   return (
     <Screen>
