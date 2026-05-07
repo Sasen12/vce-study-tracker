@@ -3,7 +3,27 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Fix study music stop control
+Most recent edit: 2026-05-07 - Add scroll-more cue
+
+Summary:
+- Updated the shared Screen wrapper so scrollable pages now show a subtle bottom fade and down chevron when more content exists below the fold.
+- The cue automatically disappears near the bottom of the page.
+- Re-enabled the native vertical scroll indicator on shared app screens.
+- Kept the cue global so Home, Study, Questions, Community, Shop, Profile, Calendar and signup benefit without page-by-page patches.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Fix study music stop control
 
 Summary:
 - Changed the Study music stop button to unload the current audio stream instead of only calling stopAsync.
