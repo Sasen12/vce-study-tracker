@@ -3,6 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseInput, ResponseInputContent } from "openai/resources/responses/responses";
 import { z } from "zod";
 import { getStudyDesignContext } from "../resources/studyDesignContext.js";
+import { inferVceSubjectFromQuestion } from "../resources/subjectInference.js";
 
 const generatedQuestionSchema = z.object({
   question: z.string(),
@@ -1534,29 +1535,7 @@ export const generateClassNoteChunkFromTranscript = async (
   return parsed;
 };
 
-const inferSubjectFromQuestion = (question: string) => {
-  if (/\b(vce\s*)?(unit\s*[34]\s*)?bio(logy)?\b/i.test(question)) return "Biology";
-  if (/\b(vet\s*)?(hospitality\s*:?\s*)?cookery\b/i.test(question)) return "VCE VET Hospitality: Cookery";
-  if (/\bbusiness management\b|\bbusman\b/i.test(question)) return "Business Management";
-  if (/\bsoftware development\b|\bsoft(ware)? dev\b/i.test(question)) return "Software Development";
-  if (/\bdata analytics\b|\bdata analysis\b/i.test(question)) return "Data Analytics";
-  if (
-    /\binfographic|data visuali[sz]ation|dashboard|chart|graph|axis|axes|evaluation criteria|efficiency|effectiveness|target audience|research question\b/i.test(
-      question
-    ) &&
-    /\bdata|dataset|BOM|Climate Data Online|Melbourne Airport Station|temperature|trend|summary statistics|visualisation|visualization\b/i.test(
-      question
-    )
-  ) {
-    return "Data Analytics";
-  }
-  if (/\bgeneral math(s|ematics)?\b/i.test(question)) return "General Mathematics";
-  if (/\bmath(ematical)? methods\b|\bmethods\b/i.test(question)) return "Mathematical Methods";
-  if (/\bspecialist math(s|ematics)?\b|\bspesh\b/i.test(question)) return "Specialist Mathematics";
-  if (/\bfoundation math(s|ematics)?\b/i.test(question)) return "Foundation Mathematics";
-  if (/\benglish\b|\beal\b/i.test(question)) return "English";
-  return null;
-};
+const inferSubjectFromQuestion = inferVceSubjectFromQuestion;
 
 type WordCountRequest = {
   count: number;

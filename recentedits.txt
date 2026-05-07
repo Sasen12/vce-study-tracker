@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Route Data Analytics coach prompts correctly
+Most recent edit: 2026-05-07 - Add full-subject coach routing and context coverage
+
+Summary:
+- Replaced the small Ask Coach subject router with a catalogue-based router that scores every subject from the VCE subject list.
+- Added exact subject-name and alias checks across VCE, VCE VM, VCE VET and language subjects, plus stronger topic signals for common indirect prompts like Geography fieldwork, Data Analytics infographics, Accounting reports, PE training and more.
+- Added backend subject inference built from the same VCE/VET/VM catalogue so fallback Ask Coach answers can infer more than just English, Maths, Business, Biology, Software and Data Analytics.
+- Added backend subject catalogue metadata and made study-design fallback context use the app's actual subject categories for every listed subject instead of only rough regex matching.
+- Upgraded Applied Computing to use the local Applied Computing study-design context, alongside existing detailed contexts for English/EAL, Software Development, Data Analytics, Business Management, Mathematics, Biology and Cookery.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- npm run lint
+- git diff --check
+- backend subject inference smoke check via node
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Route Data Analytics coach prompts correctly
 
 Summary:
 - Added a Data Analytics subject domain to the Ask Coach smart router so prompts about infographics, evaluation criteria, charts, BOM data, trends, cleaning and visualisation route to Data Analytics instead of falling back to English.

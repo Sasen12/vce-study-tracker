@@ -1,3 +1,5 @@
+import { isLanguageSubject, subjectMetaFor } from "./vceSubjectCatalogue.js";
+
 type StudyDesignContext = {
   source: string;
   context: string;
@@ -113,11 +115,7 @@ const officialStudyDesignUrlFor = (subject: string) => {
   if (direct) return `${vcaaBaseUrl}${direct}`;
 
   const normalised = subject.toLowerCase();
-  if (
-    /language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/.test(
-      normalised
-    )
-  ) {
+  if (isLanguageSubject(subject) || /language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/.test(normalised)) {
     return `${vcaaBaseUrl}${languageStudyDesignSource}`;
   }
 
@@ -669,6 +667,11 @@ const contexts: Record<string, DetailedStudyDesignContext> = {
     context:
       "For VCE English as an Additional Language Units 3 and 4, align work with Reading and responding to texts, Creating texts, and Analysing argument, with explicit support for vocabulary, syntax, expression, evidence selection, audience, purpose and context. Prefer essay plans, quote/evidence banks, paragraph scaffolds, mentor text annotations, language-feature analysis, timed responses, oral/presentation rehearsal where relevant, editing passes and written explanation practice. Avoid generic formula or calculation language."
   },
+  "Applied Computing": {
+    source: `${officialSubjectSource("Applied Computing")} ${appliedComputingSource}`,
+    context:
+      "For VCE Applied Computing Units 1 and 2, align work with the Applied Computing problem-solving methodology, data and information, digital systems, programming, networks, cyber security, solution design, testing and evaluation. Applied Computing study should produce practical digital artefacts such as requirements notes, data dictionaries, design sketches, pseudocode, test tables, security justifications and evaluation criteria. Prefer active tasks that ask students to explain decisions, apply terminology to scenarios, build or critique artefacts, and mark work against criteria."
+  },
   "Software Development": {
     source: `${officialSubjectSource("Software Development")} ${appliedComputingSource}`,
     context:
@@ -733,7 +736,7 @@ const profileStudyDesignContext = (subject: string): StudyDesignContext | null =
     };
   }
 
-  if (languageSubjects.has(normalised)) {
+  if (languageSubjects.has(normalised) || isLanguageSubject(subject)) {
     return {
       source: officialSubjectSource(subject),
       detailLevel: "generic",
@@ -747,6 +750,79 @@ const profileStudyDesignContext = (subject: string): StudyDesignContext | null =
 const genericStudyDesignContext = (subject: string): StudyDesignContext => {
   const profile = profileStudyDesignContext(subject);
   if (profile) return profile;
+  const meta = subjectMetaFor(subject);
+
+  if (meta?.category === "Languages") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with the relevant VCAA language study design: interpret spoken, written and visual texts; communicate in the language; analyse culture and context; build vocabulary, grammar and text-type control; and practise exam-style listening, reading, writing and speaking tasks where applicable. Prefer vocabulary banks, grammar repair, model responses, timed writing, oral rehearsal, text annotation and correction logs.`
+    };
+  }
+
+  if (meta?.category === "Sciences") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with scientific understanding, investigation skills, data interpretation, terminology, experimental design and exam-style explanation. Prefer concept repair, diagrams, practical-method reasoning, data/table interpretation, command-term responses, mixed exam questions and correction logs.`
+    };
+  }
+
+  if (meta?.category === "Humanities") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with key knowledge, key skills, evidence, source/case analysis and VCAA command terms. Prefer terminology banks, evidence/source tables, short-answer plans, compare/analyse/evaluate paragraphs, timed responses and marked corrections.`
+    };
+  }
+
+  if (meta?.category === "Health and PE") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with key terms, models, data interpretation, case studies, application to populations or performance contexts, and VCAA command terms. Prefer summary tables, applied examples, data-response practice, short-answer drills and correction logs.`
+    };
+  }
+
+  if (meta?.category === "The Arts") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with creative process, analysis, terminology, folio or performance development, artist/practitioner examples, audience, purpose, context and evaluation. Prefer production planning, annotation, critique paragraphs, terminology banks, rehearsal/revision tasks and reflective corrections.`
+    };
+  }
+
+  if (meta?.category === "Technology") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For VCE ${subject} Units 3 and 4, align study with a design or problem-solving process, technical terminology, materials or systems knowledge, safety, criteria, testing, evaluation, documentation and applied scenario questions. Prefer design briefs, process notes, test tables, justification paragraphs, project checkpoints and marked corrections.`
+    };
+  }
+
+  if (meta?.category === "VCE VM") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For ${subject}, align study with applied learning, portfolio evidence, practical communication, reflection, project work and task completion. Prefer checklists, evidence logs, applied scenarios, short reflections, oral rehearsal where relevant and practical next actions.`
+    };
+  }
+
+  if (meta?.category === "VCE VET") {
+    return {
+      source: officialSubjectSource(subject),
+      detailLevel: "generic",
+      context:
+        `For ${subject}, align study with workplace or vocational competencies, safety, procedures, evidence logs, practical reflection and assessment task completion. Prefer checklists, evidence logs, workplace scenarios, short applied answers, oral rehearsal where relevant and practical next actions.`
+    };
+  }
 
   if (matches(subject, [/language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/i])) {
     return {

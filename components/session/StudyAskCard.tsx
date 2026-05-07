@@ -7,6 +7,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import type { StudyAnswer, StudyNote, UserSubject } from "@/types";
+import { smartSubjectForQuestion } from "@/utils/subjectRouting";
 
 type StudyAskCardProps = {
   selectedSubject: UserSubject | null;
@@ -22,12 +23,6 @@ type TutorAttachment = {
   name: string;
   mimeType?: string;
   file?: Blob;
-};
-
-type SubjectDomain = {
-  id: string;
-  subjectTerms: string[];
-  questionSignals: { pattern: RegExp; weight: number }[];
 };
 
 type CoachMode = "coach" | "tutor";
@@ -52,104 +47,6 @@ type CoachChatTurn = {
   attachmentNames: string[];
   turnNumber: number;
 };
-
-const subjectDomains: SubjectDomain[] = [
-  {
-    id: "maths",
-    subjectTerms: ["mathematics", "maths", "math", "methods", "specialist", "further"],
-    questionSignals: [
-      { pattern: /\\frac|\\boxed|\\\(|\\\[|\^|[a-z]\s*=/i, weight: 4 },
-      { pattern: /\bannuit(?:y|ies)|recursion|compound interest|interest rate|monthly payment|depreciation\b/i, weight: 5 },
-      { pattern: /\bsolve|calculate|equation|formula|function|gradient|derivative|integral|probability|matrix|matrices|cas\b/i, weight: 3 },
-      { pattern: /\bsine|cosine|tangent|trigonometry|quadratic|linear|standard deviation|mean|median\b/i, weight: 3 }
-    ]
-  },
-  {
-    id: "business",
-    subjectTerms: ["business", "management"],
-    questionSignals: [
-      { pattern: /\bbusiness management|management style|management skill|stakeholder|corporate culture\b/i, weight: 5 },
-      { pattern: /\boperations management|human resources|marketing|employee|motivation|kpi|key performance indicator\b/i, weight: 4 },
-      { pattern: /\bswot|porter|change management|leadership|business objective|strategy\b/i, weight: 4 }
-    ]
-  },
-  {
-    id: "data-analytics",
-    subjectTerms: ["data analytics", "data analysis", "applied computing", "analytics"],
-    questionSignals: [
-      { pattern: /\bdata analytics|data analysis|applied computing\b/i, weight: 8 },
-      { pattern: /\binfographic|data visuali[sz]ation|dashboard|chart|graph|axis|axes|visual hierarchy\b/i, weight: 5 },
-      { pattern: /\bevaluation criteria|efficiency|effectiveness|target audience|research question\b/i, weight: 5 },
-      { pattern: /\bBOM\b|Climate Data Online|Melbourne Airport Station|cleaned BOM|temperature data\b/i, weight: 6 },
-      { pattern: /\bdata acquisition|data cleansing|data cleaning|cleaned data|data manipulation|data dictionary|metadata|data integrity\b/i, weight: 4 },
-      { pattern: /\bsummary statistics|trend chart|trend|pattern|outlier|correlation|statistical analysis|source data\b/i, weight: 3 }
-    ]
-  },
-  {
-    id: "accounting",
-    subjectTerms: ["accounting"],
-    questionSignals: [
-      { pattern: /\bbalance sheet|income statement|ledger|journal entry|debit|credit|accounts receivable|accounts payable\b/i, weight: 5 },
-      { pattern: /\bassets|liabilities|equity|cash flow|gross profit|net profit|inventory turnover\b/i, weight: 3 }
-    ]
-  },
-  {
-    id: "economics",
-    subjectTerms: ["economics", "eco"],
-    questionSignals: [
-      { pattern: /\bsupply and demand|aggregate demand|aggregate supply|inflation|gdp|monetary policy|fiscal policy\b/i, weight: 5 },
-      { pattern: /\bexchange rate|unemployment|scarcity|opportunity cost|market failure|elasticity\b/i, weight: 4 }
-    ]
-  },
-  {
-    id: "biology",
-    subjectTerms: ["biology", "bio"],
-    questionSignals: [
-      { pattern: /\bcell|cells|dna|rna|enzyme|photosynthesis|respiration|homeostasis|immune|evolution\b/i, weight: 4 },
-      { pattern: /\bgene|genetic|allele|mutation|protein synthesis|pathogen|antibody\b/i, weight: 4 }
-    ]
-  },
-  {
-    id: "chemistry",
-    subjectTerms: ["chemistry", "chem"],
-    questionSignals: [
-      { pattern: /\bmole|molar|stoichiometry|titration|oxidation|reduction|enthalpy|hydrocarbon\b/i, weight: 4 },
-      { pattern: /\bacid|base|covalent|ionic|equilibrium|reaction rate|organic chemistry\b/i, weight: 4 }
-    ]
-  },
-  {
-    id: "physics",
-    subjectTerms: ["physics"],
-    questionSignals: [
-      { pattern: /\bforce|velocity|acceleration|momentum|energy|power|circuit|voltage|current\b/i, weight: 4 },
-      { pattern: /\bnewton|magnetic field|electric field|wave|frequency|gravity|projectile\b/i, weight: 4 }
-    ]
-  },
-  {
-    id: "english",
-    subjectTerms: ["english", "literature", "eal"],
-    questionSignals: [
-      { pattern: /\bessay|argument analysis|language analysis|text response|comparative|contention\b/i, weight: 4 },
-      { pattern: /\btheme|symbolism|author|audience|tone|persuasive technique|metalanguage\b/i, weight: 3 }
-    ]
-  },
-  {
-    id: "legal",
-    subjectTerms: ["legal"],
-    questionSignals: [
-      { pattern: /\bconstitution|parliament|court|justice|law reform|precedent|statutory interpretation\b/i, weight: 4 },
-      { pattern: /\bcivil|criminal|rights|remedy|sanction|jury|high court\b/i, weight: 3 }
-    ]
-  },
-  {
-    id: "psychology",
-    subjectTerms: ["psychology", "psych"],
-    questionSignals: [
-      { pattern: /\bbrain|neuron|memory|learning|conditioning|sleep|stress|mental health\b/i, weight: 4 },
-      { pattern: /\bamygdala|hippocampus|classical conditioning|operant conditioning|consciousness\b/i, weight: 4 }
-    ]
-  }
-];
 
 const attachmentSummary = (attachmentNames: string[]) =>
   attachmentNames.length ? `Attachments\n${attachmentNames.map((name) => `- ${name}`).join("\n")}` : null;
@@ -282,42 +179,6 @@ const formatSavedDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-};
-
-const subjectDomainScore = (subject: UserSubject, domain: SubjectDomain) => {
-  const subjectName = subject.subjectName.toLowerCase();
-  return domain.subjectTerms.reduce((score, term) => score + (subjectName.includes(term) ? 1 : 0), 0);
-};
-
-const questionDomainScore = (question: string, domain: SubjectDomain) =>
-  domain.questionSignals.reduce((score, signal) => score + (signal.pattern.test(question) ? signal.weight : 0), 0);
-
-const smartSubjectForQuestion = (question: string, selectedSubject: UserSubject, subjects: UserSubject[]) => {
-  const rankedDomains = subjectDomains
-    .map((domain) => ({
-      domain,
-      score:
-        questionDomainScore(question, domain) +
-        (domain.subjectTerms.some((term) => question.toLowerCase().includes(term)) ? 4 : 0)
-    }))
-    .sort((a, b) => b.score - a.score);
-
-  const bestDomain = rankedDomains[0];
-  const nextDomain = rankedDomains[1];
-  if (!bestDomain || bestDomain.score < 4 || (nextDomain && bestDomain.score - nextDomain.score < 2)) {
-    return selectedSubject;
-  }
-
-  if (subjectDomainScore(selectedSubject, bestDomain.domain) > 0) {
-    return selectedSubject;
-  }
-
-  const matchingSubject = subjects
-    .map((subject) => ({ subject, score: subjectDomainScore(subject, bestDomain.domain) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.subject.subjectName.localeCompare(b.subject.subjectName))[0]?.subject;
-
-  return matchingSubject ?? selectedSubject;
 };
 
 const isPdfAttachment = (asset: TutorAttachment) =>
