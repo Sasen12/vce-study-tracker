@@ -11,6 +11,7 @@ import {
 } from "../middleware/authMiddleware.js";
 import { ensureGamification } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
+import { inferSchoolNameFromEmail } from "../utils/schoolEmail.js";
 
 export const authRouter = Router();
 
@@ -60,22 +61,18 @@ const publicUser = (user: {
 const isUniqueConstraintError = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 
-const isVicEduAuEmail = (email: string) => {
-  const domain = email.split("@")[1]?.toLowerCase() ?? "";
-  return domain === "vic.edu.au" || domain.endsWith(".vic.edu.au");
-};
-
 authRouter.post(
   "/register",
   asyncHandler(async (req, res) => {
     const payload = registerSchema.parse(req.body);
     const email = payload.email.toLowerCase().trim();
-    const schoolName = payload.schoolName?.trim() || null;
+    const submittedSchoolName = payload.schoolName?.trim() || null;
+    const schoolName = submittedSchoolName || inferSchoolNameFromEmail(email);
     if (schoolName && schoolName.length < 2) {
       throw new HttpError(400, "Enter your school name with at least 2 characters.");
     }
-    if (!isVicEduAuEmail(email) && !schoolName) {
-      throw new HttpError(400, "Enter your school name when you are not using a vic.edu.au school email.");
+    if (!schoolName) {
+      throw new HttpError(400, "Enter your school name, or use a recognised vic.edu.au school email.");
     }
     const passwordHash = await bcrypt.hash(payload.password, 12);
 

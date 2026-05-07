@@ -3,7 +3,30 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Capture school on signup
+Most recent edit: 2026-05-07 - Infer schools from vic.edu.au emails
+
+Summary:
+- Fixed signup so vic.edu.au school emails auto-detect a school name from the email domain instead of leaving school blank.
+- Added shared school-email inference helpers for the app and backend.
+- Signup now shows the detected school name and still lets students correct it manually if the domain-derived name is not clean.
+- Backend registration now stores the submitted school name or falls back to the inferred vic.edu.au school name.
+- Existing users with blank schoolName are backfilled on backend startup when their saved email can infer a vic.edu.au school domain.
+
+Validation run:
+- npm run prisma:generate --prefix backend
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npx tsx school email inference smoke test
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Capture school on signup
 
 Summary:
 - Added an optional schoolName field to users in the Prisma schema and base SQL schema.

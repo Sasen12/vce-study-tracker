@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
@@ -7,6 +7,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { palette, subjectColors } from "@/constants/theme";
 import { useAuthStore } from "@/store/authStore";
+import { inferSchoolNameFromEmail } from "@/utils/schoolEmail";
 
 type SelectedSubject = {
   subjectName: string;
@@ -17,15 +18,11 @@ type SelectedSubject = {
 
 const maxSubjects = 8;
 
-const isVicEduAuEmail = (value: string) => {
-  const domain = value.trim().toLowerCase().split("@")[1] ?? "";
-  return domain === "vic.edu.au" || domain.endsWith(".vic.edu.au");
-};
-
 export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [schoolName, setSchoolName] = useState("");
+  const [schoolNameEdited, setSchoolNameEdited] = useState(false);
   const [password, setPassword] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [selected, setSelected] = useState<SelectedSubject[]>([]);
@@ -34,7 +31,9 @@ export default function RegisterScreen() {
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
   const normalisedEmail = email.trim().toLowerCase();
-  const needsSchoolName = Boolean(normalisedEmail) && !isVicEduAuEmail(normalisedEmail);
+  const detectedSchoolName = useMemo(() => inferSchoolNameFromEmail(normalisedEmail), [normalisedEmail]);
+  const typedSchoolName = schoolName.trim();
+  const schoolReady = typedSchoolName.length >= 2 || Boolean(!typedSchoolName && detectedSchoolName);
   const subjects = useMemo(() => {
     const query = subjectSearch.trim().toLowerCase();
     return VCE_SUBJECTS.filter(
@@ -50,6 +49,13 @@ export default function RegisterScreen() {
       })).filter((group) => group.subjects.length),
     [subjects]
   );
+
+  useEffect(() => {
+    if (detectedSchoolName && !schoolNameEdited && schoolName !== detectedSchoolName) {
+      setSchoolName(detectedSchoolName);
+      setSchoolError(null);
+    }
+  }, [detectedSchoolName, schoolName, schoolNameEdited]);
 
   const toggleSubject = (subjectName: string) => {
     setSelected((current) => {
@@ -88,9 +94,9 @@ export default function RegisterScreen() {
   };
 
   const submit = async () => {
-    const cleanSchoolName = schoolName.trim();
-    if (needsSchoolName && cleanSchoolName.length < 2) {
-      setSchoolError("Enter your school name if you are not using a vic.edu.au school email.");
+    const cleanSchoolName = schoolName.trim() || detectedSchoolName;
+    if (!cleanSchoolName || cleanSchoolName.length < 2) {
+      setSchoolError("Enter your school name, or use a recognised vic.edu.au school email.");
       return;
     }
 
@@ -100,7 +106,7 @@ export default function RegisterScreen() {
         displayName,
         email,
         password,
-        schoolName: cleanSchoolName || null,
+        schoolName: cleanSchoolName,
         subjects: selected
       });
       router.replace("/(tabs)");
@@ -132,21 +138,22 @@ export default function RegisterScreen() {
               setSchoolError(null);
             }}
           />
-          {!normalisedEmail || needsSchoolName ? (
-            <>
-              <TextInput
-                mode="outlined"
-                label="School name"
-                value={schoolName}
-                autoCapitalize="words"
-                onChangeText={(value) => {
-                  setSchoolName(value);
-                  setSchoolError(null);
-                }}
-              />
-              <Text style={styles.inputHint}>Needed when signing up without a vic.edu.au school email.</Text>
-            </>
-          ) : null}
+          <TextInput
+            mode="outlined"
+            label={detectedSchoolName ? "School name (detected)" : "School name"}
+            value={schoolName}
+            autoCapitalize="words"
+            onChangeText={(value) => {
+              setSchoolName(value);
+              setSchoolNameEdited(true);
+              setSchoolError(null);
+            }}
+          />
+          <Text style={styles.inputHint}>
+            {detectedSchoolName
+              ? "Detected from the vic.edu.au email. You can correct it if needed."
+              : "Use a vic.edu.au school email to detect this, or type the school name."}
+          </Text>
           <TextInput
             mode="outlined"
             label="Password"
@@ -232,7 +239,7 @@ export default function RegisterScreen() {
           mode="contained"
           icon="account-plus"
           loading={loading}
-          disabled={loading || selected.length === 0 || (needsSchoolName && schoolName.trim().length < 2)}
+          disabled={loading || selected.length === 0 || !schoolReady}
           onPress={submit}
         >
           Start tracking
