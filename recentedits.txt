@@ -3,7 +3,28 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-08 - Student Map UI
+Most recent edit: 2026-05-08 - Safer AI question generation
+
+Summary:
+- Tightened the backend question-generation prompt with a quality contract that forces mark allocation to match the demanded response length.
+- Added a backend sanity pass over generated questions so one-sentence/one-phrase/one-word prompts are capped at 1-2 marks before students see them.
+- Added conservative caps for subjects with only generic local context and no uploaded student source material.
+- Added language-subject safeguards for French and other languages: skill-builder wording, controlled mark ranges, response-length requirements for higher marks, and no 6-mark one-sentence tasks.
+- Updated mock/fallback language questions and battle answer options so French no longer gets generic "define/apply VCE terminology" options.
+- Added a short trust note in Question Forge explaining that AI questions are drafts and are strongest when backed by uploaded SAC, exam or teacher material.
+
+Validation run:
+- npm run build --prefix backend
+- npx tsc --noEmit
+- npm run lint
+- French no-key smoke check via npx tsx
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-08 - Student Map UI
 
 Summary:
 - Reworked the hidden Insights route into a Student Map screen without using "second brain" wording.

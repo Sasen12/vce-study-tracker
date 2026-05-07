@@ -4,6 +4,7 @@ import type { ResponseInput, ResponseInputContent } from "openai/resources/respo
 import { z } from "zod";
 import { getStudyDesignContext } from "../resources/studyDesignContext.js";
 import { inferVceSubjectFromQuestion } from "../resources/subjectInference.js";
+import { isLanguageSubject } from "../resources/vceSubjectCatalogue.js";
 
 const generatedQuestionSchema = z.object({
   question: z.string(),
@@ -330,6 +331,55 @@ const buildStudyDesignBlock = (studyDesign?: StudyDesignLookup | null) =>
     ? `\nStudy design context (${studyDesignCoverageLabel(studyDesign)}):\n${studyDesign.context}\nSource note: ${studyDesign.source}\n`
     : "\nStudy design context: No local study-design context was found for this subject.\n";
 
+const hasStudentSourceContext = (personalContext?: string) => Boolean(personalContext?.trim());
+
+const isLanguagePracticeSubject = (subject: string) =>
+  isLanguageSubject(subject) ||
+  /language|arabic|armenian|auslan|bengali|bosnian|chinese|chin hakha|greek|hebrew|croatian|dutch|filipino|french|german|hindi|hungarian|indonesian|italian|japanese|karen|khmer|korean|latin|macedonian|persian|polish|portuguese|punjabi|romanian|russian|serbian|sinhala|spanish|swedish|tamil|turkish|urdu|vietnamese|yiddish/i.test(
+    subject
+  );
+
+const questionQualityContract = ({
+  subject,
+  studyDesign,
+  personalContext,
+  sourceMode
+}: {
+  subject: string;
+  studyDesign?: StudyDesignLookup | null;
+  personalContext?: string;
+  sourceMode: "balanced" | "exam_bank";
+}) => {
+  const genericWithoutStudentSources = studyDesign?.detailLevel !== "detailed" && !hasStudentSourceContext(personalContext);
+  const languageRules = isLanguagePracticeSubject(subject)
+    ? `\nLanguage-subject rules:
+- For ${subject}, do not pretend to know the exact current VCAA language exam format unless uploaded resources prove it.
+- Prefer trustworthy skill practice: vocabulary in context, grammar repair, reading comprehension from a short supplied passage, translation with clear scope, or written response with a clear word/sentence range.
+- If the task asks for one word, one phrase, one grammar transformation or one sentence, allocate 1-2 marks only.
+- Allocate 3-4 marks only when the student must write several sentences or address several criteria.
+- Allocate 5+ marks only for an explicitly extended response with a stated length, audience/purpose/text type, and multiple marking criteria.
+- Never make a 6-mark language question that asks for one sentence.`
+    : "";
+  const genericRules = genericWithoutStudentSources
+    ? "\nBecause this subject currently has only generic local context and no uploaded source context, generate conservative skill-builder practice. Do not exceed 4 marks unless the task is clearly multi-part and broadly valid for the subject."
+    : sourceMode === "exam_bank"
+      ? "\nIf uploaded exam/practice material is available in the context, mirror its style and mark density. If it is not actually available, keep the question conservative and self-contained."
+      : "";
+
+  return `Question quality contract:
+- Every generated question must be self-contained, fair and answerable from the supplied topic/context.
+- Marks must match the work demanded:
+  - 1 mark: one fact, phrase, calculation, selection or correction.
+  - 2 marks: one explained point, one sentence plus justification, or two short linked details.
+  - 3-4 marks: a short paragraph, several steps, or multiple clear criteria.
+  - 5+ marks: an extended or multi-part task with at least three assessable demands.
+- Never allocate more than 2 marks to a question that asks for "one sentence", "one phrase", "one word", "name one", or a single simple correction.
+- If you allocate 5+ marks, the question wording must explicitly ask for a structured/extended response and the marking criteria must have enough independent criteria to justify those marks.
+- Multiple-choice answer options are only for the app's quick battle mode; the main generated question should still be a fair written-response practice item.
+${genericRules}
+${languageRules}`;
+};
+
 const studyDesignReliabilityRules = (studyDesign?: StudyDesignLookup | null) => {
   const coverageRule =
     studyDesign?.detailLevel === "detailed"
@@ -362,11 +412,14 @@ ${studyDesignBlock}
 ${personalContextBlock}
 ${sourceModeBlock}
 ${studyDesignReliabilityRules(studyDesign)}
+${questionQualityContract({ subject, studyDesign, personalContext, sourceMode })}
 
 Question-generation rules:
 - Generate questions from the supplied topic and the study-design context first.
 - If the context is generic fallback only, make the question assess the broad skill/topic without pretending it is an exact VCAA dot point.
 - If the supplied topic conflicts with the detailed Unit 3/4 context, keep the model answer honest about that mismatch.
+- For subjects with generic fallback context, call the item VCE-style skill practice in the wording only when exact exam format is not supported by uploaded resources.
+- Do a final self-check before returning: if the mark allocation feels too high for the wording, lower the marks or rewrite the question so the demanded work fits.
 
 For each question, provide:
 1. A realistic exam-style question (match VCAA style and mark allocation)
@@ -385,34 +438,110 @@ Only return valid JSON that matches the requested schema. No preamble, no markdo
 
 const mockQuestions = ({ subject, topic, difficulty, count }: GenerateInput): GeneratedQuestion[] =>
   Array.from({ length: count }, (_, index) => ({
-    question: `(${index + 1}) A ${difficulty} VCE ${subject} question on ${topic}: Explain one key concept, then apply it to a realistic exam scenario. Include a justified conclusion.`,
-    marks: difficulty === "hard" ? 6 : difficulty === "medium" ? 4 : 2,
+    question: isLanguagePracticeSubject(subject)
+      ? `(${index + 1}) A ${difficulty} VCE ${subject} skill-practice question on ${topic}: Write ${difficulty === "hard" ? "4-5 connected sentences" : difficulty === "medium" ? "2-3 connected sentences" : "one accurate sentence"} using appropriate vocabulary and grammar for the context.`
+      : `(${index + 1}) A ${difficulty} VCE ${subject} question on ${topic}: Explain one key concept, then apply it to a realistic exam scenario. Include a justified conclusion.`,
+    marks: isLanguagePracticeSubject(subject) ? (difficulty === "hard" ? 4 : difficulty === "medium" ? 3 : 2) : difficulty === "hard" ? 6 : difficulty === "medium" ? 4 : 2,
     topic,
-    model_answer: `A strong answer defines the relevant ${topic} concept, applies VCE terminology accurately, links the explanation to the scenario, and finishes with a clear judgement.`,
+    model_answer: isLanguagePracticeSubject(subject)
+      ? `A strong response uses accurate ${subject} vocabulary for ${topic}, keeps grammar controlled, and matches the requested length and context.`
+      : `A strong answer defines the relevant ${topic} concept, applies VCE terminology accurately, links the explanation to the scenario, and finishes with a clear judgement.`,
     marking_criteria: [
-      "Uses accurate VCE terminology",
-      "Applies the concept directly to the scenario",
-      "Provides a justified conclusion"
+      isLanguagePracticeSubject(subject) ? `Uses accurate ${subject} vocabulary` : "Uses accurate VCE terminology",
+      isLanguagePracticeSubject(subject) ? "Controls grammar and sentence structure" : "Applies the concept directly to the scenario",
+      isLanguagePracticeSubject(subject) ? "Responds to the requested context and length" : "Provides a justified conclusion"
     ],
     answer_options: [
       {
-        text: `Define ${topic}, apply it to the scenario using VCE terminology, then justify the conclusion.`,
+        text: isLanguagePracticeSubject(subject)
+          ? `Use accurate ${subject} vocabulary, controlled grammar and the requested response length.`
+          : `Define ${topic}, apply it to the scenario using VCE terminology, then justify the conclusion.`,
         correct: true
       },
       {
-        text: `Only define ${topic} without linking it to the scenario.`,
+        text: isLanguagePracticeSubject(subject)
+          ? `Use isolated vocabulary only, without forming complete sentences.`
+          : `Only define ${topic} without linking it to the scenario.`,
         correct: false
       },
       {
-        text: "Give a conclusion first and leave out the supporting evidence.",
+        text: isLanguagePracticeSubject(subject)
+          ? "Write in English instead of the target language."
+          : "Give a conclusion first and leave out the supporting evidence.",
         correct: false
       },
       {
-        text: "List related facts without explaining how they answer the question.",
+        text: isLanguagePracticeSubject(subject)
+          ? "Ignore the context, audience or required length."
+          : "List related facts without explaining how they answer the question.",
         correct: false
       }
     ]
   }));
+
+const singleSmallTaskPattern =
+  /\b(one|single)\s+(sentence|phrase|word|term|example|reason|detail|correction)\b|\b(name|identify|state|give)\s+one\b|\bin\s+one\s+sentence\b/i;
+const selectionTaskPattern = /\b(multiple[- ]choice|choose|select|circle|tick|which option)\b/i;
+const extendedDemandPattern =
+  /\b(extended|structured|paragraph|response|essay|article|email|letter|script|speech|dialogue|journal|blog|review|report|analysis|evaluate|justify|compare|discuss|analyse|explain)\b/i;
+const explicitLengthPattern = /\b(\d{2,4}\s*[-–]\s*\d{2,4}|\d{2,4})\s*(words?|mots?)\b|\b\d+\s*[-–]?\s*(sentences?|phrases?)\b/i;
+const multiDemandPattern = /\b(two|three|four|several|multiple|at least|both|compare|contrast|explain and|justify and|evaluate and|analyse and)\b/i;
+
+const hasExtendedDemand = (question: string) =>
+  extendedDemandPattern.test(question) && (multiDemandPattern.test(question) || explicitLengthPattern.test(question));
+
+const genericWithoutStudentSources = (input: GenerateInput) => {
+  const studyDesign = getStudyDesignContext(input.subject);
+  return studyDesign.detailLevel !== "detailed" && !hasStudentSourceContext(input.personalContext);
+};
+
+const maxMarksForGeneratedQuestion = (input: GenerateInput, question: GeneratedQuestion) => {
+  const text = question.question;
+  if (selectionTaskPattern.test(text)) return 1;
+  if (singleSmallTaskPattern.test(text)) return 2;
+
+  const languageSubject = isLanguagePracticeSubject(input.subject);
+  const baseMax = input.difficulty === "hard" ? 6 : input.difficulty === "medium" ? 4 : 2;
+  let max = languageSubject ? (input.difficulty === "hard" ? 5 : input.difficulty === "medium" ? 4 : 2) : baseMax;
+
+  if (genericWithoutStudentSources(input)) {
+    max = Math.min(max, 4);
+  }
+  if (question.marks >= 5 && !hasExtendedDemand(text)) {
+    max = Math.min(max, 4);
+  }
+  if (languageSubject && /\bsentence\b/i.test(text) && !explicitLengthPattern.test(text)) {
+    max = Math.min(max, 3);
+  }
+
+  return Math.max(1, max);
+};
+
+const withExtendedDemandIfNeeded = (input: GenerateInput, question: GeneratedQuestion, marks: number) => {
+  if (marks < 5 || hasExtendedDemand(question.question) || singleSmallTaskPattern.test(question.question)) {
+    return question.question;
+  }
+
+  if (isLanguagePracticeSubject(input.subject)) {
+    return `${question.question} Write 80-120 words and make sure your response has a clear audience, purpose and text type.`;
+  }
+
+  return `${question.question} Write a structured response that explains the key idea, applies it to the scenario, and justifies the final judgement.`;
+};
+
+const sanitiseGeneratedQuestions = (input: GenerateInput, questions: GeneratedQuestion[]): GeneratedQuestion[] =>
+  questions.map((question) => {
+    const maxMarks = maxMarksForGeneratedQuestion(input, question);
+    const marks = Math.min(Math.max(1, question.marks), maxMarks);
+    return {
+      ...question,
+      marks,
+      question: withExtendedDemandIfNeeded(input, question, marks),
+      marking_criteria: question.marking_criteria.length
+        ? question.marking_criteria.slice(0, Math.max(marks, 3))
+        : ["Answers the question directly", "Uses accurate subject knowledge", "Matches the required response length and detail"]
+    };
+  });
 
 const normaliseWords = (text: string) =>
   text
@@ -1186,7 +1315,7 @@ export const generateDailyInspiration = async (input: DailyInspirationInput): Pr
 export const generatePracticeQuestions = async (input: GenerateInput): Promise<GeneratedQuestion[]> => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!hasOpenAIKey(apiKey)) {
-    return mockQuestions(input);
+    return sanitiseGeneratedQuestions(input, mockQuestions(input));
   }
 
   const model = process.env.OPENAI_MODEL ?? defaultModel;
@@ -1208,7 +1337,7 @@ export const generatePracticeQuestions = async (input: GenerateInput): Promise<G
     throw new Error("OpenAI returned an empty or unparseable question payload");
   }
 
-  return parsed.questions;
+  return sanitiseGeneratedQuestions(input, parsed.questions);
 };
 
 const buildAnswerFeedbackPrompt = (input: EvaluateAnswerInput) => `You are a strict but encouraging VCE marker.

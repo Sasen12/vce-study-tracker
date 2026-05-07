@@ -1036,6 +1036,12 @@ export default function QuestionsScreen() {
                 { value: "exam_bank", label: "Exam bank" }
               ]}
             />
+            <View style={styles.trustNote}>
+              <Text style={styles.trustTitle}>AI-built draft</Text>
+              <Text style={styles.trustText}>
+                Best with uploaded SAC, exam or teacher material. Mark allocation is checked before the deck is shown.
+              </Text>
+            </View>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button
               mode="contained"
@@ -1734,6 +1740,24 @@ const styles = StyleSheet.create({
   },
   error: {
     color: palette.secondary
+  },
+  trustNote: {
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.warning}44`,
+    backgroundColor: `${palette.warning}10`,
+    padding: 10
+  },
+  trustTitle: {
+    color: palette.warning,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  trustText: {
+    color: palette.text,
+    lineHeight: 19
   },
   toolMessage: {
     color: palette.success,
