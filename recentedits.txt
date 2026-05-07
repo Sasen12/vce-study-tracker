@@ -3,7 +3,31 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Copyright-safe study music player
+Most recent edit: 2026-05-07 - More accurate ATAR projection
+
+Summary:
+- Replaced the old linear ATAR formula that badly underestimated higher aggregates.
+- Added constants/atarEstimate.ts with 2025 VTAC-style subject scaling anchors and aggregate-to-ATAR thresholds.
+- Profile now scales raw target study scores by subject before calculating the aggregate.
+- Profile now calculates aggregate using the VCE pattern: English/top English study, next three best scaled scores, then 10% of fifth and sixth.
+- Added the estimated aggregate under the projected ATAR so students can compare it with ATAR calculators.
+- Added each subject's scaled estimate in the subject momentum list.
+- Added a warning when no English study is present, because official ATAR eligibility requires an English study.
+- Updated the projection copy and disclaimer to explain that the estimate uses 2025 VTAC rounded public data and is still not official.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Copyright-safe study music player
 
 Summary:
 - Added a Study music card to the Study timer screen.

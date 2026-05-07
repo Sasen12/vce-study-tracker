@@ -12,26 +12,13 @@ import { BadgeGrid } from "@/components/gamification/BadgeGrid";
 import { titleLabelById } from "@/constants/gamification";
 import { subjectColors, palette } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
+import { estimateAtarFromScaledScores, scaleStudyScoreForAtar } from "@/constants/atarEstimate";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
 
-const scaleAdjustments: Record<string, number> = {
-  "Specialist Mathematics": 10,
-  "Mathematical Methods": 5,
-  Chemistry: 4,
-  Physics: 3,
-  "English Language": 2,
-  Literature: 1,
-  English: 0,
-  Psychology: -1,
-  "Business Management": -2,
-  "Health and Human Development": -3,
-  "Physical Education": -3
-};
-
-const clampScore = (score: number) => Math.max(0, Math.min(55, score));
+const clampStudyScore = (score: number) => Math.max(0, Math.min(50, score));
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const maxSubjects = 8;
 
@@ -52,19 +39,6 @@ const addDays = (date: Date, days: number) => {
 const isBetween = (value: string | Date, start: Date, end: Date) => {
   const date = new Date(value);
   return date >= start && date < end;
-};
-
-const estimateAtarFromScaledScores = (scores: { subjectName: string; scaled: number }[]) => {
-  const ranked = [...scores].sort((a, b) => b.scaled - a.scaled);
-  const english = ranked
-    .filter((score) => score.subjectName.includes("English") || score.subjectName === "Literature")
-    .sort((a, b) => b.scaled - a.scaled)[0];
-  const others = ranked.filter((score) => score !== english);
-  const aggregate =
-    (english?.scaled ?? 0) +
-    others.slice(0, 3).reduce((sum, score) => sum + score.scaled, 0) +
-    others.slice(3, 5).reduce((sum, score) => sum + score.scaled * 0.1, 0);
-  return Math.min(99.95, Math.max(30, 30 + (aggregate / 210) * 69.95));
 };
 
 const studyDaysForSubject = (sessions: StudySession[], subjectId: string, start: Date, end: Date) =>
@@ -134,8 +108,10 @@ const subjectMomentum = ({
   const evidenceAdjustment = clamp(evidenceCount * 0.12, 0, 0.7);
   const adjustment = clamp(paceAdjustment + trendAdjustment + consistencyAdjustment + evidenceAdjustment, -1.8, 2.4);
   const rawTarget = Number(goal?.targetStudyScore ?? subject.targetScore ?? 30);
-  const adjustedTarget = clampScore(rawTarget + adjustment);
+  const adjustedTarget = clampStudyScore(rawTarget + adjustment);
   const status = targetRatio >= 1.15 ? "surging" : targetRatio >= 0.85 ? "on_track" : targetRatio >= 0.45 ? "soft_dip" : "needs_nudge";
+  const scaled = scaleStudyScoreForAtar(subject.subjectName, adjustedTarget);
+  const baselineScaled = scaleStudyScoreForAtar(subject.subjectName, clampStudyScore(rawTarget));
 
   return {
     subjectId: subject.id,
@@ -149,8 +125,8 @@ const subjectMomentum = ({
     adjustment,
     rawTarget,
     adjustedTarget,
-    scaled: clampScore(adjustedTarget + (scaleAdjustments[subject.subjectName] ?? 0)),
-    baselineScaled: clampScore(rawTarget + (scaleAdjustments[subject.subjectName] ?? 0)),
+    scaled,
+    baselineScaled,
     status
   };
 };
@@ -481,7 +457,7 @@ export default function ProfileScreen() {
     ).size;
     const evidence = adaptiveSubjects.reduce((sum, subject) => sum + subject.evidenceCount, 0);
     const ratio = totalTargetHours > 0 ? totalWeekHours / totalTargetHours : 1;
-    const delta = adaptive - baseline;
+    const delta = adaptive.atar - baseline.atar;
     const strongest = [...adaptiveSubjects].sort((a, b) => b.adjustment - a.adjustment)[0];
     const softest = [...adaptiveSubjects].sort((a, b) => a.adjustment - b.adjustment)[0];
     const message =
@@ -557,10 +533,10 @@ export default function ProfileScreen() {
           <Text variant="titleMedium" style={styles.cardTitle}>
             Adaptive ATAR projection
           </Text>
-          <Text style={styles.muted}>Target scores plus this week's study momentum, consistency and learning evidence.</Text>
+          <Text style={styles.muted}>Raw target study scores are scaled with 2025 VTAC data, then converted from aggregate to ATAR.</Text>
         </View>
         <View style={styles.atarRow}>
-          <Text style={styles.atar}>{atarProjection.adaptive.toFixed(2)}</Text>
+          <Text style={styles.atar}>{atarProjection.adaptive.atar.toFixed(2)}</Text>
           <View style={[styles.deltaPill, atarProjection.delta >= 0 ? styles.deltaPositive : styles.deltaSoft]}>
             <Text style={styles.deltaText}>
               {atarProjection.delta >= 0 ? "+" : ""}
@@ -568,6 +544,10 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+        <Text style={styles.aggregateText}>Estimated aggregate: {atarProjection.adaptive.aggregate.toFixed(2)}</Text>
+        {!atarProjection.adaptive.englishIncluded ? (
+          <Text style={styles.englishWarning}>Add an English study for an ATAR-eligible estimate.</Text>
+        ) : null}
         <Text style={styles.momentumMessage}>{atarProjection.message}</Text>
         <View style={styles.momentumGrid}>
           <View style={styles.momentumTile}>
@@ -601,7 +581,7 @@ export default function ProfileScreen() {
                     </Text>
                     <Text style={styles.momentumLabel}>
                       {Math.round(subject.weekHours * 10) / 10}/{subject.targetHours}h, {subject.studyDays} day
-                      {subject.studyDays === 1 ? "" : "s"}
+                      {subject.studyDays === 1 ? "" : "s"} - scaled {subject.scaled.toFixed(1)}
                     </Text>
                   </View>
                   <Text style={[styles.subjectDelta, subject.adjustment >= 0 ? styles.subjectDeltaUp : styles.subjectDeltaDown]}>
@@ -612,8 +592,11 @@ export default function ProfileScreen() {
               ))}
           </View>
         ) : null}
-        <Text style={styles.baselineText}>Target-only baseline: {atarProjection.baseline.toFixed(2)}</Text>
-        <Text style={styles.disclaimer}>Estimate only. Official scaling and ATAR conversion changes each year.</Text>
+        <Text style={styles.baselineText}>Target-only baseline: {atarProjection.baseline.atar.toFixed(2)}</Text>
+        <Text style={styles.disclaimer}>
+          Estimate only. Uses 2025 VTAC rounded scaling and aggregate thresholds; official results vary by year and exact VTAC
+          calculations use more precision.
+        </Text>
       </AppCard>
 
       <View>
@@ -753,6 +736,16 @@ const styles = StyleSheet.create({
   },
   momentumMessage: {
     color: palette.text,
+    lineHeight: 20
+  },
+  aggregateText: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  englishWarning: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
     lineHeight: 20
   },
   momentumGrid: {
