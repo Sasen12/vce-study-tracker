@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
-import { Audio, type AVPlaybackStatus } from "expo-av";
 import { Button, IconButton, Switch, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
-import { STUDY_MUSIC_TRACKS, type StudyMusicTrack } from "@/constants/studyMusic";
+import { STUDY_MUSIC_TRACKS } from "@/constants/studyMusic";
+import { useStudyMusicStore } from "@/store/studyMusicStore";
 
 const formatMillis = (millis: number) => {
   const totalSeconds = Math.max(0, Math.floor(millis / 1000));
@@ -19,181 +19,30 @@ const formatMillis = (millis: number) => {
 const licenseLabelFor = (licenseName: string) => licenseName.replace(/^Creative Commons Attribution /, "CC BY ");
 
 export function StudyMusicPanel() {
-  const [selectedTrackId, setSelectedTrackId] = useState(STUDY_MUSIC_TRACKS[0]?.id ?? "");
-  const [loadedTrackId, setLoadedTrackId] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
-  const [stopping, setStopping] = useState(false);
-  const [looping, setLooping] = useState(false);
-  const [positionMillis, setPositionMillis] = useState(0);
-  const [durationMillis, setDurationMillis] = useState(STUDY_MUSIC_TRACKS[0]?.durationMillis ?? 0);
-  const [error, setError] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const playbackTokenRef = useRef(0);
+  const {
+    selectedTrackId,
+    loadedTrackId,
+    playing,
+    loadingTrackId,
+    stopping,
+    repeat,
+    positionMillis,
+    durationMillis,
+    error,
+    initialise,
+    playOrPauseTrack,
+    stop,
+    setRepeat
+  } = useStudyMusicStore();
 
   const selectedTrack = useMemo(
     () => STUDY_MUSIC_TRACKS.find((track) => track.id === selectedTrackId) ?? STUDY_MUSIC_TRACKS[0],
     [selectedTrackId]
   );
 
-  const nextTrackAfter = (track: StudyMusicTrack) => {
-    const currentIndex = STUDY_MUSIC_TRACKS.findIndex((item) => item.id === track.id);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % STUDY_MUSIC_TRACKS.length : 0;
-    return STUDY_MUSIC_TRACKS[nextIndex];
-  };
-
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true
-    }).catch(() => undefined);
-
-    return () => {
-      playbackTokenRef.current += 1;
-      const sound = soundRef.current;
-      soundRef.current = null;
-      if (sound) {
-        sound.setOnPlaybackStatusUpdate(null);
-        void sound.unloadAsync();
-      }
-    };
-  }, []);
-
-  const updateStatus = (track: StudyMusicTrack, token: number) => (status: AVPlaybackStatus) => {
-    if (token !== playbackTokenRef.current) {
-      return;
-    }
-    if (!status.isLoaded) {
-      return;
-    }
-
-    setPlaying(status.isPlaying);
-    setPositionMillis(status.positionMillis);
-    setDurationMillis(status.durationMillis ?? track.durationMillis);
-
-    if (status.didJustFinish && !status.isLooping) {
-      const nextTrack = nextTrackAfter(track);
-      if (nextTrack) {
-        void loadAndPlay(nextTrack);
-      }
-    }
-  };
-
-  const unloadSound = async (sound: Audio.Sound | null) => {
-    if (!sound) return;
-    sound.setOnPlaybackStatusUpdate(null);
-    await sound.unloadAsync();
-  };
-
-  const resetPlaybackState = () => {
-    setLoadedTrackId(null);
-    setPlaying(false);
-    setPositionMillis(0);
-  };
-
-  const replaceCurrentSound = async () => {
-    const sound = soundRef.current;
-    soundRef.current = null;
-    resetPlaybackState();
-    await unloadSound(sound);
-  };
-
-  const stopPlayback = async () => {
-    playbackTokenRef.current += 1;
-    setLoadingTrackId(null);
-    const sound = soundRef.current;
-    soundRef.current = null;
-    resetPlaybackState();
-    await unloadSound(sound);
-  };
-
-  const loadAndPlay = async (track: StudyMusicTrack) => {
-    const token = playbackTokenRef.current + 1;
-    playbackTokenRef.current = token;
-    setLoadingTrackId(track.id);
-    setError(null);
-    try {
-      await replaceCurrentSound();
-      const { sound, status } = await Audio.Sound.createAsync(
-        { uri: track.audioUrl },
-        {
-          shouldPlay: true,
-          isLooping: looping,
-          volume: 0.72,
-          progressUpdateIntervalMillis: 600
-        },
-        updateStatus(track, token)
-      );
-
-      if (token !== playbackTokenRef.current) {
-        await unloadSound(sound);
-        return;
-      }
-
-      soundRef.current = sound;
-      setSelectedTrackId(track.id);
-      setLoadedTrackId(track.id);
-      if (status.isLoaded) {
-        setPlaying(status.isPlaying);
-        setPositionMillis(status.positionMillis);
-        setDurationMillis(status.durationMillis ?? track.durationMillis);
-      }
-    } catch (loadError) {
-      if (token === playbackTokenRef.current) {
-        setError(loadError instanceof Error ? loadError.message : "Could not play this study track.");
-        setPlaying(false);
-      }
-    } finally {
-      if (token === playbackTokenRef.current) {
-        setLoadingTrackId(null);
-      }
-    }
-  };
-
-  const playOrPauseTrack = async (track: StudyMusicTrack) => {
-    if (loadedTrackId !== track.id || !soundRef.current) {
-      await loadAndPlay(track);
-      return;
-    }
-
-    const status = await soundRef.current.getStatusAsync();
-    if (!status.isLoaded) {
-      await loadAndPlay(track);
-      return;
-    }
-
-    if (status.isPlaying) {
-      await soundRef.current.pauseAsync();
-      setPlaying(false);
-      return;
-    }
-
-    await soundRef.current.playAsync();
-    setPlaying(true);
-  };
-
-  const stop = async () => {
-    if (!soundRef.current && !loadingTrackId) return;
-    setStopping(true);
-    setError(null);
-    try {
-      await stopPlayback();
-    } catch (stopError) {
-      setError(stopError instanceof Error ? stopError.message : "Could not stop this study track.");
-      resetPlaybackState();
-    } finally {
-      setStopping(false);
-    }
-  };
-
-  const changeLooping = async (value: boolean) => {
-    setLooping(value);
-    if (soundRef.current) {
-      await soundRef.current.setIsLoopingAsync(value);
-    }
-  };
+    initialise();
+  }, [initialise]);
 
   const progress = durationMillis ? Math.min(100, Math.round((positionMillis / durationMillis) * 100)) : 0;
 
@@ -209,7 +58,7 @@ export function StudyMusicPanel() {
         </View>
         <View style={styles.loopControl}>
           <Text style={styles.loopLabel}>Repeat</Text>
-          <Switch value={looping} onValueChange={(value) => void changeLooping(value)} color={palette.info} />
+          <Switch value={repeat} onValueChange={(value) => void setRepeat(value)} color={palette.info} />
         </View>
       </View>
 
