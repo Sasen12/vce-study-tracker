@@ -21,11 +21,13 @@ export function StudyMusicPanel() {
   const [loadedTrackId, setLoadedTrackId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [looping, setLooping] = useState(true);
   const [positionMillis, setPositionMillis] = useState(0);
   const [durationMillis, setDurationMillis] = useState(STUDY_MUSIC_TRACKS[0]?.durationMillis ?? 0);
   const [error, setError] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const playbackTokenRef = useRef(0);
 
   const selectedTrack = useMemo(
     () => STUDY_MUSIC_TRACKS.find((track) => track.id === selectedTrackId) ?? STUDY_MUSIC_TRACKS[0],
@@ -41,13 +43,20 @@ export function StudyMusicPanel() {
     }).catch(() => undefined);
 
     return () => {
+      playbackTokenRef.current += 1;
       const sound = soundRef.current;
       soundRef.current = null;
-      if (sound) void sound.unloadAsync();
+      if (sound) {
+        sound.setOnPlaybackStatusUpdate(null);
+        void sound.unloadAsync();
+      }
     };
   }, []);
 
-  const updateStatus = (track: StudyMusicTrack) => (status: AVPlaybackStatus) => {
+  const updateStatus = (track: StudyMusicTrack, token: number) => (status: AVPlaybackStatus) => {
+    if (token !== playbackTokenRef.current) {
+      return;
+    }
     if (!status.isLoaded) {
       return;
     }
@@ -57,22 +66,41 @@ export function StudyMusicPanel() {
     setDurationMillis(status.durationMillis ?? track.durationMillis);
   };
 
-  const unloadCurrent = async () => {
-    const sound = soundRef.current;
-    soundRef.current = null;
+  const unloadSound = async (sound: Audio.Sound | null) => {
+    if (!sound) return;
+    sound.setOnPlaybackStatusUpdate(null);
+    await sound.unloadAsync();
+  };
+
+  const resetPlaybackState = () => {
     setLoadedTrackId(null);
     setPlaying(false);
     setPositionMillis(0);
-    if (sound) {
-      await sound.unloadAsync();
-    }
+  };
+
+  const replaceCurrentSound = async () => {
+    const sound = soundRef.current;
+    soundRef.current = null;
+    resetPlaybackState();
+    await unloadSound(sound);
+  };
+
+  const stopPlayback = async () => {
+    playbackTokenRef.current += 1;
+    setLoadingTrackId(null);
+    const sound = soundRef.current;
+    soundRef.current = null;
+    resetPlaybackState();
+    await unloadSound(sound);
   };
 
   const loadAndPlay = async (track: StudyMusicTrack) => {
+    const token = playbackTokenRef.current + 1;
+    playbackTokenRef.current = token;
     setLoadingTrackId(track.id);
     setError(null);
     try {
-      await unloadCurrent();
+      await replaceCurrentSound();
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: track.audioUrl },
         {
@@ -81,8 +109,14 @@ export function StudyMusicPanel() {
           volume: 0.72,
           progressUpdateIntervalMillis: 600
         },
-        updateStatus(track)
+        updateStatus(track, token)
       );
+
+      if (token !== playbackTokenRef.current) {
+        await unloadSound(sound);
+        return;
+      }
+
       soundRef.current = sound;
       setSelectedTrackId(track.id);
       setLoadedTrackId(track.id);
@@ -92,10 +126,14 @@ export function StudyMusicPanel() {
         setDurationMillis(status.durationMillis ?? track.durationMillis);
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not play this study track.");
-      setPlaying(false);
+      if (token === playbackTokenRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "Could not play this study track.");
+        setPlaying(false);
+      }
     } finally {
-      setLoadingTrackId(null);
+      if (token === playbackTokenRef.current) {
+        setLoadingTrackId(null);
+      }
     }
   };
 
@@ -122,11 +160,17 @@ export function StudyMusicPanel() {
   };
 
   const stop = async () => {
-    if (!soundRef.current) return;
-    await soundRef.current.stopAsync();
-    await soundRef.current.setPositionAsync(0);
-    setPlaying(false);
-    setPositionMillis(0);
+    if (!soundRef.current && !loadingTrackId) return;
+    setStopping(true);
+    setError(null);
+    try {
+      await stopPlayback();
+    } catch (stopError) {
+      setError(stopError instanceof Error ? stopError.message : "Could not stop this study track.");
+      resetPlaybackState();
+    } finally {
+      setStopping(false);
+    }
   };
 
   const changeLooping = async (value: boolean) => {
@@ -168,14 +212,15 @@ export function StudyMusicPanel() {
             mode="contained"
             icon={playing ? "pause" : "play"}
             loading={loadingTrackId === selectedTrack.id}
-            disabled={Boolean(loadingTrackId)}
+            disabled={stopping || Boolean(loadingTrackId)}
             accessibilityLabel={playing ? "Pause study music" : "Play study music"}
             onPress={() => void playOrPauseTrack(selectedTrack)}
           />
           <IconButton
             mode="outlined"
             icon="stop"
-            disabled={!loadedTrackId || Boolean(loadingTrackId)}
+            loading={stopping}
+            disabled={stopping || (!loadedTrackId && !loadingTrackId)}
             accessibilityLabel="Stop study music"
             onPress={() => void stop()}
           />
@@ -198,6 +243,7 @@ export function StudyMusicPanel() {
             <Pressable
               key={track.id}
               onPress={() => void playOrPauseTrack(track)}
+              disabled={stopping || Boolean(loadingTrackId)}
               style={[styles.trackRow, selected && styles.trackRowSelected]}
             >
               <View style={styles.trackIcon}>

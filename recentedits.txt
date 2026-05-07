@@ -3,7 +3,27 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Infer schools from vic.edu.au emails
+Most recent edit: 2026-05-07 - Fix study music stop control
+
+Summary:
+- Changed the Study music stop button to unload the current audio stream instead of only calling stopAsync.
+- Stop now also cancels an in-progress track load, so students can stop even if the stream is still starting.
+- Added playback tokens so stale expo-av status updates from old sounds cannot flip the UI back to playing after stop.
+- Disabled play/track row presses while a stop or load action is already in progress.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Infer schools from vic.edu.au emails
 
 Summary:
 - Fixed signup so vic.edu.au school emails auto-detect a school name from the email domain instead of leaving school blank.
