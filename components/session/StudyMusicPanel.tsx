@@ -16,6 +16,8 @@ const formatMillis = (millis: number) => {
   return `${minutes}:${seconds}`;
 };
 
+const licenseLabelFor = (licenseName: string) => licenseName.replace(/^Creative Commons Attribution /, "CC BY ");
+
 export function StudyMusicPanel() {
   const [selectedTrackId, setSelectedTrackId] = useState(STUDY_MUSIC_TRACKS[0]?.id ?? "");
   const [loadedTrackId, setLoadedTrackId] = useState<string | null>(null);
@@ -273,7 +275,7 @@ export function StudyMusicPanel() {
             Source
           </Button>
           <Button compact mode="outlined" icon="certificate-outline" onPress={() => void Linking.openURL(selectedTrack.licenseUrl)}>
-            CC BY 4.0
+            {licenseLabelFor(selectedTrack.licenseName)}
           </Button>
         </View>
       </View>

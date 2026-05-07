@@ -3,7 +3,29 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Add scroll-more cue
+Most recent edit: 2026-05-07 - Add more study music
+
+Summary:
+- Added 11 more copyright-safe streamed Kevin MacLeod/Incompetech tracks to Study music.
+- New tracks include Calmant, Pensif, Facile, Avec Soin, Dream Culture, Floating Cities, Peaceful Desolation, Porch Swing Days - slower, Ambiment, Peace of Mind, and Relaxing Piano Music.
+- Updated the Study music license button so it displays the selected track's actual CC BY version instead of always showing CC BY 4.0.
+- Updated assets/study-music/LICENSES.md with source URLs, stream URLs, and attribution notes for the new tracks.
+- Verified each added MP3 stream URL returned HTTP 200.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- PowerShell HEAD check for 11 added Incompetech MP3 URLs
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Add scroll-more cue
 
 Summary:
 - Updated the shared Screen wrapper so scrollable pages now show a subtle bottom fade and down chevron when more content exists below the fold.
