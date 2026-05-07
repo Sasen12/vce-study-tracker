@@ -1,8 +1,89 @@
 import { prisma } from "./prismaClient.js";
 import { inferSchoolNameFromEmail } from "../utils/schoolEmail.js";
 
+const ensureStudentMemorySchema = async () => {
+  await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS student_memory_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      subject_id UUID REFERENCES user_subjects(id) ON DELETE SET NULL,
+      event_type TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      payload JSONB DEFAULT '{}',
+      importance INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS student_memory_events_user_created_idx ON student_memory_events(user_id, created_at)"
+  );
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS student_memory_events_subject_created_idx ON student_memory_events(subject_id, created_at)"
+  );
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS student_memory_events_type_created_idx ON student_memory_events(event_type, created_at)"
+  );
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS learning_signals (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      subject_id UUID REFERENCES user_subjects(id) ON DELETE SET NULL,
+      subject_key TEXT NOT NULL,
+      subject_name TEXT NOT NULL,
+      memory_event_id UUID REFERENCES student_memory_events(id) ON DELETE SET NULL,
+      signal_type TEXT NOT NULL,
+      topic TEXT,
+      title TEXT NOT NULL,
+      detail TEXT NOT NULL,
+      evidence TEXT NOT NULL,
+      confidence TEXT NOT NULL DEFAULT 'medium',
+      next_action TEXT,
+      weight INTEGER DEFAULT 1,
+      source_type TEXT NOT NULL,
+      source_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS learning_signals_user_created_idx ON learning_signals(user_id, created_at)");
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS learning_signals_subject_key_created_idx ON learning_signals(subject_key, created_at)"
+  );
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS learning_signals_type_created_idx ON learning_signals(signal_type, created_at)");
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS learning_signals_memory_event_idx ON learning_signals(memory_event_id)");
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS student_subject_memory (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      subject_id UUID REFERENCES user_subjects(id) ON DELETE SET NULL,
+      subject_key TEXT NOT NULL,
+      subject_name TEXT NOT NULL,
+      strengths JSONB DEFAULT '[]',
+      weak_areas JSONB DEFAULT '[]',
+      common_mistakes JSONB DEFAULT '[]',
+      recent_topics JSONB DEFAULT '[]',
+      upcoming_assessments JSONB DEFAULT '[]',
+      best_study_methods JSONB DEFAULT '[]',
+      evidence_trail JSONB DEFAULT '[]',
+      risk_level TEXT NOT NULL DEFAULT 'low',
+      predicted_next_task TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (user_id, subject_key)
+    )
+  `);
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS student_subject_memory_user_risk_idx ON student_subject_memory(user_id, risk_level)");
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS student_subject_memory_subject_idx ON student_subject_memory(subject_id)");
+};
+
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
+  await ensureStudentMemorySchema();
 
   const usersMissingSchool = await prisma.user.findMany({
     where: {

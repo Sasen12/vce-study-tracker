@@ -4,6 +4,7 @@ import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 import { calculateSessionXp, recordStudySessionEffects } from "../services/gamificationService.js";
+import { recordStudentMemory } from "../services/studentMemoryService.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -73,6 +74,42 @@ sessionsRouter.post(
       xpEarned,
       createdAt: session.createdAt
     });
+
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject.id,
+        subjectName: subject.subjectName,
+        eventType: "study_session_completed",
+        sourceType: "study_session",
+        sourceId: session.id,
+        title: `${subject.subjectName} study session`,
+        summary: `Studied ${subject.subjectName} for ${Math.round(session.durationSeconds / 60)} minutes.${session.notes ? ` Notes: ${session.notes}` : ""}`,
+        importance: session.durationSeconds >= 45 * 60 ? 3 : 2,
+        payload: {
+          durationSeconds: session.durationSeconds,
+          xpEarned,
+          notes: session.notes,
+          createdAt: session.createdAt.toISOString()
+        }
+      },
+      {
+        topic: session.notes ?? subject.subjectName,
+        signals: [
+          {
+            signalType: "study_behavior",
+            topic: session.notes ?? "Study time",
+            title: `${Math.round(session.durationSeconds / 60)} min study block`,
+            detail: `Completed a ${Math.round(session.durationSeconds / 60)} minute ${subject.subjectName} study session.`,
+            evidence: session.notes || "Study timer completed.",
+            nextAction: session.notes
+              ? "Use these session notes to choose the next retrieval or correction task."
+              : "Add a short note next time so the app can link time spent to topic mastery.",
+            weight: session.durationSeconds >= 45 * 60 ? 3 : 2
+          }
+        ]
+      }
+    );
 
     res.status(201).json({ session, gamification });
   })

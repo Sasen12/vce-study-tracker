@@ -386,6 +386,72 @@ export type StudyResource = {
   subject?: UserSubject | null;
 };
 
+export type StudentMemoryEvent = {
+  id: string;
+  userId: string;
+  subjectId?: string | null;
+  eventType: string;
+  sourceType: string;
+  sourceId?: string | null;
+  title: string;
+  summary: string;
+  payload: unknown;
+  importance: number;
+  createdAt: string;
+  subject?: UserSubject | null;
+  signals?: LearningSignal[];
+};
+
+export type LearningSignal = {
+  id: string;
+  userId: string;
+  subjectId?: string | null;
+  subjectKey: string;
+  subjectName: string;
+  memoryEventId?: string | null;
+  signalType:
+    | "weakness"
+    | "strength"
+    | "mistake"
+    | "topic_interest"
+    | "study_behavior"
+    | "assessment_risk"
+    | "resource_context"
+    | "next_action"
+    | string;
+  topic?: string | null;
+  title: string;
+  detail: string;
+  evidence: string;
+  confidence: "low" | "medium" | "high" | string;
+  nextAction?: string | null;
+  weight: number;
+  sourceType: string;
+  sourceId?: string | null;
+  createdAt: string;
+  subject?: UserSubject | null;
+};
+
+export type StudentSubjectMemory = {
+  id: string;
+  userId: string;
+  subjectId?: string | null;
+  subjectKey: string;
+  subjectName: string;
+  strengths: unknown[];
+  weakAreas: unknown[];
+  commonMistakes: unknown[];
+  recentTopics: unknown[];
+  upcomingAssessments: unknown[];
+  bestStudyMethods: unknown[];
+  evidenceTrail: unknown[];
+  riskLevel: "low" | "medium" | "high" | string;
+  predictedNextTask?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  subject?: UserSubject | null;
+};
+
 export type AdaptiveStudyTask = {
   date?: string;
   title: string;

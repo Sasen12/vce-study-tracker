@@ -11,6 +11,7 @@ import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
+import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
 import { errorHandler } from "./utils/http.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
@@ -58,6 +59,7 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
 app.use("/api/community", communityRouter);
+app.use("/api/memory", memoryRouter);
 
 app.use(errorHandler);
 

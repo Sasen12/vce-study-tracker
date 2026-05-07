@@ -3,7 +3,37 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Add full-subject coach routing and context coverage
+Most recent edit: 2026-05-07 - Student Memory and Learning Signals foundation
+
+Summary:
+- Added durable backend memory tables for raw student activity, extracted learning signals, and the per-subject Student Map.
+- Added startup schema creation for the new memory tables so deployed databases get the memory foundation automatically.
+- Added AI-assisted learning signal extraction with deterministic fallback when no OpenAI key is available.
+- Added memory API endpoints:
+  - GET /api/memory/events
+  - GET /api/memory/signals
+  - GET /api/memory/student-map
+  - POST /api/memory/student-map/rebuild
+- Made Ask Coach include the existing Student Map and recent learning signals as context, then write each coach/tutor turn back into memory.
+- Made Questions write memory for generated practice, timer checks, saved questions, checked answers, weaknesses, strengths and lost-mark mistakes.
+- Made uploaded resources, saved notes, mistake logs, class reflections, class notetaker notes, study sessions, calendar events and generated study plans update memory too.
+- Updated adaptive study plans so they can use the Student Map, weak areas, evidence trail and predicted next task.
+- Added frontend API typings/methods for future Student Map/My Brain UI work.
+
+Validation run:
+- npm run prisma:generate --prefix backend
+- npm run build --prefix backend
+- npx tsc --noEmit
+- npm run lint
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Add full-subject coach routing and context coverage
 
 Summary:
 - Replaced the small Ask Coach subject router with a catalogue-based router that scores every subject from the VCE subject list.

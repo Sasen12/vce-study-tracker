@@ -38,6 +38,33 @@ const answerFeedbackSchema = z.object({
 
 export type AnswerFeedback = z.infer<typeof answerFeedbackSchema>;
 
+const learningSignalSchema = z.object({
+  signal_type: z.enum([
+    "weakness",
+    "strength",
+    "mistake",
+    "topic_interest",
+    "study_behavior",
+    "assessment_risk",
+    "resource_context",
+    "next_action"
+  ]),
+  subject: z.string().nullable().optional(),
+  topic: z.string().nullable().optional(),
+  title: z.string().min(1).max(160),
+  detail: z.string().min(1).max(700),
+  evidence: z.string().min(1).max(600),
+  confidence: z.enum(["low", "medium", "high"]).default("medium"),
+  next_action: z.string().nullable().optional(),
+  weight: z.coerce.number().int().min(1).max(5).default(2)
+});
+
+const learningSignalsResponseSchema = z.object({
+  signals: z.array(learningSignalSchema).max(4)
+});
+
+export type ExtractedLearningSignal = z.infer<typeof learningSignalSchema>;
+
 const adaptiveTaskSchema = z.object({
   date: z.string(),
   title: z.string(),
@@ -171,6 +198,15 @@ type EvaluateAnswerInput = {
   marks: number;
 };
 
+type ExtractLearningSignalsInput = {
+  eventType: string;
+  subject?: string | null;
+  topic?: string | null;
+  summary: string;
+  evidence?: string | null;
+  payload?: unknown;
+};
+
 type PlanInput = {
   planDate: string;
   availableMinutes: number;
@@ -182,6 +218,7 @@ type PlanInput = {
   recentSessions: string;
   notesContext: string;
   resourceContext: string;
+  studentMemoryContext?: string;
   studyBlocks: StudyBlock[];
   scheduledStudyBlocks: string;
   priority?: string | null;
@@ -415,6 +452,50 @@ const mockAnswerFeedback = (input: EvaluateAnswerInput): AnswerFeedback => {
         : ["Add key terminology, apply it directly to the question, and finish with a justified conclusion."],
     next_step: `Rewrite one sentence so it clearly addresses: ${input.markingCriteria[0] ?? "the main marking criterion"}.`
   };
+};
+
+const mockLearningSignals = (input: ExtractLearningSignalsInput): ExtractedLearningSignal[] => {
+  const combined = `${input.eventType} ${input.summary} ${input.evidence ?? ""}`.toLowerCase();
+  const isWeak =
+    /wrong|mistake|confus|weak|needs_work|close|improvement|lost mark|unclear|avoid|struggl/.test(combined);
+  const isStrong = /excellent|strong|correct|strength|high confidence|full marks|master/.test(combined);
+  const signalType: ExtractedLearningSignal["signal_type"] = isWeak
+    ? "weakness"
+    : isStrong
+      ? "strength"
+      : /upload|resource|pdf|textbook|worksheet/.test(combined)
+        ? "resource_context"
+        : /session|studied|minutes|timer/.test(combined)
+          ? "study_behavior"
+          : "topic_interest";
+
+  const topic = input.topic?.trim() || null;
+  const title =
+    signalType === "weakness"
+      ? `Watch: ${topic ?? "repeat weak area"}`
+      : signalType === "strength"
+        ? `Strength: ${topic ?? "recent answer"}`
+        : signalType === "study_behavior"
+          ? `Study pattern: ${topic ?? input.subject ?? "general study"}`
+          : `Interest: ${topic ?? input.subject ?? "recent topic"}`;
+
+  return [
+    {
+      signal_type: signalType,
+      subject: input.subject ?? null,
+      topic,
+      title,
+      detail: input.summary.slice(0, 650) || "The student created a new learning event.",
+      evidence: (input.evidence || input.summary).slice(0, 550) || "Recorded from app activity.",
+      confidence: isWeak || isStrong ? "medium" : "low",
+      next_action: isWeak
+        ? `Practise one short response on ${topic ?? "this weak area"} and save the next-time rule.`
+        : signalType === "strength"
+          ? `Use this strength as retrieval practice before moving to a harder version.`
+          : `Add one checked question so the app can test whether this is curiosity or a gap.`,
+      weight: isWeak ? 4 : isStrong ? 3 : 2
+    }
+  ];
 };
 
 const dateKey = (date: Date) => date.toISOString().slice(0, 10);
@@ -1158,6 +1239,71 @@ Return only valid JSON with:
 - improvements: string[]
 - next_step: one practical sentence the student should do next`;
 
+const buildLearningSignalPrompt = (input: ExtractLearningSignalsInput) => {
+  const payloadText =
+    input.payload === undefined
+      ? "No structured payload."
+      : JSON.stringify(input.payload, null, 2).replace(/\s+/g, " ").slice(0, 4000);
+
+  return `You are the memory extraction layer for a VCE student study app.
+
+Convert this app activity into 1 to 3 durable learning signals. A signal should describe something the app should remember for future coaching, planning and exam-risk prediction. Do not invent facts beyond the evidence.
+
+Event type: ${input.eventType}
+Subject: ${input.subject ?? "Unknown"}
+Topic: ${input.topic ?? "Unknown"}
+Summary:
+${input.summary}
+
+Evidence:
+${input.evidence || "No extra evidence supplied."}
+
+Structured payload:
+${payloadText}
+
+Signal rules:
+- Prefer specific weaknesses, strengths, recurring topics, saved mistakes, assessment risk, study behaviour, resource context, or next action.
+- If the evidence shows confusion or lost marks, create a weakness or mistake signal.
+- If the evidence shows a strong answer, create a strength signal.
+- If the event is just asking, generating or uploading, create a topic_interest or resource_context signal unless a clearer weakness is visible.
+- Keep evidence short and concrete, like "Asked for evaluation criteria and needed clarification".
+- next_action must be something the student can do in one study block.
+- weight is 1 low importance, 5 high importance.
+
+Return only valid JSON with:
+- signals: array of { signal_type, subject, topic, title, detail, evidence, confidence, next_action, weight }`;
+};
+
+export const extractLearningSignalsFromMemoryEvent = async (
+  input: ExtractLearningSignalsInput
+): Promise<ExtractedLearningSignal[]> => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!hasOpenAIKey(apiKey)) {
+    return mockLearningSignals(input);
+  }
+
+  try {
+    const model = process.env.OPENAI_MODEL ?? defaultModel;
+    const openai = new OpenAI({ apiKey });
+    const response = await openai.responses.parse({
+      model,
+      input: buildLearningSignalPrompt(input),
+      max_output_tokens: 1100,
+      store: false,
+      reasoning: modelSupportsReasoning(model) ? { effort: "low" } : undefined,
+      text: {
+        verbosity: "low",
+        format: zodTextFormat(learningSignalsResponseSchema, "student_learning_signals")
+      }
+    });
+
+    return response.output_parsed?.signals.length ? response.output_parsed.signals : mockLearningSignals(input);
+  } catch (error) {
+    console.warn("Falling back to deterministic learning signal extraction", error);
+    return mockLearningSignals(input);
+  }
+};
+
 export const evaluateStudentAnswer = async (input: EvaluateAnswerInput): Promise<AnswerFeedback> => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!hasOpenAIKey(apiKey)) {
@@ -1223,6 +1369,9 @@ ${input.scheduledStudyBlocks || "No scheduled study blocks logged. Use the fallb
 
 Recent class reflections:
 ${input.recentReflections || "No reflections logged yet."}
+
+Student memory map and extracted learning signals:
+${input.studentMemoryContext || "No student memory map has been built yet."}
 
 Calendar summary:
 ${input.upcomingEvents || "No upcoming events logged."}

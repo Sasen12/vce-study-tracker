@@ -16,6 +16,7 @@ import {
 } from "../services/aiService.js";
 import { addXp } from "../services/gamificationService.js";
 import { contextSnippetForQuery, extractResourceText } from "../services/resourceService.js";
+import { recordStudentMemory, subjectKeyFor } from "../services/studentMemoryService.js";
 import { todayMelbourne } from "../utils/date.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
@@ -313,6 +314,65 @@ const buildAskCoachLearningSignals = (reflections: ReflectionForPlan[], notes: N
   return [...tutorSessionSignals, ...mistakeSignals, ...confusionSignals, ...contextSignals].slice(0, 10).join("\n");
 };
 
+const buildStudentMemorySignals = (
+  subjectMemory:
+    | {
+        riskLevel: string;
+        predictedNextTask: string | null;
+        weakAreas: unknown;
+        strengths: unknown;
+        recentTopics: unknown;
+      }
+    | null,
+  learningSignals: {
+    signalType: string;
+    topic: string | null;
+    title: string;
+    detail: string;
+    evidence: string;
+    nextAction: string | null;
+  }[]
+) => {
+  const memoryMapSignal = subjectMemory
+    ? `Student map risk: ${subjectMemory.riskLevel}. Predicted next task: ${subjectMemory.predictedNextTask ?? "Not enough evidence yet"}. Weak areas: ${compactText(JSON.stringify(subjectMemory.weakAreas), 420)}. Strengths: ${compactText(JSON.stringify(subjectMemory.strengths), 300)}. Recent topics: ${compactText(JSON.stringify(subjectMemory.recentTopics), 300)}.`
+    : "";
+  const recentSignals = learningSignals
+    .slice(0, 8)
+    .map(
+      (signal) =>
+        `${signal.signalType} in ${signal.topic ?? "General"}: ${compactText(signal.title, 120)} - ${compactText(signal.detail, 220)} Evidence: ${compactText(signal.evidence, 160)}${signal.nextAction ? ` Next: ${compactText(signal.nextAction, 160)}` : ""}`
+    );
+
+  return [memoryMapSignal, ...recentSignals].filter(Boolean).join("\n");
+};
+
+const buildStudentMemoryPlanContext = (
+  subjectMemories: {
+    subjectName: string;
+    riskLevel: string;
+    predictedNextTask: string | null;
+    weakAreas: unknown;
+    strengths: unknown;
+    commonMistakes: unknown;
+    recentTopics: unknown;
+    upcomingAssessments: unknown;
+    evidenceTrail: unknown;
+  }[]
+) =>
+  subjectMemories
+    .slice(0, 8)
+    .map(
+      (memory) => `### ${memory.subjectName}
+Risk: ${memory.riskLevel}
+Predicted next task: ${memory.predictedNextTask ?? "Not enough evidence yet"}
+Weak areas: ${compactText(JSON.stringify(memory.weakAreas), 600)}
+Common mistakes: ${compactText(JSON.stringify(memory.commonMistakes), 520)}
+Strengths: ${compactText(JSON.stringify(memory.strengths), 420)}
+Recent topics: ${compactText(JSON.stringify(memory.recentTopics), 420)}
+Evidence trail: ${compactText(JSON.stringify(memory.evidenceTrail), 520)}`
+    )
+    .join("\n\n");
+
 const formatClassNoteBody = (draft: ClassNoteDraft, transcript: string) => {
   const body = [
     draft.summary,
@@ -425,7 +485,7 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = reflectionSchema.parse(req.body);
-    await ensureSubject(authReq.user.id, payload.subjectId);
+    const subject = await ensureSubject(authReq.user.id, payload.subjectId);
 
     const reflection = await prisma.studyReflection.create({
       data: {
@@ -439,6 +499,58 @@ coachRouter.post(
       },
       include: { subject: true }
     });
+
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject?.id ?? null,
+        subjectName: subject?.subjectName ?? "General study",
+        eventType: "class_reflection_saved",
+        sourceType: "study_reflection",
+        sourceId: reflection.id,
+        title: `Class reflection: ${subject?.subjectName ?? "General study"}`,
+        summary: `Class: ${payload.classSummary}\nUnderstood: ${payload.understood}\nConfused: ${payload.confused}\nNext: ${payload.nextAction ?? ""}`,
+        importance: payload.confused.trim() ? 3 : 2,
+        payload: {
+          classDate: payload.classDate,
+          classSummary: payload.classSummary,
+          understood: payload.understood,
+          confused: payload.confused,
+          nextAction: payload.nextAction
+        }
+      },
+      {
+        topic: payload.classSummary,
+        signals: [
+          ...(payload.understood.trim()
+            ? [
+                {
+                  signalType: "strength" as const,
+                  topic: payload.classSummary,
+                  title: "Understood in class",
+                  detail: payload.understood,
+                  evidence: "Student marked this as understood in a class reflection.",
+                  nextAction: "Use this as retrieval practice before moving to harder application.",
+                  weight: 2
+                }
+              ]
+            : []),
+          ...(payload.confused.trim()
+            ? [
+                {
+                  signalType: "weakness" as const,
+                  topic: payload.classSummary,
+                  title: "Confusion from class",
+                  detail: payload.confused,
+                  evidence: "Student explicitly logged this as confusing.",
+                  nextAction: payload.nextAction ?? "Ask Coach for a worked explanation, then do one checked question.",
+                  weight: 4
+                }
+              ]
+            : [])
+        ]
+      }
+    );
 
     res.status(201).json({ reflection });
   })
@@ -462,7 +574,7 @@ coachRouter.post(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const payload = noteSchema.parse(req.body);
-    await ensureSubject(authReq.user.id, payload.subjectId);
+    const subject = await ensureSubject(authReq.user.id, payload.subjectId);
 
     const note = await prisma.studyNote.create({
       data: {
@@ -475,6 +587,45 @@ coachRouter.post(
       },
       include: { subject: true }
     });
+
+    const mistake = payload.noteType === "mistake_log" || payload.tags.some((tag) => /mistake|weak|error|timer-check/i.test(tag));
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject?.id ?? null,
+        subjectName: subject?.subjectName ?? "General study",
+        eventType: mistake ? "mistake_saved" : "study_note_saved",
+        sourceType: "study_note",
+        sourceId: note.id,
+        title: note.title,
+        summary: compactText(note.body, 2000),
+        importance: mistake ? 4 : 2,
+        payload: {
+          title: note.title,
+          noteType: note.noteType,
+          tags: note.tags,
+          bodyPreview: compactText(note.body, 1800)
+        }
+      },
+      {
+        topic: note.title,
+        extractAiSignals: mistake,
+        evidence: note.body,
+        signals: [
+          {
+            signalType: mistake ? "mistake" : "resource_context",
+            topic: note.title.replace(/^Mistake:\s*/i, ""),
+            title: mistake ? "Saved mistake" : "Saved study note",
+            detail: compactText(note.body, 700),
+            evidence: mistake ? "Student saved this as a mistake log." : "Student saved this note as study context.",
+            nextAction: mistake
+              ? "Turn this mistake into one flashcard and one checked retry."
+              : "Use this note as source context for the next Coach question or practice set.",
+            weight: mistake ? 4 : 2
+          }
+        ]
+      }
+    );
 
     res.status(201).json({ note });
   })
@@ -556,6 +707,39 @@ coachRouter.post(
         include: { subject: true }
       });
       created.push(resourceDto(resource));
+      await recordStudentMemory(
+        {
+          userId: authReq.user.id,
+          subjectId,
+          subjectName: resource.subject?.subjectName ?? "General study",
+          eventType: "resource_uploaded",
+          sourceType: "study_resource",
+          sourceId: resource.id,
+          title: resource.fileName,
+          summary: `Uploaded ${resource.sourceType} resource (${resource.fileType}) with ${resource.extractedText.length} extracted characters.`,
+          importance: ["exam", "exam_report", "practice_sac", "practice_sat"].includes(resource.sourceType) ? 4 : 3,
+          payload: {
+            fileName: resource.fileName,
+            fileType: resource.fileType,
+            sourceType: resource.sourceType,
+            extractedTextPreview: compactText(resource.extractedText, 1800)
+          }
+        },
+        {
+          topic: resource.fileName,
+          signals: [
+            {
+              signalType: "resource_context",
+              topic: resource.fileName,
+              title: `${resource.sourceType} uploaded`,
+              detail: `The student uploaded ${resource.fileName}, making it searchable context for future coaching and practice.`,
+              evidence: compactText(resource.extractedText, 420),
+              nextAction: "Use this source when generating questions or answering Coach prompts for the linked subject.",
+              weight: ["exam", "exam_report", "practice_sac", "practice_sat"].includes(resource.sourceType) ? 4 : 3
+            }
+          ]
+        }
+      );
     }
 
     res.status(201).json({ resources: created });
@@ -760,6 +944,49 @@ coachRouter.post(
     });
 
     const gamification = await addXp(authReq.user.id, 12);
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject.id,
+        subjectName: subject.subjectName,
+        eventType: "class_notetaker_saved",
+        sourceType: "study_note",
+        sourceId: note.id,
+        title: note.title,
+        summary: `Class notetaker generated notes for ${subject.subjectName}. ${classNotes.summary}`,
+        importance: classNotes.confusion_flags.length ? 4 : 3,
+        payload: {
+          title: note.title,
+          summary: classNotes.summary,
+          keyPoints: classNotes.key_points,
+          confusionFlags: classNotes.confusion_flags,
+          nextActions: classNotes.next_actions
+        }
+      },
+      {
+        topic: note.title,
+        signals: [
+          ...classNotes.confusion_flags.map((flag) => ({
+            signalType: "weakness" as const,
+            topic: note.title,
+            title: "Class confusion flag",
+            detail: flag,
+            evidence: "Generated from class notetaker transcript.",
+            nextAction: classNotes.next_actions[0] ?? "Turn this into a checked practice question.",
+            weight: 4
+          })),
+          ...classNotes.key_points.slice(0, 2).map((point) => ({
+            signalType: "topic_interest" as const,
+            topic: note.title,
+            title: "Class topic captured",
+            detail: point,
+            evidence: "Generated from class notetaker transcript.",
+            nextAction: classNotes.retrieval_prompts[0] ?? "Review with closed-book retrieval.",
+            weight: 2
+          }))
+        ]
+      }
+    );
     res.status(201).json({ note, transcript, classNotes, gamification });
   })
 );
@@ -811,7 +1038,8 @@ coachRouter.post(
     }
 
     const subjectScope = subject ? { OR: [{ subjectId: subject.id }, { subjectId: null }] } : {};
-    const [attachedDocuments, reflections, notes, resources] = await Promise.all([
+    const currentSubjectKey = subjectKeyFor(subject?.id ?? null, subject?.subjectName ?? null);
+    const [attachedDocuments, reflections, notes, resources, recentMemorySignals, subjectMemory] = await Promise.all([
       Promise.all(
         documentFiles.map(async (file) => {
           const extracted = await extractResourceText(file);
@@ -842,6 +1070,14 @@ coachRouter.post(
         include: { subject: true },
         orderBy: { createdAt: "desc" },
         take: 8
+      }),
+      prisma.learningSignal.findMany({
+        where: { userId: authReq.user.id, subjectKey: currentSubjectKey },
+        orderBy: { createdAt: "desc" },
+        take: 12
+      }),
+      prisma.studentSubjectMemory.findUnique({
+        where: { userId_subjectKey: { userId: authReq.user.id, subjectKey: currentSubjectKey } }
       })
     ]);
 
@@ -888,7 +1124,9 @@ coachRouter.post(
       subjectUnit: subject?.unit,
       question: payload.question,
       context,
-      learningSignals: buildAskCoachLearningSignals(reflections, notes),
+      learningSignals: [buildStudentMemorySignals(subjectMemory, recentMemorySignals), buildAskCoachLearningSignals(reflections, notes)]
+        .filter(Boolean)
+        .join("\n"),
       responseMode: payload.sessionMode === "tutor_session" ? "tutor" : payload.responseMode,
       coachChatTitle: payload.coachChatTitle ?? null,
       coachChatTranscript: payload.coachChatTranscript ?? null,
@@ -906,6 +1144,60 @@ coachRouter.post(
     });
 
     const gamification = await addXp(authReq.user.id, files.length ? 8 : 5);
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject?.id ?? null,
+        subjectName: subject?.subjectName ?? "General study",
+        eventType: payload.sessionMode === "tutor_session" ? "tutor_turn_asked" : "coach_question_asked",
+        sourceType: "ask_coach",
+        title: payload.question,
+        summary: `Student asked: ${payload.question}\nCoach answered: ${answer.answer}`,
+        importance: payload.sessionMode === "tutor_session" || files.length ? 4 : 3,
+        payload: {
+          question: payload.question,
+          responseMode: payload.responseMode,
+          sessionMode: payload.sessionMode,
+          sessionTopic: payload.sessionTopic,
+          answerConfidence: answer.confidence,
+          tutorDiagnosis: answer.tutor_plan?.diagnosis,
+          tutorNextRevision: answer.tutor_plan?.next_revision,
+          keyPoints: answer.key_points,
+          followUpQuestions: answer.follow_up_questions,
+          attachedDocumentLabels,
+          sourceLabels
+        }
+      },
+      {
+        topic: payload.sessionTopic ?? payload.question,
+        evidence: answer.tutor_plan?.diagnosis ?? answer.answer,
+        extractAiSignals: true,
+        signals: [
+          {
+            signalType: "topic_interest",
+            topic: payload.sessionTopic ?? payload.question,
+            title: payload.sessionMode === "tutor_session" ? "Tutor turn topic" : "Coach question topic",
+            detail: compactText(payload.question, 700),
+            evidence: `Asked Coach in ${answer.confidence} confidence mode.${attachedDocumentLabels.length ? ` Attachments: ${attachedDocumentLabels.join(", ")}` : ""}`,
+            nextAction: answer.tutor_plan?.next_revision ?? answer.follow_up_questions[0] ?? null,
+            weight: payload.sessionMode === "tutor_session" ? 4 : 3
+          },
+          ...(answer.tutor_plan?.diagnosis
+            ? [
+                {
+                  signalType: "weakness" as const,
+                  topic: payload.sessionTopic ?? payload.question,
+                  title: "Coach diagnosis",
+                  detail: answer.tutor_plan.diagnosis,
+                  evidence: "Extracted from the Coach tutor plan for this turn.",
+                  nextAction: answer.tutor_plan.next_revision,
+                  weight: 4
+                }
+              ]
+            : [])
+        ]
+      }
+    );
     res.json({ answer, gamification });
   })
 );
@@ -932,7 +1224,7 @@ coachRouter.post(
     const horizonDays = payload.horizonDays;
 
     const horizonEnd = addDays(today, horizonDays);
-    const [subjects, reflections, events, sessions, notes, resources] = await Promise.all([
+    const [subjects, reflections, events, sessions, notes, resources, subjectMemories] = await Promise.all([
       prisma.userSubject.findMany({ where: { userId: authReq.user.id }, orderBy: { subjectName: "asc" } }),
       prisma.studyReflection.findMany({
         where: { userId: authReq.user.id },
@@ -973,6 +1265,11 @@ coachRouter.post(
         where: { userId: authReq.user.id },
         include: { subject: true },
         orderBy: { createdAt: "desc" },
+        take: 12
+      }),
+      prisma.studentSubjectMemory.findMany({
+        where: { userId: authReq.user.id },
+        orderBy: [{ riskLevel: "desc" }, { updatedAt: "desc" }],
         take: 12
       })
     ]);
@@ -1046,6 +1343,7 @@ coachRouter.post(
             `${session.createdAt.toISOString().slice(0, 10)} ${session.subject?.subjectName ?? "No subject"} ${Math.round(session.durationSeconds / 60)}min ${session.notes ?? ""}`
         )
         .join("\n"),
+      studentMemoryContext: buildStudentMemoryPlanContext(subjectMemories),
       notesContext: notes
         .map((note: NoteForPlan) =>
           contextSnippetForQuery(`${note.subject?.subjectName ?? "General"} note: ${note.title}`, note.body, eventQuery, 900)
@@ -1069,6 +1367,38 @@ coachRouter.post(
         checkpoints: plan.checkpoints
       }
     });
+
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        eventType: "adaptive_plan_generated",
+        sourceType: "adaptive_study_plan",
+        sourceId: savedPlan.id,
+        title: "Adaptive study plan generated",
+        summary: `${plan.summary}\nFocus areas: ${plan.focus_areas.join(", ")}`,
+        importance: 3,
+        payload: {
+          planDate: payload.planDate,
+          availableMinutes: payload.availableMinutes,
+          horizonDays,
+          focusAreas: plan.focus_areas,
+          checkpoints: plan.checkpoints,
+          taskCount: plan.tasks.length
+        }
+      },
+      {
+        topic: plan.focus_areas[0] ?? "Study plan",
+        signals: plan.focus_areas.slice(0, 4).map((focus) => ({
+          signalType: "next_action",
+          topic: focus,
+          title: "Plan focus area",
+          detail: focus,
+          evidence: "Generated by the adaptive study plan from current calendar and memory data.",
+          nextAction: plan.tasks.find((task) => task.topic === focus || task.title.includes(focus))?.title ?? plan.tasks[0]?.title ?? null,
+          weight: 3
+        }))
+      }
+    );
 
     res.status(201).json({ plan: savedPlan });
   })

@@ -4,6 +4,7 @@ import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 import { addXp, awardEventBadges } from "../services/gamificationService.js";
+import { recordStudentMemory } from "../services/studentMemoryService.js";
 
 export const eventsRouter = Router();
 eventsRouter.use(requireAuth);
@@ -111,6 +112,54 @@ eventsRouter.post(
 
     await addXp(authReq.user.id, 5);
     const gamification = await awardEventBadges(authReq.user.id);
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: subject?.id ?? null,
+        subjectName: subject?.subjectName ?? "General study",
+        eventType: "calendar_event_created",
+        sourceType: "calendar_event",
+        sourceId: event.id,
+        title: event.title,
+        summary: `${event.eventType} logged for ${event.eventDate.toISOString().slice(0, 10)}.${event.description ? ` ${event.description}` : ""}`,
+        importance: event.eventType === "EXAM" || event.eventType === "SAC" || event.eventType === "SAT" ? 4 : 2,
+        payload: {
+          eventType: event.eventType,
+          eventDate: event.eventDate.toISOString().slice(0, 10),
+          startTime: event.startTime,
+          endTime: event.endTime,
+          recurrence: event.recurrence,
+          description: event.description
+        }
+      },
+      {
+        topic: event.description ?? event.title,
+        signals:
+          event.eventType === "STUDY_TIME"
+            ? [
+                {
+                  signalType: "study_behavior",
+                  topic: event.title,
+                  title: "Scheduled study time",
+                  detail: `Scheduled ${event.title} on ${event.eventDate.toISOString().slice(0, 10)}.`,
+                  evidence: `${event.startTime ?? ""}-${event.endTime ?? ""}`.trim() || "Calendar study block created.",
+                  nextAction: "Use this block for the weakest linked topic when the date arrives.",
+                  weight: 2
+                }
+              ]
+            : [
+                {
+                  signalType: "assessment_risk",
+                  topic: event.description ?? event.title,
+                  title: `${event.eventType} coming up`,
+                  detail: `${event.title} is now part of the student's assessment timeline.`,
+                  evidence: `${event.eventType} on ${event.eventDate.toISOString().slice(0, 10)}`,
+                  nextAction: "Link saved mistakes and recent weak topics to this assessment in the next study plan.",
+                  weight: event.eventType === "EXAM" ? 5 : 4
+                }
+              ]
+      }
+    );
     res.status(201).json({ event, gamification });
   })
 );
@@ -173,6 +222,51 @@ eventsRouter.patch(
     });
 
     const gamification = await awardEventBadges(authReq.user.id);
+    await recordStudentMemory(
+      {
+        userId: authReq.user.id,
+        subjectId: event.subjectId,
+        subjectName: event.subject?.subjectName ?? "General study",
+        eventType: "calendar_event_updated",
+        sourceType: "calendar_event",
+        sourceId: event.id,
+        title: event.title,
+        summary: `${event.eventType} updated for ${event.eventDate.toISOString().slice(0, 10)}.${event.completed ? " Marked completed." : ""}`,
+        importance: event.completed ? 2 : event.eventType === "EXAM" || event.eventType === "SAC" || event.eventType === "SAT" ? 4 : 2,
+        payload: {
+          eventType: event.eventType,
+          eventDate: event.eventDate.toISOString().slice(0, 10),
+          completed: event.completed,
+          description: event.description
+        }
+      },
+      {
+        topic: event.description ?? event.title,
+        signals: event.completed
+          ? [
+              {
+                signalType: "study_behavior",
+                topic: event.title,
+                title: "Assessment/calendar item completed",
+                detail: `${event.title} was marked complete.`,
+                evidence: `${event.eventType} completion update`,
+                nextAction: "Capture marks or teacher feedback if available so the memory map can calibrate outcomes.",
+                weight: 2
+              }
+            ]
+          : [
+              {
+                signalType: event.eventType === "STUDY_TIME" ? "study_behavior" : "assessment_risk",
+                topic: event.description ?? event.title,
+                title: `${event.eventType} timeline changed`,
+                detail: `${event.title} is scheduled for ${event.eventDate.toISOString().slice(0, 10)}.`,
+                evidence: "Calendar event was updated.",
+                nextAction: "Refresh the study plan so risk and next tasks use the latest date.",
+                weight: event.eventType === "EXAM" ? 5 : 3
+              }
+            ]
+      }
+    );
     res.json({ event, gamification });
   })
 );

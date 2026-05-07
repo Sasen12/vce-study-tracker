@@ -17,6 +17,9 @@ import type {
   SavedQuestion,
   StudyAnswer,
   StudyEvent,
+  StudentMemoryEvent,
+  LearningSignal,
+  StudentSubjectMemory,
   UserFeedback,
   StudyNote,
   StudyReflection,
@@ -165,6 +168,11 @@ export const studyApi = {
   latestPlan: () => apiFetch<{ plan: AdaptiveStudyPlan | null }>("/coach/plans/latest"),
   generatePlan: (body: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) =>
     apiFetch<{ plan: AdaptiveStudyPlan }>("/coach/plans/generate", { method: "POST", body }),
+  memoryEvents: (limit = 50) => apiFetch<{ events: StudentMemoryEvent[] }>(`/memory/events?limit=${limit}`),
+  learningSignals: (limit = 50) => apiFetch<{ signals: LearningSignal[] }>(`/memory/signals?limit=${limit}`),
+  studentMemoryMap: () => apiFetch<{ subjectMemories: StudentSubjectMemory[] }>("/memory/student-map"),
+  rebuildStudentMemoryMap: () =>
+    apiFetch<{ subjectMemories: StudentSubjectMemory[] }>("/memory/student-map/rebuild", { method: "POST" }),
   gamification: () => apiFetch<{ gamification: Gamification }>("/gamification"),
   community: () =>
     apiFetch<{
