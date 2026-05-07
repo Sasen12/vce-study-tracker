@@ -12,6 +12,7 @@ import { SkeletonStack } from "@/components/ui/Skeleton";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { ChessBreak } from "@/components/session/ChessBreak";
 import { StudyCoachPanel } from "@/components/session/StudyCoachPanel";
+import { StudyMusicPanel } from "@/components/session/StudyMusicPanel";
 import { StudyNotesPanel } from "@/components/session/StudyNotesPanel";
 import { StudyResourcesPanel } from "@/components/session/StudyResourcesPanel";
 import { palette } from "@/constants/theme";
@@ -666,6 +667,8 @@ export default function StudyScreen() {
               </Button>
             </View>
           </AppCard>
+
+          <StudyMusicPanel />
 
           <AppCard style={[styles.breakCard, breakReady && styles.breakCardReady]}>
             <View style={styles.breakHeader}>

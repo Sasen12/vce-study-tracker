@@ -3,7 +3,36 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Pro waitlist demand test
+Most recent edit: 2026-05-07 - Copyright-safe study music player
+
+Summary:
+- Added a Study music card to the Study timer screen.
+- Added playback through expo-av so study music works through the Expo app stack instead of web-only audio.
+- Added four streamed Kevin MacLeod/Incompetech study tracks:
+  - Study And Relax
+  - Meditation Impromptu 01
+  - Valse Gymnopedie
+  - Local Forecast - Slower
+- Added play/pause, stop, looping, progress, current time, duration, and track selection controls.
+- Kept visible attribution in the player with source and CC BY 4.0 license links for the selected track.
+- Added constants/studyMusic.ts for track metadata and stream URLs.
+- Added assets/study-music/LICENSES.md with license notes and attribution text.
+- Added expo-av to app dependencies.
+- The app streams tracks from Incompetech instead of committing MP3 files into the repo.
+
+Validation run:
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Pro waitlist demand test
 
 Summary:
 - Added a hidden VCE Study Tracker Pro screen that keeps the free app promise clear.
