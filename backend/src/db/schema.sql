@@ -5,6 +5,7 @@ CREATE TABLE users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
+  school_name TEXT,
   avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

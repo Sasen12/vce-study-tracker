@@ -180,6 +180,7 @@ const adminUserSelect = {
   id: true,
   email: true,
   displayName: true,
+  schoolName: true,
   createdAt: true,
   gamification: {
     select: {
@@ -209,6 +210,7 @@ const serialiseAdminUser = (user: {
   id: string;
   email: string;
   displayName: string;
+  schoolName: string | null;
   createdAt: Date;
   gamification: {
     totalXp: number;
@@ -229,6 +231,7 @@ const serialiseAdminUser = (user: {
   id: user.id,
   email: user.email,
   displayName: user.displayName,
+  schoolName: user.schoolName,
   createdAt: user.createdAt,
   level: user.gamification?.level ?? 1,
   totalXp: user.gamification?.totalXp ?? 0,
@@ -428,7 +431,8 @@ const buildUsageAnalytics = async () => {
           select: {
             id: true,
             displayName: true,
-            email: true
+            email: true,
+            schoolName: true
           }
         }
       }
@@ -459,7 +463,8 @@ const buildUsageAnalytics = async () => {
       select: {
         id: true,
         displayName: true,
-        email: true
+        email: true,
+        schoolName: true
       }
     })
   ]);
@@ -480,6 +485,7 @@ const buildUsageAnalytics = async () => {
         userId: user.id,
         displayName: user.displayName,
         email: user.email,
+        schoolName: user.schoolName,
         lastSeenAt: null as Date | null,
         lastScreen: null as string | null,
         events24h: 0,
@@ -569,6 +575,7 @@ const buildUsageAnalytics = async () => {
       userId: event.userId,
       displayName: event.user.displayName,
       email: event.user.email,
+      schoolName: event.user.schoolName,
       screen: event.screen,
       label: screenLabels[event.screen as TrackedScreen] ?? event.screen,
       action: event.action,

@@ -3,7 +3,31 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Hide Pro plan
+Most recent edit: 2026-05-07 - Capture school on signup
+
+Summary:
+- Added an optional schoolName field to users in the Prisma schema and base SQL schema.
+- Signup now asks for a school name when the student is not using a vic.edu.au school email.
+- The backend now requires schoolName for non-vic.edu.au registration requests, so direct API signups follow the same rule.
+- Auth responses include schoolName so the app can keep the logged-in user shape current.
+- Admin Community user lists and usage analytics now show captured school names.
+- Added a small startup schema guard that creates users.school_name if the connected database does not have it yet.
+
+Validation run:
+- npm run prisma:generate --prefix backend
+- npm run prisma:push --prefix backend was attempted, but the local DATABASE_URL points at localhost:5432 and the schema engine did not apply the change there.
+- npx tsc --noEmit
+- npm run lint
+- npm run build --prefix backend
+- git diff --check
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Hide Pro plan
 
 Summary:
 - Added a small PRO_PLAN_VISIBLE flag so the Pro plan can be paused without deleting the waitlist screen.

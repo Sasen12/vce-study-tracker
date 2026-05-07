@@ -13,6 +13,7 @@ model User {
   email          String              @unique
   passwordHash   String              @map("password_hash")
   displayName    String              @map("display_name")
+  schoolName     String?             @map("school_name")
   avatarUrl      String?             @map("avatar_url")
   createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   subjects       UserSubject[]

@@ -11,6 +11,7 @@ import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
+import { ensureDatabaseSchema } from "./db/ensureSchema.js";
 import { errorHandler } from "./utils/http.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
 import { APP_TIME_ZONE } from "./utils/date.js";
@@ -75,6 +76,14 @@ cron.schedule(
   }
 );
 
-app.listen(port, () => {
-  console.log(`VCE Study Tracker API running on http://localhost:${port}`);
+const start = async () => {
+  await ensureDatabaseSchema();
+  app.listen(port, () => {
+    console.log(`VCE Study Tracker API running on http://localhost:${port}`);
+  });
+};
+
+start().catch((error) => {
+  console.error("Failed to start VCE Study Tracker API", error);
+  process.exit(1);
 });

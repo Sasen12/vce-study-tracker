@@ -20,6 +20,7 @@ type AuthState = {
     email: string;
     password: string;
     displayName: string;
+    schoolName?: string | null;
     subjects: RegisterSubject[];
   }) => Promise<void>;
   logout: () => Promise<void>;
@@ -86,4 +87,3 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, error: null });
   }
 }));
-

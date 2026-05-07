@@ -17,15 +17,24 @@ type SelectedSubject = {
 
 const maxSubjects = 8;
 
+const isVicEduAuEmail = (value: string) => {
+  const domain = value.trim().toLowerCase().split("@")[1] ?? "";
+  return domain === "vic.edu.au" || domain.endsWith(".vic.edu.au");
+};
+
 export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [schoolName, setSchoolName] = useState("");
   const [password, setPassword] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [selected, setSelected] = useState<SelectedSubject[]>([]);
+  const [schoolError, setSchoolError] = useState<string | null>(null);
   const register = useAuthStore((state) => state.register);
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
+  const normalisedEmail = email.trim().toLowerCase();
+  const needsSchoolName = Boolean(normalisedEmail) && !isVicEduAuEmail(normalisedEmail);
   const subjects = useMemo(() => {
     const query = subjectSearch.trim().toLowerCase();
     return VCE_SUBJECTS.filter(
@@ -79,8 +88,21 @@ export default function RegisterScreen() {
   };
 
   const submit = async () => {
+    const cleanSchoolName = schoolName.trim();
+    if (needsSchoolName && cleanSchoolName.length < 2) {
+      setSchoolError("Enter your school name if you are not using a vic.edu.au school email.");
+      return;
+    }
+
+    setSchoolError(null);
     try {
-      await register({ displayName, email, password, subjects: selected });
+      await register({
+        displayName,
+        email,
+        password,
+        schoolName: cleanSchoolName || null,
+        subjects: selected
+      });
       router.replace("/(tabs)");
     } catch {
       // The auth store surfaces the message inline.
@@ -105,8 +127,26 @@ export default function RegisterScreen() {
             value={email}
             autoCapitalize="none"
             keyboardType="email-address"
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setSchoolError(null);
+            }}
           />
+          {!normalisedEmail || needsSchoolName ? (
+            <>
+              <TextInput
+                mode="outlined"
+                label="School name"
+                value={schoolName}
+                autoCapitalize="words"
+                onChangeText={(value) => {
+                  setSchoolName(value);
+                  setSchoolError(null);
+                }}
+              />
+              <Text style={styles.inputHint}>Needed when signing up without a vic.edu.au school email.</Text>
+            </>
+          ) : null}
           <TextInput
             mode="outlined"
             label="Password"
@@ -187,12 +227,12 @@ export default function RegisterScreen() {
           ))}
         </AppCard>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {schoolError || error ? <Text style={styles.error}>{schoolError ?? error}</Text> : null}
         <Button
           mode="contained"
           icon="account-plus"
           loading={loading}
-          disabled={loading || selected.length === 0}
+          disabled={loading || selected.length === 0 || (needsSchoolName && schoolName.trim().length < 2)}
           onPress={submit}
         >
           Start tracking
@@ -219,6 +259,11 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 12
+  },
+  inputHint: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 18
   },
   subjectCard: {
     gap: 12

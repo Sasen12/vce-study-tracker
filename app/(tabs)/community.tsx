@@ -220,6 +220,11 @@ function UserRow({
           <Text style={styles.userEmail} numberOfLines={1}>
             {item.email}
           </Text>
+          {item.schoolName ? (
+            <Text style={styles.mutedSmall} numberOfLines={1}>
+              School: {item.schoolName}
+            </Text>
+          ) : null}
         </View>
         <View style={[styles.optInPill, item.leaderboardOptIn ? styles.optInPillActive : styles.optInPillMuted]}>
           <Text style={styles.optInText}>{item.leaderboardOptIn ? "Opted in" : "Opted out"}</Text>
@@ -387,6 +392,11 @@ function AnalyticsPanel({
                     <Text style={styles.userEmail} numberOfLines={1}>
                       {user.email}
                     </Text>
+                    {user.schoolName ? (
+                      <Text style={styles.mutedSmall} numberOfLines={1}>
+                        School: {user.schoolName}
+                      </Text>
+                    ) : null}
                   </View>
                   <Text style={styles.mutedSmall}>{formatRelativeTime(user.lastSeenAt)}</Text>
                 </View>
@@ -421,7 +431,7 @@ function AnalyticsPanel({
                     {event.displayName}
                   </Text>
                   <Text style={styles.mutedSmall} numberOfLines={1}>
-                    {event.email}
+                    {event.schoolName ? `${event.email} - ${event.schoolName}` : event.email}
                   </Text>
                 </View>
                 <Text style={styles.recentScreen}>{event.label}</Text>

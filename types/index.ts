@@ -2,6 +2,7 @@ export type User = {
   id: string;
   email: string;
   displayName: string;
+  schoolName?: string | null;
   avatarUrl?: string | null;
   createdAt?: string;
 };
@@ -146,6 +147,7 @@ export type CommunityUserSummary = {
   id: string;
   email: string;
   displayName: string;
+  schoolName?: string | null;
   createdAt: string;
   level: number;
   totalXp: number;
@@ -190,6 +192,7 @@ export type UsageUserSummary = {
   userId: string;
   displayName: string;
   email: string;
+  schoolName?: string | null;
   lastSeenAt?: string | null;
   lastScreen?: UsageScreen | string | null;
   events24h: number;
@@ -204,6 +207,7 @@ export type UsageRecentEvent = {
   userId: string;
   displayName: string;
   email: string;
+  schoolName?: string | null;
   screen: UsageScreen | string;
   label: string;
   action: string;

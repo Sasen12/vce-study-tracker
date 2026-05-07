@@ -23,10 +23,16 @@ const subjectSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/)
 });
 
+const optionalSchoolNameSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().max(120).optional().nullable()
+);
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   displayName: z.string().min(2),
+  schoolName: optionalSchoolNameSchema,
   subjects: z.array(subjectSchema).max(MAX_SUBJECTS, `Choose up to ${MAX_SUBJECTS} subjects.`).default([])
 });
 
@@ -39,12 +45,14 @@ const publicUser = (user: {
   id: string;
   email: string;
   displayName: string;
+  schoolName: string | null;
   avatarUrl: string | null;
   createdAt: Date;
 }) => ({
   id: user.id,
   email: user.email,
   displayName: user.displayName,
+  schoolName: user.schoolName,
   avatarUrl: user.avatarUrl,
   createdAt: user.createdAt
 });
@@ -52,11 +60,23 @@ const publicUser = (user: {
 const isUniqueConstraintError = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 
+const isVicEduAuEmail = (email: string) => {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  return domain === "vic.edu.au" || domain.endsWith(".vic.edu.au");
+};
+
 authRouter.post(
   "/register",
   asyncHandler(async (req, res) => {
     const payload = registerSchema.parse(req.body);
     const email = payload.email.toLowerCase().trim();
+    const schoolName = payload.schoolName?.trim() || null;
+    if (schoolName && schoolName.length < 2) {
+      throw new HttpError(400, "Enter your school name with at least 2 characters.");
+    }
+    if (!isVicEduAuEmail(email) && !schoolName) {
+      throw new HttpError(400, "Enter your school name when you are not using a vic.edu.au school email.");
+    }
     const passwordHash = await bcrypt.hash(payload.password, 12);
 
     try {
@@ -65,6 +85,7 @@ authRouter.post(
           email,
           passwordHash,
           displayName: payload.displayName.trim(),
+          schoolName,
           gamification: { create: {} },
           subjects: {
             create: payload.subjects.map((subject) => ({

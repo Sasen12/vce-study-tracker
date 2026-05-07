@@ -23,6 +23,7 @@ async function main() {
       email: demoEmail,
       passwordHash: await bcrypt.hash("password123", 12),
       displayName: "Sasen",
+      schoolName: "Demo School",
       gamification: { create: {} },
       subjects: { create: starterSubjects }
     }
