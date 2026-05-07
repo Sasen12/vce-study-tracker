@@ -3,7 +3,28 @@ Standing request from Sasen:
 - After finishing edits, deploy/publish the result to GitHub and Netlify when the tools are available.
 - This file is meant as a handoff note for a fresh Codex tab.
 
-Most recent edit: 2026-05-07 - Student Memory and Learning Signals foundation
+Most recent edit: 2026-05-08 - Student Map UI
+
+Summary:
+- Reworked the hidden Insights route into a Student Map screen without using "second brain" wording.
+- Renamed visible Insights entry points and analytics labels to Student Map.
+- Added Student Map store loading and a rebuild action using the existing /api/memory/student-map endpoints.
+- Added a memory-first dashboard showing mapped subjects, risk level, mastery estimate, predicted next move, weak areas, common mistakes, strengths, linked assessments, learned topics, study methods and evidence trail.
+- Kept the useful weekly study report, XP/streak, study pulse, subject mix, weekly pace and continue cards below the Student Map sections.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+- git diff --check
+- npm run lint
+- npm run build:web
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
+Previous edit: 2026-05-07 - Student Memory and Learning Signals foundation
 
 Summary:
 - Added durable backend memory tables for raw student activity, extracted learning signals, and the per-subject Student Map.

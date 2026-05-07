@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Button, Text } from "react-native-paper";
 import Animated from "react-native-reanimated";
@@ -17,6 +17,46 @@ import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import { buildWeeklyReport, isFlashcardNote, isMistakeNote, isSacPanicNote } from "@/utils/vceCoach";
 import { getActiveStreak } from "@/utils/streaks";
+import type { StudentSubjectMemory } from "@/types";
+
+type MemoryTopic = {
+  topic?: string | null;
+  title?: string | null;
+  detail?: string | null;
+  evidence?: string | null;
+  confidence?: string | null;
+  count?: number;
+  weight?: number;
+  lastSeenAt?: string | null;
+  sourceTypes?: string[];
+};
+
+type MemoryAssessment = {
+  id?: string;
+  title?: string;
+  eventType?: string;
+  eventDate?: string;
+  daysUntil?: number;
+  topic?: string;
+  subject?: string;
+};
+
+type EvidenceItem = {
+  at?: string;
+  type?: string;
+  topic?: string | null;
+  title?: string;
+  evidence?: string;
+  sourceType?: string;
+};
+
+type StudyMethod = {
+  method?: string;
+  reason?: string;
+  topic?: string | null;
+  evidence?: string;
+  confidence?: string;
+};
 
 const startOfWeek = () => {
   const date = new Date();
@@ -26,9 +66,96 @@ const startOfWeek = () => {
   return date;
 };
 
-export default function InsightsScreen() {
+const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value.filter(Boolean) as T[]) : []);
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const riskRank = (risk: string) => (risk === "high" ? 3 : risk === "medium" ? 2 : 1);
+const riskColor = (risk: string) => {
+  if (risk === "high") return palette.secondary;
+  if (risk === "medium") return palette.warning;
+  return palette.success;
+};
+const riskLabel = (risk: string) => `${risk.slice(0, 1).toUpperCase()}${risk.slice(1)} risk`;
+const compactDate = (value?: string | null) => {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }).format(new Date(value));
+};
+const topicTitle = (item: MemoryTopic) => item.topic || item.title || "General";
+const topicDetail = (item: MemoryTopic) => item.detail || item.evidence || "Recent signal";
+const subjectKey = (memory: StudentSubjectMemory) => memory.subjectKey || memory.subjectId || memory.subjectName;
+const subjectColorFor = (memory: StudentSubjectMemory, index: number) =>
+  memory.subject?.color ?? paletteByIndex[index % paletteByIndex.length];
+const paletteByIndex = [palette.primary, palette.info, palette.success, palette.warning, palette.secondary, "#22D3EE", "#F472B6"];
+
+const masteryFor = (memory: StudentSubjectMemory) => {
+  const strengths = asArray<MemoryTopic>(memory.strengths);
+  const weakAreas = asArray<MemoryTopic>(memory.weakAreas);
+  const mistakes = asArray<MemoryTopic>(memory.commonMistakes);
+  const recentTopics = asArray<MemoryTopic>(memory.recentTopics);
+  const riskPenalty = memory.riskLevel === "high" ? 18 : memory.riskLevel === "medium" ? 10 : 3;
+  return clamp(58 + strengths.length * 8 + recentTopics.length * 2 - weakAreas.length * 7 - mistakes.length * 4 - riskPenalty, 14, 96);
+};
+
+const listKey = (item: MemoryTopic | EvidenceItem | StudyMethod | MemoryAssessment, fallback: string) =>
+  [("topic" in item && item.topic) || ("title" in item && item.title) || ("method" in item && item.method), fallback].filter(Boolean).join("-");
+
+function MiniBar({ value, color }: { value: number; color: string }) {
+  return (
+    <View style={styles.miniTrack}>
+      <View style={[styles.miniFill, { width: `${clamp(value, 0, 100)}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function SignalList({
+  items,
+  emptyTitle,
+  emptyBody,
+  accent
+}: {
+  items: MemoryTopic[];
+  emptyTitle: string;
+  emptyBody: string;
+  accent: string;
+}) {
+  if (!items.length) return <EmptyState title={emptyTitle} body={emptyBody} />;
+
+  return (
+    <View style={styles.signalStack}>
+      {items.slice(0, 5).map((item, index) => (
+        <View key={listKey(item, String(index))} style={styles.signalRow}>
+          <View style={[styles.signalIndex, { borderColor: `${accent}66`, backgroundColor: `${accent}16` }]}>
+            <Text style={[styles.signalIndexText, { color: accent }]}>{index + 1}</Text>
+          </View>
+          <View style={styles.flexText}>
+            <Text style={styles.signalTitle}>{topicTitle(item)}</Text>
+            <Text style={styles.signalDetail}>{topicDetail(item)}</Text>
+            {item.evidence ? <Text style={styles.evidenceText}>Evidence: {item.evidence}</Text> : null}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export default function StudentMapScreen() {
   useTrackScreen("insights");
-  const { subjects, sessions, events, stats, goals, savedQuestions, notes, gamification, loading, fetchAll } = useAppStore();
+  const {
+    subjects,
+    sessions,
+    events,
+    stats,
+    goals,
+    savedQuestions,
+    notes,
+    subjectMemories,
+    gamification,
+    loading,
+    fetchAll,
+    refreshStudentMemoryMap
+  } = useAppStore();
+  const [selectedMemoryKey, setSelectedMemoryKey] = useState<string | null>(null);
+  const [refreshingMap, setRefreshingMap] = useState(false);
+  const [mapMessage, setMapMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,7 +168,6 @@ export default function InsightsScreen() {
   const nextLevel = LEVELS.find((item) => item.xp > xp) ?? LEVELS[LEVELS.length - 1];
   const previousLevel = LEVELS.filter((item) => item.xp <= xp).at(-1) ?? LEVELS[0];
   const xpProgress = nextLevel.xp === previousLevel.xp ? 1 : (xp - previousLevel.xp) / (nextLevel.xp - previousLevel.xp);
-  const xpCaption = nextLevel.xp > xp ? `${nextLevel.xp - xp} XP to ${nextLevel.title}` : "Max level unlocked";
   const todayMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
   const weekMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
   const monthMinutes = Math.round((stats?.monthSeconds ?? 0) / 60);
@@ -86,6 +212,39 @@ export default function InsightsScreen() {
         .sort((a, b) => a.progress - b.progress || a.subject.subjectName.localeCompare(b.subject.subjectName)),
     [goals, subjects, weeklySecondsBySubject]
   );
+  const sortedMemories = useMemo(
+    () =>
+      [...subjectMemories].sort(
+        (a, b) =>
+          riskRank(b.riskLevel) - riskRank(a.riskLevel) ||
+          masteryFor(a) - masteryFor(b) ||
+          a.subjectName.localeCompare(b.subjectName)
+      ),
+    [subjectMemories]
+  );
+  const selectedMemory = useMemo(
+    () => sortedMemories.find((memory) => subjectKey(memory) === selectedMemoryKey) ?? sortedMemories[0] ?? null,
+    [selectedMemoryKey, sortedMemories]
+  );
+  const selectedIndex = selectedMemory ? sortedMemories.findIndex((memory) => subjectKey(memory) === subjectKey(selectedMemory)) : 0;
+  const selectedColor = selectedMemory ? subjectColorFor(selectedMemory, selectedIndex) : palette.primary;
+  const selectedMastery = selectedMemory ? masteryFor(selectedMemory) : 0;
+  const selectedWeakAreas = asArray<MemoryTopic>(selectedMemory?.weakAreas);
+  const selectedMistakes = asArray<MemoryTopic>(selectedMemory?.commonMistakes);
+  const selectedStrengths = asArray<MemoryTopic>(selectedMemory?.strengths);
+  const selectedTopics = asArray<MemoryTopic>(selectedMemory?.recentTopics);
+  const selectedAssessments = asArray<MemoryAssessment>(selectedMemory?.upcomingAssessments);
+  const selectedMethods = asArray<StudyMethod>(selectedMemory?.bestStudyMethods);
+  const selectedEvidence = asArray<EvidenceItem>(selectedMemory?.evidenceTrail);
+  const memoryStats = useMemo(
+    () => ({
+      subjects: sortedMemories.length,
+      highRisk: sortedMemories.filter((memory) => memory.riskLevel === "high").length,
+      weakAreas: sortedMemories.reduce((sum, memory) => sum + asArray<MemoryTopic>(memory.weakAreas).length, 0),
+      evidence: sortedMemories.reduce((sum, memory) => sum + asArray<EvidenceItem>(memory.evidenceTrail).length, 0)
+    }),
+    [sortedMemories]
+  );
   const continueItems = useMemo(() => {
     const latestPanicPlan = notes.filter(isSacPanicNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     const latestMistake = notes.filter(isMistakeNote).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
@@ -124,7 +283,20 @@ export default function InsightsScreen() {
     }[];
   }, [notes]);
 
-  if (loading && !stats) {
+  const rebuildMap = async () => {
+    setRefreshingMap(true);
+    setMapMessage(null);
+    try {
+      await refreshStudentMemoryMap();
+      setMapMessage("Student Map refreshed.");
+    } catch (error) {
+      setMapMessage(error instanceof Error ? error.message : "Could not refresh Student Map.");
+    } finally {
+      setRefreshingMap(false);
+    }
+  };
+
+  if (loading && !stats && !subjectMemories.length) {
     return (
       <Screen>
         <SkeletonStack />
@@ -136,9 +308,9 @@ export default function InsightsScreen() {
     <Screen>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>Insights</Text>
+          <Text style={styles.eyebrow}>Student Map</Text>
           <Text variant="headlineLarge" style={styles.title}>
-            Study report
+            Learning profile
           </Text>
         </View>
         <Button mode="outlined" icon="home-outline" onPress={() => router.push("/(tabs)")}>
@@ -146,11 +318,246 @@ export default function InsightsScreen() {
         </Button>
       </View>
 
+      {mapMessage ? <Text style={styles.mapMessage}>{mapMessage}</Text> : null}
+
       <Animated.View entering={motion.card(16)}>
+        <AppCard style={styles.mapHero}>
+          {selectedMemory ? (
+            <>
+              <ProgressRing
+                size={112}
+                stroke={9}
+                progress={selectedMastery / 100}
+                label={`${selectedMastery}%`}
+                sublabel="mastery"
+                color={selectedColor}
+              />
+              <View style={styles.heroText}>
+                <View style={styles.heroTopRow}>
+                  <View style={styles.flexText}>
+                    <Text style={styles.heroSubject}>{selectedMemory.subjectName}</Text>
+                    <Text style={styles.muted}>{titleLabelById(gamification?.activeTitle)}</Text>
+                  </View>
+                  <View style={[styles.riskPill, { borderColor: `${riskColor(selectedMemory.riskLevel)}66`, backgroundColor: `${riskColor(selectedMemory.riskLevel)}16` }]}>
+                    <MaterialCommunityIcons name="radar" color={riskColor(selectedMemory.riskLevel)} size={15} />
+                    <Text style={[styles.riskPillText, { color: riskColor(selectedMemory.riskLevel) }]}>
+                      {riskLabel(selectedMemory.riskLevel)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.nextMoveBox}>
+                  <Text style={styles.nextMoveLabel}>Next move</Text>
+                  <Text style={styles.nextMoveText}>{selectedMemory.predictedNextTask ?? "Complete one checked practice answer."}</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.emptyMapWrap}>
+              <EmptyState title="Student Map is empty" body="Ask Coach, check answers, save mistakes, upload resources, or rebuild from existing signals." />
+              <Button mode="contained" icon="map-sync-outline" loading={refreshingMap} disabled={refreshingMap} onPress={rebuildMap}>
+                Rebuild map
+              </Button>
+            </View>
+          )}
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(30)}>
+        <AppCard style={styles.metricCard}>
+          <View style={styles.metricGrid}>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricValue}>{memoryStats.subjects}</Text>
+              <Text style={styles.metricLabel}>mapped subjects</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricValue}>{memoryStats.highRisk}</Text>
+              <Text style={styles.metricLabel}>high risk</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricValue}>{memoryStats.weakAreas}</Text>
+              <Text style={styles.metricLabel}>weak areas</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricValue}>{memoryStats.evidence}</Text>
+              <Text style={styles.metricLabel}>evidence points</Text>
+            </View>
+          </View>
+          <Button mode="outlined" icon="map-sync-outline" loading={refreshingMap} disabled={refreshingMap} onPress={rebuildMap}>
+            Refresh Student Map
+          </Button>
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(44)}>
+        <AppCard style={styles.section}>
+          <View style={styles.rowBetween}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Subject mastery map
+            </Text>
+            <Text style={styles.muted}>{sortedMemories.length || subjects.length} subjects</Text>
+          </View>
+          {sortedMemories.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectMapRow}>
+              {sortedMemories.map((memory, index) => {
+                const active = selectedMemory && subjectKey(memory) === subjectKey(selectedMemory);
+                const color = subjectColorFor(memory, index);
+                const mastery = masteryFor(memory);
+                return (
+                  <Pressable
+                    key={subjectKey(memory)}
+                    style={[styles.subjectMapTile, active && { borderColor: `${color}88`, backgroundColor: `${color}12` }]}
+                    onPress={() => setSelectedMemoryKey(subjectKey(memory))}
+                  >
+                    <View style={styles.subjectMapTop}>
+                      <View style={[styles.subjectDot, { backgroundColor: color }]} />
+                      <Text style={[styles.subjectRisk, { color: riskColor(memory.riskLevel) }]}>{memory.riskLevel}</Text>
+                    </View>
+                    <Text style={styles.subjectMapName} numberOfLines={2}>
+                      {memory.subjectName}
+                    </Text>
+                    <MiniBar value={mastery} color={color} />
+                    <Text style={styles.subjectMapValue}>{mastery}% mastery</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <EmptyState title="No mapped subjects yet" body="The map fills in after saved coach turns, checked answers, mistakes, resources and study sessions." />
+          )}
+        </AppCard>
+      </Animated.View>
+
+      {selectedMemory ? (
+        <>
+          <Animated.View entering={motion.card(58)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Weak area tracker
+              </Text>
+              <SignalList
+                items={selectedWeakAreas}
+                emptyTitle="No weak areas mapped"
+                emptyBody="Checked answers and saved mistakes will calibrate this."
+                accent={palette.secondary}
+              />
+            </AppCard>
+          </Animated.View>
+
+          <Animated.View entering={motion.card(72)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Common mistakes
+              </Text>
+              <SignalList
+                items={selectedMistakes}
+                emptyTitle="No repeat mistakes yet"
+                emptyBody="Mistake logs and marked answers will appear here."
+                accent={palette.warning}
+              />
+            </AppCard>
+          </Animated.View>
+
+          <Animated.View entering={motion.card(86)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Strengths
+              </Text>
+              <SignalList
+                items={selectedStrengths}
+                emptyTitle="No strengths confirmed"
+                emptyBody="Strong checked answers will add proof here."
+                accent={palette.success}
+              />
+            </AppCard>
+          </Animated.View>
+
+          <Animated.View entering={motion.card(100)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Risk links
+              </Text>
+              {selectedAssessments.length ? (
+                selectedAssessments.slice(0, 5).map((assessment, index) => (
+                  <View key={assessment.id ?? `${assessment.title}-${index}`} style={styles.assessmentRow}>
+                    <View style={[styles.assessmentBadge, { borderColor: `${riskColor(selectedMemory.riskLevel)}55` }]}>
+                      <Text style={[styles.assessmentDays, { color: riskColor(selectedMemory.riskLevel) }]}>
+                        {assessment.daysUntil ?? 0}d
+                      </Text>
+                    </View>
+                    <View style={styles.flexText}>
+                      <Text style={styles.signalTitle}>{assessment.title ?? "Assessment"}</Text>
+                      <Text style={styles.signalDetail}>
+                        {assessment.eventType ?? "TASK"} - {compactDate(assessment.eventDate)}
+                      </Text>
+                      {assessment.topic ? <Text style={styles.evidenceText}>{assessment.topic}</Text> : null}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <EmptyState title="No upcoming risk link" body="Calendar SACs and exams will connect here." />
+              )}
+            </AppCard>
+          </Animated.View>
+
+          <Animated.View entering={motion.card(114)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                What the app has learned
+              </Text>
+              <View style={styles.learnedGrid}>
+                <View style={styles.learnedColumn}>
+                  <Text style={styles.learnedLabel}>Recent topics</Text>
+                  {selectedTopics.slice(0, 5).map((item, index) => (
+                    <Text key={listKey(item, String(index))} style={styles.learnedItem}>
+                      - {topicTitle(item)}
+                    </Text>
+                  ))}
+                  {!selectedTopics.length ? <Text style={styles.muted}>No topic pattern yet.</Text> : null}
+                </View>
+                <View style={styles.learnedColumn}>
+                  <Text style={styles.learnedLabel}>Best study methods</Text>
+                  {selectedMethods.slice(0, 4).map((item, index) => (
+                    <Text key={listKey(item, String(index))} style={styles.learnedItem}>
+                      - {item.method ?? item.reason ?? "Checked practice"}
+                    </Text>
+                  ))}
+                  {!selectedMethods.length ? <Text style={styles.muted}>No method pattern yet.</Text> : null}
+                </View>
+              </View>
+            </AppCard>
+          </Animated.View>
+
+          <Animated.View entering={motion.card(128)}>
+            <AppCard style={styles.section}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Evidence trail
+              </Text>
+              {selectedEvidence.length ? (
+                selectedEvidence.slice(0, 8).map((item, index) => (
+                  <View key={`${item.at}-${index}`} style={styles.evidenceRow}>
+                    <MaterialCommunityIcons name="source-branch" color={selectedColor} size={18} />
+                    <View style={styles.flexText}>
+                      <Text style={styles.signalTitle}>
+                        {item.title ?? item.topic ?? item.type ?? "Signal"} {item.at ? `- ${compactDate(item.at)}` : ""}
+                      </Text>
+                      <Text style={styles.signalDetail}>{item.evidence ?? "Saved app activity"}</Text>
+                      <Text style={styles.evidenceText}>{item.sourceType ?? item.type ?? "memory event"}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <EmptyState title="No evidence trail yet" body="Every new coach turn, mistake and checked answer adds proof." />
+              )}
+            </AppCard>
+          </Animated.View>
+        </>
+      ) : null}
+
+      <Animated.View entering={motion.card(142)}>
         <AppCard style={styles.levelCard}>
           <ProgressRing
-            size={104}
-            stroke={9}
+            size={96}
+            stroke={8}
             progress={xpProgress}
             label={`Lvl ${gamification?.level ?? 1}`}
             sublabel={`${gamification?.xpBalance ?? 0} coins`}
@@ -159,7 +566,6 @@ export default function InsightsScreen() {
           <View style={styles.levelText}>
             <Text style={styles.levelTitle}>{level.title}</Text>
             <Text style={styles.muted}>{titleLabelById(gamification?.activeTitle)}</Text>
-            <Text style={styles.xpCaption}>{xpCaption}</Text>
             <View style={styles.xpStats}>
               <View style={styles.statTile}>
                 <Text style={styles.statValue}>{xp}</Text>
@@ -174,14 +580,14 @@ export default function InsightsScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(38)}>
+      <Animated.View entering={motion.card(156)}>
         <AppCard style={styles.reportCard}>
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
               <Text variant="titleMedium" style={styles.cardTitle}>
                 Weekly study report
               </Text>
-              <Text style={styles.muted}>The heavier read on what your week is doing.</Text>
+              <Text style={styles.muted}>Study time, mistakes and review pressure.</Text>
             </View>
             <View style={styles.reportBadge}>
               <Text style={styles.reportBadgeValue}>{weeklyReport.totalMinutes}</Text>
@@ -197,7 +603,7 @@ export default function InsightsScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(58)}>
+      <Animated.View entering={motion.card(170)}>
         <AppCard style={styles.metricCard}>
           <Text variant="titleMedium" style={styles.cardTitle}>
             Study pulse
@@ -222,7 +628,7 @@ export default function InsightsScreen() {
           </View>
           <View style={styles.todayTargetRow}>
             <ProgressRing
-              size={84}
+              size={80}
               stroke={8}
               progress={todayMinutes / dailyTargetMinutes}
               label={`${Math.min(100, Math.round((todayMinutes / dailyTargetMinutes) * 100))}%`}
@@ -239,7 +645,7 @@ export default function InsightsScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(78)}>
+      <Animated.View entering={motion.card(184)}>
         <AppCard style={styles.chartCard}>
           <View style={styles.rowBetween}>
             <Text variant="titleMedium" style={styles.cardTitle}>
@@ -251,7 +657,7 @@ export default function InsightsScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(98)}>
+      <Animated.View entering={motion.card(198)}>
         <AppCard style={styles.section}>
           <Text variant="titleMedium" style={styles.cardTitle}>
             Weekly pace
@@ -279,7 +685,7 @@ export default function InsightsScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(118)}>
+      <Animated.View entering={motion.card(212)}>
         <AppCard style={styles.section}>
           <Text variant="titleMedium" style={styles.cardTitle}>
             Continue
@@ -347,6 +753,245 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12
   },
+  mapMessage: {
+    color: palette.success,
+    textAlign: "center",
+    fontFamily: "Outfit_700Bold"
+  },
+  mapHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    borderColor: "rgba(96,165,250,0.26)",
+    backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  heroText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 10
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap"
+  },
+  heroSubject: {
+    color: palette.text,
+    fontSize: 22,
+    lineHeight: 28,
+    fontFamily: "Outfit_700Bold"
+  },
+  riskPill: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 6
+  },
+  riskPillText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  nextMoveBox: {
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10
+  },
+  nextMoveLabel: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  nextMoveText: {
+    color: palette.text,
+    lineHeight: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  emptyMapWrap: {
+    flex: 1,
+    gap: 12
+  },
+  metricCard: {
+    gap: 14
+  },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  metricTile: {
+    minWidth: 126,
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12
+  },
+  metricValue: {
+    color: palette.text,
+    fontSize: 22,
+    fontFamily: "Outfit_700Bold"
+  },
+  metricLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  section: {
+    gap: 12
+  },
+  subjectMapRow: {
+    gap: 10,
+    paddingVertical: 2
+  },
+  subjectMapTile: {
+    width: 164,
+    minHeight: 126,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 9
+  },
+  subjectMapTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8
+  },
+  subjectDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6
+  },
+  subjectRisk: {
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  subjectMapName: {
+    minHeight: 38,
+    color: palette.text,
+    lineHeight: 19,
+    fontFamily: "Outfit_700Bold"
+  },
+  miniTrack: {
+    height: 8,
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)"
+  },
+  miniFill: {
+    height: "100%",
+    borderRadius: 8
+  },
+  subjectMapValue: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  signalStack: {
+    gap: 12
+  },
+  signalRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 12
+  },
+  signalIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  signalIndexText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  signalTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  signalDetail: {
+    color: palette.text,
+    lineHeight: 20
+  },
+  evidenceText: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  assessmentRow: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 12
+  },
+  assessmentBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  assessmentDays: {
+    fontFamily: "Outfit_700Bold"
+  },
+  learnedGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  learnedColumn: {
+    flex: 1,
+    minWidth: 240,
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12
+  },
+  learnedLabel: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    textTransform: "uppercase"
+  },
+  learnedItem: {
+    color: palette.text,
+    lineHeight: 19
+  },
+  evidenceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 12
+  },
   levelCard: {
     flexDirection: "row",
     gap: 16,
@@ -361,14 +1006,9 @@ const styles = StyleSheet.create({
   },
   levelTitle: {
     color: palette.text,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 26,
     fontFamily: "Outfit_700Bold"
-  },
-  xpCaption: {
-    color: palette.warning,
-    fontFamily: "Outfit_700Bold",
-    lineHeight: 20
   },
   xpStats: {
     flexDirection: "row",
@@ -428,33 +1068,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: "Outfit_700Bold"
   },
-  metricCard: {
-    gap: 14
-  },
-  metricGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  metricTile: {
-    minWidth: 126,
-    flex: 1,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: "rgba(255,255,255,0.035)",
-    padding: 12
-  },
-  metricValue: {
-    color: palette.text,
-    fontSize: 22,
-    fontFamily: "Outfit_700Bold"
-  },
-  metricLabel: {
-    color: palette.muted,
-    fontSize: 12,
-    lineHeight: 18
-  },
   todayTargetRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -468,19 +1081,11 @@ const styles = StyleSheet.create({
   chartCard: {
     gap: 8
   },
-  section: {
-    gap: 12
-  },
   paceRow: {
     minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     gap: 10
-  },
-  subjectDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6
   },
   paceText: {
     flex: 1,

@@ -41,7 +41,7 @@ export default function TabsLayout() {
         name="insights"
         options={{
           href: null,
-          title: "Insights"
+          title: "Student Map"
         }}
       />
       <Tabs.Screen

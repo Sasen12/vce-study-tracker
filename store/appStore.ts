@@ -16,6 +16,7 @@ import type {
   StudyReflection,
   StudyResource,
   StudySession,
+  StudentSubjectMemory,
   EventRecurrence,
   EventType,
   UserSubject
@@ -38,6 +39,7 @@ type AppState = {
   reflections: StudyReflection[];
   notes: StudyNote[];
   resources: StudyResource[];
+  subjectMemories: StudentSubjectMemory[];
   latestPlan: AdaptiveStudyPlan | null;
   gamification: Gamification | null;
   leaderboard: Leaderboard | null;
@@ -135,6 +137,7 @@ type AppState = {
   uploadResources: (formData: FormData) => Promise<void>;
   deleteResource: (id: string) => Promise<void>;
   generatePlan: (input: { planDate: string; availableMinutes: number; horizonDays?: number; priority?: string | null }) => Promise<void>;
+  refreshStudentMemoryMap: () => Promise<void>;
   refreshCoach: () => Promise<void>;
   setLeaderboardPreference: (optIn: boolean) => Promise<void>;
   unlockTheme: (themeId: string) => Promise<void>;
@@ -154,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   reflections: [],
   notes: [],
   resources: [],
+  subjectMemories: [],
   latestPlan: null,
   gamification: null,
   leaderboard: null,
@@ -175,6 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         reflections,
         notes,
         resources,
+        studentMemoryMap,
         latestPlan
       ] = await Promise.all([
         studyApi.subjects(),
@@ -188,6 +193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         studyApi.reflections(),
         studyApi.notes(),
         studyApi.resources(),
+        studyApi.studentMemoryMap().catch(() => ({ subjectMemories: [] })),
         studyApi.latestPlan()
       ]);
       set({
@@ -200,6 +206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         reflections: reflections.reflections,
         notes: notes.notes,
         resources: resources.resources,
+        subjectMemories: studentMemoryMap.subjectMemories,
         latestPlan: latestPlan.plan,
         gamification: gamification.gamification,
         leaderboard: leaderboard.leaderboard,
@@ -343,17 +350,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const data = await studyApi.generatePlan(input);
     set({ latestPlan: data.plan });
   },
+  refreshStudentMemoryMap: async () => {
+    const data = await studyApi.rebuildStudentMemoryMap();
+    set({ subjectMemories: data.subjectMemories });
+  },
   refreshCoach: async () => {
-    const [reflections, notes, resources, latestPlan] = await Promise.all([
+    const [reflections, notes, resources, studentMemoryMap, latestPlan] = await Promise.all([
       studyApi.reflections(),
       studyApi.notes(),
       studyApi.resources(),
+      studyApi.studentMemoryMap().catch(() => ({ subjectMemories: [] })),
       studyApi.latestPlan()
     ]);
     set({
       reflections: reflections.reflections,
       notes: notes.notes,
       resources: resources.resources,
+      subjectMemories: studentMemoryMap.subjectMemories,
       latestPlan: latestPlan.plan
     });
   },

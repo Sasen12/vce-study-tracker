@@ -278,11 +278,11 @@ export default function DashboardScreen() {
               contentStyle={styles.browserSearchContent}
             />
             <Pressable style={styles.levelChip} onPress={() => router.push("/(tabs)/insights")}>
-              <MaterialCommunityIcons name="chart-box-outline" color={palette.warning} size={18} />
+              <MaterialCommunityIcons name="map-search-outline" color={palette.warning} size={18} />
               <View style={styles.levelChipText}>
                 <Text style={styles.levelChipTitle}>Lvl {gamification?.level ?? 1}</Text>
                 <Text style={styles.levelChipSub} numberOfLines={1}>
-                  Insights
+                  Student Map
                 </Text>
               </View>
             </Pressable>
