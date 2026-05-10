@@ -15,11 +15,13 @@ import { StudyCoachPanel } from "@/components/session/StudyCoachPanel";
 import { StudyMusicPanel } from "@/components/session/StudyMusicPanel";
 import { StudyNotesPanel } from "@/components/session/StudyNotesPanel";
 import { StudyResourcesPanel } from "@/components/session/StudyResourcesPanel";
+import { ScientificCalculator } from "@/components/tools/ScientificCalculator";
 import { palette } from "@/constants/theme";
 import { MOTIVATION_MESSAGES } from "@/constants/gamification";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
+import { subjectToolProfile } from "@/utils/subjectTools";
 
 const formatElapsed = (seconds: number) => {
   const minutes = Math.floor(seconds / 60)
@@ -242,6 +244,29 @@ export default function StudyScreen() {
   }, [releaseFocusLock]);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const selectedSubjectTools = useMemo(() => subjectToolProfile(selectedSubject?.subjectName), [selectedSubject?.subjectName]);
+  const calculatorSubjects = useMemo(
+    () => subjects.filter((subject) => subjectToolProfile(subject.subjectName).calculator),
+    [subjects]
+  );
+  const calculatorSubject =
+    selectedSubject && selectedSubjectTools.calculator ? selectedSubject : calculatorSubjects[0] ?? null;
+  const studyModeButtons = useMemo(
+    () => [
+      { value: "timer", label: "Timer" },
+      { value: "coach", label: "Coach" },
+      { value: "notes", label: "Notes" },
+      { value: "resources", label: "Files" },
+      ...(calculatorSubjects.length ? [{ value: "calculator", label: "Calc" }] : []),
+      { value: "chess", label: "Chess" }
+    ],
+    [calculatorSubjects.length]
+  );
+  useEffect(() => {
+    if (mode === "calculator" && !calculatorSubjects.length) {
+      setMode("timer");
+    }
+  }, [calculatorSubjects.length, mode]);
   const trimmedStudyTopic = studyTopic.trim();
   const checkInsActive = checkInsEnabled && Boolean(trimmedStudyTopic);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -500,13 +525,7 @@ export default function StudyScreen() {
         <SegmentedButtons
           value={mode}
           onValueChange={changeMode}
-          buttons={[
-            { value: "timer", label: "Timer" },
-            { value: "coach", label: "Coach" },
-            { value: "notes", label: "Notes" },
-            { value: "resources", label: "Files" },
-            { value: "chess", label: "Chess" }
-          ]}
+          buttons={studyModeButtons}
         />
       )}
 
@@ -556,6 +575,23 @@ export default function StudyScreen() {
           selectedSubjectId={selectedSubjectId}
           onSelectSubject={(subject) => setSelectedSubjectId(subject.id)}
         />
+      ) : null}
+
+      {mode === "calculator" ? (
+        <>
+          {subjects.length ? (
+            <SubjectSelector
+              subjects={subjects}
+              selectedId={calculatorSubject?.id ?? selectedSubjectId}
+              onSelect={(subject) => setSelectedSubjectId(subject.id)}
+            />
+          ) : null}
+          {calculatorSubject ? (
+            <ScientificCalculator subjectName={calculatorSubject.subjectName} />
+          ) : (
+            <EmptyState title="No calculator subject selected" body="Add General Mathematics or another calculator subject from Profile." />
+          )}
+        </>
       ) : null}
 
       {mode === "chess" ? <ChessBreak /> : null}

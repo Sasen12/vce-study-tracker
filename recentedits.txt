@@ -860,6 +860,23 @@ Deployment status:
 - GitHub target: origin/main
 - Netlify production target: https://vce-study-tracker-sasen.netlify.app
 
+Previous edit: 2026-05-10 - Move calculator into Study tab
+
+Summary:
+- Moved the subject-gated calculator entry point into the Study tab where students actually work.
+- Study now shows a Calc mode when the student has at least one calculator-relevant subject, such as General Mathematics.
+- The Calc mode auto-selects a calculator subject when the current Study subject is not calculator-eligible.
+- Kept the calculator subject-gated so it does not appear as a global app-wide tool.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+
+Deployment status:
+- This correction is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
 Previous edit: 2026-05-10 - Subject-aware visuals and calculator support
 
 Summary:
