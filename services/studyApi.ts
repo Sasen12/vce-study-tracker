@@ -89,6 +89,7 @@ export const studyApi = {
     difficulty: "easy" | "medium" | "hard";
     count: 1 | 3 | 5;
     sourceMode?: "balanced" | "exam_bank";
+    visualMode?: "auto" | "visual";
   }) =>
     apiFetch<{ questions: GeneratedQuestion[]; gamification: Gamification }>("/questions/generate", {
       method: "POST",

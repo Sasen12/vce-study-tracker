@@ -4,7 +4,30 @@ import type { ResponseInput, ResponseInputContent } from "openai/resources/respo
 import { z } from "zod";
 import { getStudyDesignContext } from "../resources/studyDesignContext.js";
 import { inferVceSubjectFromQuestion } from "../resources/subjectInference.js";
+import { subjectToolProfile, visualTopicLooksRelevant } from "../resources/subjectTools.js";
 import { isLanguageSubject } from "../resources/vceSubjectCatalogue.js";
+
+const generatedQuestionVisualSchema = z.object({
+  type: z.enum(["line_graph", "scatter_plot", "bar_chart", "diagram", "image_prompt"]),
+  title: z.string(),
+  description: z.string(),
+  x_label: z.string(),
+  y_label: z.string(),
+  points: z.array(
+    z.object({
+      x: z.coerce.number(),
+      y: z.coerce.number(),
+      label: z.string()
+    })
+  ),
+  bars: z.array(
+    z.object({
+      label: z.string(),
+      value: z.coerce.number()
+    })
+  ),
+  labels: z.array(z.string())
+});
 
 const generatedQuestionSchema = z.object({
   question: z.string(),
@@ -17,7 +40,8 @@ const generatedQuestionSchema = z.object({
       text: z.string(),
       correct: z.boolean()
     })
-  )
+  ),
+  visual: generatedQuestionVisualSchema.nullable()
 });
 
 const generatedQuestionsSchema = z.array(generatedQuestionSchema);
@@ -187,6 +211,7 @@ type GenerateInput = {
   count: 1 | 3 | 5;
   personalContext?: string;
   sourceMode?: "balanced" | "exam_bank";
+  visualMode?: "auto" | "visual";
 };
 
 type EvaluateAnswerInput = {
@@ -339,6 +364,44 @@ const isLanguagePracticeSubject = (subject: string) =>
     subject
   );
 
+const visualQuestionRules = ({
+  subject,
+  topic,
+  count,
+  visualMode = "auto"
+}: {
+  subject: string;
+  topic: string;
+  count: number;
+  visualMode?: "auto" | "visual";
+}) => {
+  const profile = subjectToolProfile(subject);
+  if (!profile.visual) {
+    return "\nVisual rules: This subject is not currently routed to visual generation. Set visual to null unless uploaded material explicitly supplies a diagram/chart the question depends on.";
+  }
+
+  const requestedVisual = visualMode === "visual";
+  const topicLooksVisual = visualTopicLooksRelevant(topic);
+  const visualKinds = profile.visualKinds.join(", ");
+  const visualKindCount = profile.visualKinds.length;
+  const visualTarget = Math.min(count, Math.max(1, Math.min(3, visualKindCount || 1)));
+  const forceLine = requestedVisual
+    ? `\n- Visual mode is ON. At least ${visualTarget} question${visualTarget === 1 ? "" : "s"} in the returned set should include a visual object if the topic can support it.`
+    : topicLooksVisual
+      ? "\n- The topic looks visual/data-based, so include visual objects whenever they make the question fairer."
+      : "\n- Visual mode is AUTO. Include a visual only when the generated question genuinely needs one.";
+
+  return `\nVisual rules:
+- Subject visual profile: ${profile.visualLabel}; supported kinds: ${visualKinds || "diagram"}.
+${forceLine}
+- For Foundation Mathematics, General Mathematics, Mathematical Methods and Specialist Mathematics, prefer graph/table/chart visuals for functions, relations, calculus, probability, statistics, measurement, data and modelling topics.
+- For science/data/geography/economics/accounting/technology topics, use charts, scatter plots, field/circuit/system diagrams, maps or data displays only when relevant.
+- If a visual is included, the question text must explicitly refer to "the visual shown" or "the graph/chart/diagram shown".
+- Use renderable numbers: line_graph and scatter_plot need 3-8 points sorted by x; bar_chart needs 3-6 bars; diagram/image_prompt should use labels and a concise description.
+- Keep every visual self-contained. Do not rely on external images or links.
+- If no visual is useful, set visual to null.`;
+};
+
 const questionQualityContract = ({
   subject,
   studyDesign,
@@ -396,7 +459,7 @@ ${coverageRule}
 - If the student's topic appears outside the supplied Unit 3/4 context, flag it as possible prerequisite or off-study-design revision instead of quietly drifting into it.`;
 };
 
-const buildPrompt = ({ subject, topic, difficulty, count, personalContext, sourceMode = "balanced" }: GenerateInput) => {
+const buildPrompt = ({ subject, topic, difficulty, count, personalContext, sourceMode = "balanced", visualMode = "auto" }: GenerateInput) => {
   const studyDesign = getStudyDesignContext(subject);
   const studyDesignBlock = buildStudyDesignBlock(studyDesign);
   const personalContextBlock = personalContext
@@ -413,6 +476,7 @@ ${personalContextBlock}
 ${sourceModeBlock}
 ${studyDesignReliabilityRules(studyDesign)}
 ${questionQualityContract({ subject, studyDesign, personalContext, sourceMode })}
+${visualQuestionRules({ subject, topic, count, visualMode })}
 
 Question-generation rules:
 - Generate questions from the supplied topic and the study-design context first.
@@ -432,52 +496,115 @@ Return a JSON object with a "questions" array. Each question must include:
 - model_answer
 - marking_criteria: string[]
 - answer_options: exactly 4 short multiple-choice answers for a fast quiz mode. Exactly one option must have correct true. Distractors should reflect common VCE mistakes, not joke answers.
+- visual: either null or an object with type, title, description, x_label, y_label, points, bars and labels. Use empty strings or empty arrays for visual fields that do not apply.
 
 Only return valid JSON that matches the requested schema. No preamble, no markdown.`;
 };
 
-const mockQuestions = ({ subject, topic, difficulty, count }: GenerateInput): GeneratedQuestion[] =>
-  Array.from({ length: count }, (_, index) => ({
-    question: isLanguagePracticeSubject(subject)
-      ? `(${index + 1}) A ${difficulty} VCE ${subject} skill-practice question on ${topic}: Write ${difficulty === "hard" ? "4-5 connected sentences" : difficulty === "medium" ? "2-3 connected sentences" : "one accurate sentence"} using appropriate vocabulary and grammar for the context.`
-      : `(${index + 1}) A ${difficulty} VCE ${subject} question on ${topic}: Explain one key concept, then apply it to a realistic exam scenario. Include a justified conclusion.`,
-    marks: isLanguagePracticeSubject(subject) ? (difficulty === "hard" ? 4 : difficulty === "medium" ? 3 : 2) : difficulty === "hard" ? 6 : difficulty === "medium" ? 4 : 2,
-    topic,
-    model_answer: isLanguagePracticeSubject(subject)
-      ? `A strong response uses accurate ${subject} vocabulary for ${topic}, keeps grammar controlled, and matches the requested length and context.`
-      : `A strong answer defines the relevant ${topic} concept, applies VCE terminology accurately, links the explanation to the scenario, and finishes with a clear judgement.`,
-    marking_criteria: [
-      isLanguagePracticeSubject(subject) ? `Uses accurate ${subject} vocabulary` : "Uses accurate VCE terminology",
-      isLanguagePracticeSubject(subject) ? "Controls grammar and sentence structure" : "Applies the concept directly to the scenario",
-      isLanguagePracticeSubject(subject) ? "Responds to the requested context and length" : "Provides a justified conclusion"
-    ],
-    answer_options: [
-      {
-        text: isLanguagePracticeSubject(subject)
-          ? `Use accurate ${subject} vocabulary, controlled grammar and the requested response length.`
-          : `Define ${topic}, apply it to the scenario using VCE terminology, then justify the conclusion.`,
-        correct: true
-      },
-      {
-        text: isLanguagePracticeSubject(subject)
-          ? `Use isolated vocabulary only, without forming complete sentences.`
-          : `Only define ${topic} without linking it to the scenario.`,
-        correct: false
-      },
-      {
-        text: isLanguagePracticeSubject(subject)
-          ? "Write in English instead of the target language."
-          : "Give a conclusion first and leave out the supporting evidence.",
-        correct: false
-      },
-      {
-        text: isLanguagePracticeSubject(subject)
-          ? "Ignore the context, audience or required length."
-          : "List related facts without explaining how they answer the question.",
-        correct: false
-      }
-    ]
-  }));
+const mockVisualFor = (input: GenerateInput, index: number): GeneratedQuestion["visual"] => {
+  const profile = subjectToolProfile(input.subject);
+  const shouldShow = profile.visual && (input.visualMode === "visual" || visualTopicLooksRelevant(input.topic));
+  if (!shouldShow) return null;
+
+  if (profile.graph) {
+    const offset = index + 1;
+    return {
+      type: /bar|histogram|category|compare/i.test(input.topic) ? "bar_chart" : "line_graph",
+      title: `${input.topic} visual`,
+      description: `Use this ${profile.graph ? "graph" : "chart"} to support the ${input.subject} question.`,
+      x_label: /time|motion|rate/i.test(input.topic) ? "time" : "x",
+      y_label: /time|motion|rate/i.test(input.topic) ? "value" : "y",
+      points: [
+        { x: -2, y: offset + 4, label: "A" },
+        { x: -1, y: offset + 1, label: "B" },
+        { x: 0, y: offset, label: "C" },
+        { x: 1, y: offset + 1, label: "D" },
+        { x: 2, y: offset + 4, label: "E" }
+      ],
+      bars: [
+        { label: "A", value: 3 + offset },
+        { label: "B", value: 6 + offset },
+        { label: "C", value: 4 + offset }
+      ],
+      labels: []
+    };
+  }
+
+  return {
+    type: "diagram",
+    title: `${input.topic} diagram`,
+    description: `Use the labelled diagram to answer the ${input.subject} prompt.`,
+    x_label: "",
+    y_label: "",
+    points: [],
+    bars: [],
+    labels: ["input", "process", "output", "evaluation"]
+  };
+};
+
+const mockQuestions = (input: GenerateInput): GeneratedQuestion[] =>
+  Array.from({ length: input.count }, (_, index) => {
+    const visual = mockVisualFor(input, index);
+    const visualQuestion = visual ? ` Use the visual shown to identify the main pattern, then justify your conclusion.` : "";
+    return {
+      question: isLanguagePracticeSubject(input.subject)
+        ? `(${index + 1}) A ${input.difficulty} VCE ${input.subject} skill-practice question on ${input.topic}: Write ${input.difficulty === "hard" ? "4-5 connected sentences" : input.difficulty === "medium" ? "2-3 connected sentences" : "one accurate sentence"} using appropriate vocabulary and grammar for the context.`
+        : `(${index + 1}) A ${input.difficulty} VCE ${input.subject} question on ${input.topic}: Explain one key concept, then apply it to a realistic exam scenario.${visualQuestion} Include a justified conclusion.`,
+      marks: isLanguagePracticeSubject(input.subject)
+        ? input.difficulty === "hard"
+          ? 4
+          : input.difficulty === "medium"
+            ? 3
+            : 2
+        : input.difficulty === "hard"
+          ? 6
+          : input.difficulty === "medium"
+            ? 4
+            : 2,
+      topic: input.topic,
+      model_answer: isLanguagePracticeSubject(input.subject)
+        ? `A strong response uses accurate ${input.subject} vocabulary for ${input.topic}, keeps grammar controlled, and matches the requested length and context.`
+        : visual
+          ? `A strong answer states the key ${input.topic} idea, reads the visual pattern accurately, uses the values or labels as evidence, and interprets the conclusion in context.`
+          : `A strong answer defines the relevant ${input.topic} concept, applies VCE terminology accurately, links the explanation to the scenario, and finishes with a clear judgement.`,
+      marking_criteria: [
+        isLanguagePracticeSubject(input.subject) ? `Uses accurate ${input.subject} vocabulary` : "Uses accurate VCE terminology",
+        visual ? "Interprets the supplied visual accurately" : isLanguagePracticeSubject(input.subject) ? "Controls grammar and sentence structure" : "Applies the concept directly to the scenario",
+        isLanguagePracticeSubject(input.subject) ? "Responds to the requested context and length" : "Provides a justified conclusion"
+      ],
+      answer_options: [
+        {
+          text: isLanguagePracticeSubject(input.subject)
+            ? `Use accurate ${input.subject} vocabulary, controlled grammar and the requested response length.`
+            : visual
+              ? `Use the visual evidence, explain the pattern, and interpret it in context.`
+              : `Define ${input.topic}, apply it to the scenario using VCE terminology, then justify the conclusion.`,
+          correct: true
+        },
+        {
+          text: isLanguagePracticeSubject(input.subject)
+            ? `Use isolated vocabulary only, without forming complete sentences.`
+            : `Only define ${input.topic} without linking it to the scenario.`,
+          correct: false
+        },
+        {
+          text: isLanguagePracticeSubject(input.subject)
+            ? "Write in English instead of the target language."
+            : visual
+              ? "Read one value from the visual without explaining the pattern."
+              : "Give a conclusion first and leave out the supporting evidence.",
+          correct: false
+        },
+        {
+          text: isLanguagePracticeSubject(input.subject)
+            ? "Ignore the context, audience or required length."
+            : "List related facts without explaining how they answer the question.",
+          correct: false
+        }
+      ],
+      visual
+    };
+  });
 
 const singleSmallTaskPattern =
   /\b(one|single)\s+(sentence|phrase|word|term|example|reason|detail|correction)\b|\b(name|identify|state|give)\s+one\b|\bin\s+one\s+sentence\b/i;
@@ -529,6 +656,27 @@ const withExtendedDemandIfNeeded = (input: GenerateInput, question: GeneratedQue
   return `${question.question} Write a structured response that explains the key idea, applies it to the scenario, and justifies the final judgement.`;
 };
 
+const sanitiseQuestionVisual = (visual: GeneratedQuestion["visual"]): GeneratedQuestion["visual"] => {
+  if (!visual) return null;
+
+  return {
+    type: visual.type,
+    title: visual.title.slice(0, 90),
+    description: visual.description.slice(0, 260),
+    x_label: visual.x_label.slice(0, 40),
+    y_label: visual.y_label.slice(0, 40),
+    points: visual.points
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+      .slice(0, 10)
+      .map((point) => ({ x: point.x, y: point.y, label: point.label.slice(0, 24) })),
+    bars: visual.bars
+      .filter((bar) => Number.isFinite(bar.value))
+      .slice(0, 7)
+      .map((bar) => ({ label: bar.label.slice(0, 24), value: bar.value })),
+    labels: visual.labels.slice(0, 8).map((label) => label.slice(0, 40))
+  };
+};
+
 const sanitiseGeneratedQuestions = (input: GenerateInput, questions: GeneratedQuestion[]): GeneratedQuestion[] =>
   questions.map((question) => {
     const maxMarks = maxMarksForGeneratedQuestion(input, question);
@@ -539,7 +687,8 @@ const sanitiseGeneratedQuestions = (input: GenerateInput, questions: GeneratedQu
       question: withExtendedDemandIfNeeded(input, question, marks),
       marking_criteria: question.marking_criteria.length
         ? question.marking_criteria.slice(0, Math.max(marks, 3))
-        : ["Answers the question directly", "Uses accurate subject knowledge", "Matches the required response length and detail"]
+        : ["Answers the question directly", "Uses accurate subject knowledge", "Matches the required response length and detail"],
+      visual: sanitiseQuestionVisual(question.visual)
     };
   });
 

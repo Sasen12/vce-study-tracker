@@ -265,11 +265,23 @@ export type GeneratedQuestion = {
   model_answer: string;
   marking_criteria: string[];
   answer_options?: GeneratedAnswerOption[];
+  visual?: GeneratedQuestionVisual | null;
 };
 
 export type GeneratedAnswerOption = {
   text: string;
   correct: boolean;
+};
+
+export type GeneratedQuestionVisual = {
+  type: "line_graph" | "scatter_plot" | "bar_chart" | "diagram" | "image_prompt";
+  title: string;
+  description: string;
+  x_label: string;
+  y_label: string;
+  points: { x: number; y: number; label: string }[];
+  bars: { label: string; value: number }[];
+  labels: string[];
 };
 
 export type AnswerFeedback = {

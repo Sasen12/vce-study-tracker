@@ -35,7 +35,8 @@ const generateSchema = z.object({
   topic: z.string().min(2).max(100),
   difficulty: z.enum(["easy", "medium", "hard"]),
   count: z.union([z.literal(1), z.literal(3), z.literal(5)]),
-  sourceMode: z.enum(["balanced", "exam_bank"]).default("balanced")
+  sourceMode: z.enum(["balanced", "exam_bank"]).default("balanced"),
+  visualMode: z.enum(["auto", "visual"]).default("auto")
 });
 
 const saveSchema = z.object({
@@ -182,7 +183,8 @@ questionsRouter.post(
       difficulty: payload.difficulty,
       count: payload.count,
       personalContext,
-      sourceMode: payload.sourceMode
+      sourceMode: payload.sourceMode,
+      visualMode: payload.visualMode
     });
 
     const gamification = await addXp(authReq.user.id, payload.count * 5);
@@ -201,6 +203,7 @@ questionsRouter.post(
           difficulty: payload.difficulty,
           count: payload.count,
           sourceMode: payload.sourceMode,
+          visualMode: payload.visualMode,
           generatedTopics: questions.map((question) => question.topic)
         }
       },

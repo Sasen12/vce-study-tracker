@@ -860,6 +860,29 @@ Deployment status:
 - GitHub target: origin/main
 - Netlify production target: https://vce-study-tracker-sasen.netlify.app
 
+Previous edit: 2026-05-10 - Subject-aware visuals and calculator support
+
+Summary:
+- Added subject-aware visual question support for graph/chart/diagram-capable subjects, especially Foundation Mathematics, General Mathematics, Mathematical Methods, and Specialist Mathematics.
+- Generated visual specs now render inside Question Forge, Battle, and Exam mode using local SVG charts/diagrams.
+- Answer checking, saved questions, mistake logs, and forged flashcards now include visual context when a generated question depends on a graph or diagram.
+- Added a subject-gated scientific calculator in Questions > Tools that only appears for calculator-relevant subjects instead of globally.
+- Added shared subject tool routing so visual and calculator eligibility can be tuned from one place.
+- Extended the backend question generation schema and prompt so AI-generated decks can include structured visuals.
+- Added deterministic fallback visuals for local/mock question generation when visual mode is requested.
+
+Validation run:
+- npx tsc --noEmit
+- npm run build --prefix backend
+
+Local preview started:
+- Web app: http://localhost:8081
+
+Deployment status:
+- This handoff note is included in the commit being pushed to GitHub and deployed to Netlify production.
+- GitHub target: origin/main
+- Netlify production target: https://vce-study-tracker-sasen.netlify.app
+
 Previous edit: 2026-05-05 - Optional subject chat rooms
 
 Summary:

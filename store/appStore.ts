@@ -80,6 +80,7 @@ type AppState = {
     difficulty: "easy" | "medium" | "hard";
     count: 1 | 3 | 5;
     sourceMode?: "balanced" | "exam_bank";
+    visualMode?: "auto" | "visual";
   }) => Promise<GeneratedQuestion[]>;
   timerCheckQuestion: (input: {
     subjectId: string;

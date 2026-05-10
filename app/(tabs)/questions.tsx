@@ -7,10 +7,14 @@ import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
+import { QuestionVisual } from "@/components/questions/QuestionVisual";
+import { ScientificCalculator } from "@/components/tools/ScientificCalculator";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { AnswerFeedback, GeneratedAnswerOption, GeneratedQuestion, SavedQuestion, StudyNote } from "@/types";
+import { questionWithVisualContext } from "@/utils/questionVisuals";
+import { subjectToolProfile, visualSubjectHint } from "@/utils/subjectTools";
 import {
   commandTermsForSubject,
   flashcardTag,
@@ -72,7 +76,7 @@ type FeedbackState = {
   xpEarned: number;
 };
 
-type PracticeTool = "exam" | "command" | "mistakes" | "flashcards";
+type PracticeTool = "exam" | "command" | "calculator" | "mistakes" | "flashcards";
 
 function QuestionCard({
   item,
@@ -110,6 +114,7 @@ function QuestionCard({
         <Text style={styles.muted}>Question {index + 1}</Text>
       </View>
       <Text style={styles.questionText}>{item.question}</Text>
+      <QuestionVisual visual={item.visual} />
       <TextInput
         mode="outlined"
         label="Your answer"
@@ -312,6 +317,7 @@ export default function QuestionsScreen() {
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [count, setCount] = useState<1 | 3 | 5>(3);
   const [sourceMode, setSourceMode] = useState<"balanced" | "exam_bank">("balanced");
+  const [visualMode, setVisualMode] = useState<"auto" | "visual">("auto");
   const [generating, setGenerating] = useState(false);
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [checkingIndex, setCheckingIndex] = useState<number | null>(null);
@@ -378,6 +384,17 @@ export default function QuestionsScreen() {
   }, []);
 
   const selectedSubject = subjects.find((subject) => subject.id === subjectId) ?? subjects[0];
+  const selectedSubjectTools = useMemo(() => subjectToolProfile(selectedSubject?.subjectName), [selectedSubject?.subjectName]);
+  const toolButtons = useMemo(
+    () => [
+      { value: "exam", label: "Exam" },
+      { value: "command", label: "Terms" },
+      ...(selectedSubjectTools.calculator ? [{ value: "calculator", label: "Calc" }] : []),
+      { value: "mistakes", label: "Mistakes" },
+      { value: "flashcards", label: "Cards" }
+    ],
+    [selectedSubjectTools.calculator]
+  );
   const commandTermPrompts = useMemo(
     () => commandTermsForSubject(selectedSubject?.subjectName),
     [selectedSubject?.subjectName]
@@ -390,6 +407,16 @@ export default function QuestionsScreen() {
       setCommandAnswer("");
     }
   }, [commandTerm, commandTermPrompts]);
+  useEffect(() => {
+    if (!selectedSubjectTools.visual && visualMode !== "auto") {
+      setVisualMode("auto");
+    }
+  }, [selectedSubjectTools.visual, visualMode]);
+  useEffect(() => {
+    if (toolMode === "calculator" && !selectedSubjectTools.calculator) {
+      setToolMode("exam");
+    }
+  }, [selectedSubjectTools.calculator, toolMode]);
   useEffect(() => {
     if (!cooldownActive) return;
     const timer = setTimeout(() => setCooldownActive(false), 2500);
@@ -561,7 +588,8 @@ export default function QuestionsScreen() {
         topic: topic.trim(),
         difficulty,
         count,
-        sourceMode
+        sourceMode,
+        visualMode: selectedSubjectTools.visual ? visualMode : "auto"
       });
       resetPracticeState();
       return true;
@@ -590,7 +618,7 @@ export default function QuestionsScreen() {
     try {
       const result = await checkAnswer({
         subjectId: selectedSubject.id,
-        question: item.question,
+        question: questionWithVisualContext(item),
         studentAnswer: studentAnswers[index].trim(),
         modelAnswer: item.model_answer,
         topic: item.topic,
@@ -668,7 +696,7 @@ export default function QuestionsScreen() {
     setSavingIndex(index);
     await saveQuestion({
       subjectId: selectedSubject.id,
-      question: item.question,
+      question: questionWithVisualContext(item),
       modelAnswer: item.model_answer,
       topic: item.topic,
       difficulty,
@@ -695,7 +723,7 @@ export default function QuestionsScreen() {
         body: formatMistakeNoteBody({
           topic: item.topic,
           commandTerm: selectedCommandPrompt.term,
-          question: item.question,
+          question: questionWithVisualContext(item),
           studentAnswer,
           issue: feedback.feedback.improvements.join("\n") || feedback.feedback.next_step,
           correctIdea: item.model_answer,
@@ -807,7 +835,7 @@ export default function QuestionsScreen() {
           body: formatFlashcardNoteBody({
             cardType: "normal",
             sourceTitle: `${cleanTopic} (${selectedSubject.subjectName} topic support)`,
-            front: question.question,
+            front: questionWithVisualContext(question),
             back: [
               question.model_answer,
               question.marking_criteria.length ? "" : null,
@@ -886,7 +914,7 @@ export default function QuestionsScreen() {
     try {
       const result = await checkAnswer({
         subjectId: selectedSubject.id,
-        question: item.question,
+        question: questionWithVisualContext(item),
         studentAnswer: examAnswers[index].trim(),
         modelAnswer: item.model_answer,
         topic: item.topic,
@@ -916,7 +944,7 @@ export default function QuestionsScreen() {
         body: formatMistakeNoteBody({
           topic: item.topic,
           commandTerm,
-          question: item.question,
+          question: questionWithVisualContext(item),
           studentAnswer: examAnswers[index],
           issue: examFeedback[index].feedback.improvements.join("\n") || examFeedback[index].feedback.next_step,
           correctIdea: item.model_answer,
@@ -1036,6 +1064,32 @@ export default function QuestionsScreen() {
                 { value: "exam_bank", label: "Exam bank" }
               ]}
             />
+            {selectedSubjectTools.visual ? (
+              <View style={styles.subjectToolPanel}>
+                <View style={styles.subjectToolHeader}>
+                  <View>
+                    <Text style={styles.subjectToolTitle}>{selectedSubjectTools.visualLabel}</Text>
+                    <Text style={styles.subjectToolMeta}>{visualSubjectHint(selectedSubjectTools)}</Text>
+                  </View>
+                  {selectedSubjectTools.calculator ? <Text style={styles.subjectToolBadge}>Calc ready</Text> : null}
+                </View>
+                <SegmentedButtons
+                  value={visualMode}
+                  onValueChange={(value) => setVisualMode(value as "auto" | "visual")}
+                  buttons={[
+                    { value: "auto", label: "Auto" },
+                    { value: "visual", label: "Visual" }
+                  ]}
+                />
+              </View>
+            ) : selectedSubjectTools.calculator ? (
+              <View style={styles.subjectToolPanel}>
+                <View style={styles.subjectToolHeader}>
+                  <Text style={styles.subjectToolTitle}>{selectedSubjectTools.calculatorLabel}</Text>
+                  <Text style={styles.subjectToolBadge}>Tools</Text>
+                </View>
+              </View>
+            ) : null}
             <View style={styles.trustNote}>
               <Text style={styles.trustTitle}>AI-built draft</Text>
               <Text style={styles.trustText}>
@@ -1245,6 +1299,7 @@ export default function QuestionsScreen() {
                 Round {gameIndex + 1} of {gameRoundCount} - {timeLeft}s
               </Text>
               <Text style={styles.questionText}>{currentGameQuestion.question}</Text>
+              <QuestionVisual visual={currentGameQuestion.visual} />
               <View style={styles.optionGrid}>
                 {visibleGameOptions.map((option) => {
                   const selected = selectedOption === option.text;
@@ -1357,12 +1412,7 @@ export default function QuestionsScreen() {
           <SegmentedButtons
             value={toolMode}
             onValueChange={(value) => setToolMode(value as PracticeTool)}
-            buttons={[
-              { value: "exam", label: "Exam" },
-              { value: "command", label: "Terms" },
-              { value: "mistakes", label: "Mistakes" },
-              { value: "flashcards", label: "Cards" }
-            ]}
+            buttons={toolButtons}
           />
           {toolMessage ? <Text style={toolMessage.includes("Could") ? styles.error : styles.toolMessage}>{toolMessage}</Text> : null}
 
@@ -1427,6 +1477,7 @@ export default function QuestionsScreen() {
                   </View>
                   <Text style={styles.badge}>{generatedQuestions[examIndex].marks} marks</Text>
                   <Text style={styles.questionText}>{generatedQuestions[examIndex].question}</Text>
+                  <QuestionVisual visual={generatedQuestions[examIndex].visual} />
                   <TextInput
                     mode="outlined"
                     label="Exam answer"
@@ -1578,6 +1629,8 @@ export default function QuestionsScreen() {
                 </AppCard>
               ) : null}
             </>
+          ) : toolMode === "calculator" && selectedSubjectTools.calculator ? (
+            <ScientificCalculator subjectName={selectedSubject?.subjectName} />
           ) : toolMode === "mistakes" ? (
             <>
               <AppCard style={styles.form}>
@@ -1763,6 +1816,39 @@ const styles = StyleSheet.create({
     color: palette.success,
     fontFamily: "Outfit_700Bold",
     textAlign: "center"
+  },
+  subjectToolPanel: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}10`,
+    padding: 12
+  },
+  subjectToolHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap"
+  },
+  subjectToolTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  subjectToolMeta: {
+    color: palette.muted,
+    fontSize: 12
+  },
+  subjectToolBadge: {
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: `${palette.success}22`,
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 8,
+    paddingVertical: 4
   },
   questionCard: {
     width: width - 40,
