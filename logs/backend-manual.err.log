@@ -1,0 +1,937 @@
+Falling back to deterministic calendar roadmap SyntaxError: Unterminated string in JSON at position 15200 (line 1 column 15201)
+    at JSON.parse (<anonymous>)
+    at Object.<anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\helpers\zod.ts:114:39)
+    at parseTextFormat (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:134:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:80:23)
+    at Array.map (<anonymous>)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:76:69)
+    at Array.map (<anonymous>)
+    at parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:67:76)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\resources\responses\responses.ts:189:34)
+    at APIPromise.parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\core\api-promise.ts:40:20)
+Falling back to deterministic calendar roadmap SyntaxError: Unterminated string in JSON at position 14482 (line 1 column 14483)
+    at JSON.parse (<anonymous>)
+    at Object.<anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\helpers\zod.ts:114:39)
+    at parseTextFormat (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:134:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:80:23)
+    at Array.map (<anonymous>)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:76:69)
+    at Array.map (<anonymous>)
+    at parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:67:76)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\resources\responses\responses.ts:189:34)
+    at APIPromise.parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\core\api-promise.ts:40:20)
+Falling back to deterministic calendar roadmap SyntaxError: Unterminated string in JSON at position 14722 (line 1 column 14723)
+    at JSON.parse (<anonymous>)
+    at Object.<anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\helpers\zod.ts:114:39)
+    at parseTextFormat (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:134:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:80:23)
+    at Array.map (<anonymous>)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:76:69)
+    at Array.map (<anonymous>)
+    at parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\lib\ResponsesParser.ts:67:76)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\resources\responses\responses.ts:189:34)
+    at APIPromise.parseResponse (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\openai\src\core\api-promise.ts:40:20)
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:55:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:55:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:55:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:58:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:58:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:58:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:58:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:81:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\auth.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550679288:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550679288:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550679288:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\auth.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550717396:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550717396:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550717396:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\auth.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550808692:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550808692:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550808692:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\auth.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550829501:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550829501:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550829501:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\auth.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550842836:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550842836:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550842836:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550858837:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550858837:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550858837:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550871241:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550871241:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550871241:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550872390:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550872390:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550872390:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550880111:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550880111:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550880111:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550884725:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550884725:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550884725:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550910660:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550910660:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550910660:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550912977:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550912977:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550912977:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550938098:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550938098:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550938098:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\subjects.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550959800:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550959800:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777550959800:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551003240:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551003240:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551003240:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551009978:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551009978:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551009978:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551044280:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551044280:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551044280:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551083935:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551083935:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551083935:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551102074:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551102074:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551102074:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551463510:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551463510:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551463510:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551466337:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551466337:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551466337:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\middleware\aiUsageLimit.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551487903:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551487903:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551487903:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\coach.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551494210:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551494210:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551494210:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\coach.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551500353:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551500353:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551500353:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\coach.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551508262:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551508262:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551508262:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\sasen\Documents\Study Tracker\backend\src\services\billingService.js' imported from C:\Users\sasen\Documents\Study Tracker\backend\src\routes\coach.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:866:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551563545:2:3744)
+    at async resolveDirectory (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551563545:2:4237)
+    at async resolve (file:///C:/Users/sasen/Documents/Study%20Tracker/backend/node_modules/tsx/dist/esm/index.mjs?1777551563545:2:5355)
+    at async nextResolve (node:internal/modules/esm/hooks:785:22)
+    at async AsyncLoaderHooksOnLoaderHookWorker.resolve (node:internal/modules/esm/hooks:269:24)
+    at async handleMessage (node:internal/modules/esm/worker:251:18) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/sasen/Documents/Study%20Tracker/backend/src/services/billingService.js'
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at app.listen (C:\Users\sasen\Documents\Study Tracker\backend\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\sasen\Documents\Study Tracker\backend\src\index.ts:78:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.13.1

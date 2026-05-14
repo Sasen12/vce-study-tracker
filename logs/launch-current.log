@@ -1,0 +1,57 @@
+Starting Postgres with Docker Compose...
+Waiting for Postgres...
+Preparing Prisma...
+
+> vce-study-tracker@1.0.0 backend:prisma
+> npm run prisma:generate --prefix backend
+
+
+> vce-study-tracker-backend@1.0.0 prisma:generate
+> prisma generate --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 201ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+
+> vce-study-tracker-backend@1.0.0 prisma:push
+> prisma db push --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+Datasource "db": PostgreSQL database "vce_study_tracker", schema "public" at "localhost:5432"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 128ms
+
+Port 3000 is busy, using backend port 3001.
+Starting backend API...
+Waiting for backend API on http://localhost:3001...
+Backend running on http://localhost:3001
+Backend logs: C:\Users\sasen\Documents\Study Tracker\logs\backend-launch.log
+Launching Expo web on http://localhost:8081. Press Ctrl+C here to stop the frontend and backend.
+
+> vce-study-tracker@1.0.0 web
+> expo start --web --port 8081
+
+Starting project at C:\Users\sasen\Documents\Study Tracker
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundled 2406ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1592 modules)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 182ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 271ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 241ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 216ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Stopping backend API...

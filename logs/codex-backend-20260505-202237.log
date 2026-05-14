@@ -1,0 +1,21 @@
+
+> vce-study-tracker@1.0.0 backend
+> npm run dev --prefix backend
+
+
+> vce-study-tracker-backend@1.0.0 dev
+> tsx watch src/index.ts
+
+VCE Study Tracker API running on http://localhost:3001
+8:29:45 pm [tsx] change in ./src\services\gamificationService.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001
+8:30:03 pm [tsx] change in ./src\routes\gamification.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001
+8:30:12 pm [tsx] change in ./src\routes\community.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001
+8:58:47 pm [tsx] change in ./src\routes\community.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001
+8:59:09 pm [tsx] change in ./src\routes\community.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001
+10:07:30 pm [tsx] change in ./src\routes\community.ts Restarting...
+cVCE Study Tracker API running on http://localhost:3001

@@ -1,0 +1,3 @@
+Created .env for Expo API URL.
+Created backend\.env from backend\.env.example.
+Starting Postgres with Docker Compose...

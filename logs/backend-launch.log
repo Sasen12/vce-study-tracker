@@ -1,0 +1,5 @@
+
+> vce-study-tracker-backend@1.0.0 dev
+> tsx watch src/index.ts
+
+VCE Study Tracker API running on http://localhost:3001

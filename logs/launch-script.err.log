@@ -1,0 +1,8 @@
+unable to get image 'postgres:16-alpine': failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+docker compose up -d failed with exit code 1
+At C:\Users\sasen\Documents\Study Tracker\launch.ps1:61 char:7
++       throw "docker compose up -d failed with exit code $LASTEXITCODE ...
++       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (docker compose ...ith exit code 1:String) [], RuntimeException
+    + FullyQualifiedErrorId : docker compose up -d failed with exit code 1
+ 

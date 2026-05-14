@@ -1,0 +1,89 @@
+import { todayMelbourne } from "../utils/date.js";
+import { HttpError } from "../utils/http.js";
+const userUsage = new Map();
+let globalUsage = { date: todayMelbourne(), used: 0 };
+const parsePositiveLimit = (value, fallback) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed))
+        return fallback;
+    return Math.max(0, Math.floor(parsed));
+};
+const perUserDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_FREE, 20);
+const globalDailyLimit = () => parsePositiveLimit(process.env.AI_DAILY_LIMIT_GLOBAL, 250);
+const defaultUnlimitedDomains = ["rivercrest.vic.edu.au", "hillcrest.vic.edu.au"];
+const defaultUnlimitedEmails = ["lakeeeshahaffi@yahoo.com", "sasenb@gmail.com", "vjmadhus@gmail.com"];
+const unlimitedDomains = () => {
+    const configured = process.env.AI_UNLIMITED_EMAIL_DOMAINS;
+    if (!configured?.trim())
+        return defaultUnlimitedDomains;
+    return configured
+        .split(",")
+        .map((domain) => domain.trim().replace(/^@/, "").toLowerCase())
+        .filter(Boolean);
+};
+const hasUnlimitedAi = (email) => {
+    const normalisedEmail = email.trim().toLowerCase();
+    const configuredEmails = process.env.AI_UNLIMITED_EMAILS;
+    const unlimitedEmails = configuredEmails?.trim()
+        ? configuredEmails
+            .split(",")
+            .map((item) => item.trim().toLowerCase())
+            .filter(Boolean)
+        : defaultUnlimitedEmails;
+    return (unlimitedEmails.includes(normalisedEmail) ||
+        unlimitedDomains().some((domain) => normalisedEmail.endsWith(`@${domain}`)));
+};
+const costForRequest = (req, cost) => {
+    const value = typeof cost === "function" ? cost(req) : cost;
+    if (!Number.isFinite(value ?? 1))
+        return 1;
+    return Math.max(1, Math.ceil(value ?? 1));
+};
+const counterForUser = (userId, today) => {
+    const existing = userUsage.get(userId);
+    if (existing?.date === today)
+        return existing;
+    const next = { date: today, used: 0 };
+    userUsage.set(userId, next);
+    return next;
+};
+const resetGlobalIfNeeded = (today) => {
+    if (globalUsage.date !== today) {
+        globalUsage = { date: today, used: 0 };
+        for (const [userId, counter] of userUsage.entries()) {
+            if (counter.date !== today)
+                userUsage.delete(userId);
+        }
+    }
+};
+export const limitAiUsage = ({ cost } = {}) => (async (req, res, next) => {
+    const authReq = req;
+    try {
+        if (hasUnlimitedAi(authReq.user.email)) {
+            res.setHeader("X-AI-Remaining", "unlimited");
+            next();
+            return;
+        }
+        const today = todayMelbourne();
+        resetGlobalIfNeeded(today);
+        const requestCost = costForRequest(authReq, cost);
+        const userLimit = perUserDailyLimit();
+        const globalLimit = globalDailyLimit();
+        const userCounter = counterForUser(authReq.user.id, today);
+        if (userLimit > 0 && userCounter.used + requestCost > userLimit) {
+            throw new HttpError(429, `Daily AI limit reached. Try again tomorrow. (${userCounter.used}/${userLimit} used)`);
+        }
+        if (globalLimit > 0 && globalUsage.used + requestCost > globalLimit) {
+            throw new HttpError(429, "The shared AI budget is paused for today. Try again tomorrow.");
+        }
+        userCounter.used += requestCost;
+        globalUsage.used += requestCost;
+        if (userLimit > 0) {
+            res.setHeader("X-AI-Remaining", Math.max(0, userLimit - userCounter.used).toString());
+        }
+        next();
+    }
+    catch (error) {
+        next(error);
+    }
+});

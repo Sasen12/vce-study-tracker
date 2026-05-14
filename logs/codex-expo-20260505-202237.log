@@ -1,0 +1,12 @@
+
+> vce-study-tracker@1.0.0 web
+> expo start --web --port 8081
+
+Starting project at C:\Users\sasen\Documents\Study Tracker
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundled 4494ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1522 modules)
+ LOG  [web] Logs will appear in the browser console

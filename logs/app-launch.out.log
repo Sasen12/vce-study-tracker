@@ -1,0 +1,51 @@
+
+> vce-study-tracker@1.0.0 launch
+> powershell -ExecutionPolicy Bypass -File ./launch.ps1
+
+Starting Docker Desktop...
+Waiting for Docker Desktop...
+Starting Postgres with Docker Compose...
+Waiting for Postgres...
+Preparing Prisma...
+
+> vce-study-tracker@1.0.0 backend:prisma
+> npm run prisma:generate --prefix backend
+
+
+> vce-study-tracker-backend@1.0.0 prisma:generate
+> prisma generate --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 110ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+
+> vce-study-tracker-backend@1.0.0 prisma:push
+> prisma db push --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+Datasource "db": PostgreSQL database "vce_study_tracker", schema "public" at "localhost:5432"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 80ms
+
+Port 3000 is busy, using backend port 3001.
+Starting backend API...
+Waiting for backend API on http://localhost:3001...
+Backend running on http://localhost:3001
+Backend logs: C:\Users\sasen\Documents\Study Tracker\logs\backend-launch.log
+Launching Expo web on http://localhost:8081. Press Ctrl+C here to stop the frontend and backend.
+
+> vce-study-tracker@1.0.0 web
+> expo start --web --port 8081
+
+Starting project at C:\Users\sasen\Documents\Study Tracker
+Starting Metro Bundler
+Stopping backend API...

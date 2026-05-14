@@ -1,0 +1,27 @@
+ Container studytracker-postgres-1 Running 
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+(node:26080) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+FetchError: request to https://api.expo.dev/v2/sdks/51.0.0/native-modules failed, reason: socket hang up
+FetchError: request to https://api.expo.dev/v2/sdks/51.0.0/native-modules failed, reason: socket hang up
+    at ClientRequest.<anonymous> (C:\Users\sasen\Documents\Study Tracker\node_modules\node-fetch\lib\index.js:1501:11)
+    at ClientRequest.emit (node:events:508:28)
+    at emitErrorEvent (node:_http_client:108:11)
+    at TLSSocket.socketOnEnd (node:_http_client:599:5)
+    at TLSSocket.emit (node:events:520:35)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+npm run web -- --port 8081 failed with exit code 1
+At C:\Users\sasen\Documents\Study Tracker\launch.ps1:25 char:7
++       throw "npm $($Arguments -join ' ') failed with exit code $LASTE ...
++       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (npm run web -- ...ith exit code 1:String) [], RuntimeException
+    + FullyQualifiedErrorId : npm run web -- --port 8081 failed with exit code 1
+ 

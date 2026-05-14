@@ -1,0 +1,45 @@
+Starting Postgres with Docker Compose...
+Preparing Prisma...
+
+> vce-study-tracker@1.0.0 backend:prisma
+> npm run prisma:generate --prefix backend
+
+
+> vce-study-tracker-backend@1.0.0 prisma:generate
+> prisma generate --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 121ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+
+> vce-study-tracker-backend@1.0.0 prisma:push
+> prisma db push --schema src/db/prisma/schema.prisma
+
+Prisma schema loaded from src\db\prisma\schema.prisma
+Datasource "db": PostgreSQL database "vce_study_tracker", schema "public" at "localhost:5432"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 234ms
+
+Starting backend API...
+Backend running on http://localhost:3000
+Backend logs: C:\Users\sasen\Documents\Study Tracker\logs\backend-launch.log
+Launching Expo web. Press Ctrl+C here to stop the frontend and backend.
+
+> vce-study-tracker@1.0.0 web
+> expo start --web
+
+Starting project at C:\Users\sasen\Documents\Study Tracker
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.

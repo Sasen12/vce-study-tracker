@@ -1,0 +1,9 @@
+Networking has been disabled
+Starting project at C:\Users\sasen\Documents\Study Tracker
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundled 3369ms C:\Users\sasen\Documents\Study Tracker\node_modules\expo-router\entry.js (1573 modules)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/constants/vceSubjects" from "app\(auth)\register.tsx"
+Unable to resolve "@/constants/vceSubjects" from "app\(auth)\register.tsx"
