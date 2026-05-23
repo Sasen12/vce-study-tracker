@@ -88,14 +88,6 @@ const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? 
 
 const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : "Nice");
 
-type BriefItem = {
-  label: string;
-  title: string;
-  body: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  accent: string;
-};
-
 type ParkingLotItem = {
   id: string;
   text: string;
@@ -140,14 +132,6 @@ type EvidenceItem = {
 };
 
 const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
-
-const briefFallback = (subjects: UserSubject[]): BriefItem => ({
-  label: "Warm-up",
-  title: subjects.length ? "Start with the subject that feels easiest to open." : "Add subjects when you are ready.",
-  body: subjects.length ? "A small clean start beats waiting for perfect motivation." : "Once subjects exist, Home can build a sharper brief.",
-  icon: subjects.length ? "timer-outline" : "book-plus-outline",
-  accent: subjects.length ? palette.success : palette.info
-});
 
 const weekStartDate = () => {
   const date = new Date();
@@ -321,6 +305,9 @@ export default function DashboardScreen() {
   const [winText, setWinText] = useState("");
   const [winNotice, setWinNotice] = useState<string | null>(null);
   const [savingWin, setSavingWin] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [perksOpen, setPerksOpen] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
@@ -411,43 +398,6 @@ export default function DashboardScreen() {
     () => buildWeaknessSummary({ subjects, sessions, goals, notes, savedQuestions, events }),
     [events, goals, notes, savedQuestions, sessions, subjects]
   );
-  const quietBrief = useMemo(() => {
-    const items: BriefItem[] = [];
-
-    if (nextDeadline) {
-      items.push({
-        label: "Protect",
-        title: nextDeadline.title,
-        body: `${countdownLabel(nextDeadline)}. Start with one thing you can finish tonight.`,
-        icon: "calendar-alert",
-        accent: palette.warning
-      });
-    }
-
-    if (weaknessSummary.weakSubject) {
-      items.push({
-        label: "Repair",
-        title: weaknessSummary.weakSubject.subjectName,
-        body: weaknessSummary.nextAction,
-        icon: "brain",
-        accent: palette.info
-      });
-    }
-
-    if (subjects.length) {
-      const todaySeconds = stats?.todaySeconds ?? 0;
-      items.push({
-        label: todaySeconds > 0 ? "Keep warm" : "Start",
-        title: todaySeconds > 0 ? "Bank one more clean block." : "Do the first 25 minutes.",
-        body: todaySeconds > 0 ? "Momentum is already open. Add one focused repair before stopping." : "No drama: timer on, one topic, one visible result.",
-        icon: "timer-sand",
-        accent: palette.success
-      });
-    }
-
-    if (!items.length) items.push(briefFallback(subjects));
-    return items.slice(0, 3);
-  }, [nextDeadline, stats?.todaySeconds, subjects, weaknessSummary.nextAction, weaknessSummary.weakSubject]);
   const searchResults = useMemo(
     () => globalStudySearch({ query: searchQuery, notes, savedQuestions, events, resources }),
     [events, notes, resources, savedQuestions, searchQuery]
@@ -555,6 +505,8 @@ export default function DashboardScreen() {
     weaknessSummary.weakSubject,
     weaknessSummary.weakTopic
   ]);
+  const primaryPlan = tonightPlan[0] ?? null;
+  const secondaryPlan = tonightPlan.slice(1, 3);
   const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
   const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
   const rescueModeBody = rescueSubject
@@ -852,91 +804,237 @@ export default function DashboardScreen() {
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
               <Text variant="titleMedium" style={styles.cardTitle}>
-                Quiet Launchpad
+                Today Command
               </Text>
-              <Text style={styles.muted}>A clean brief plus a place to park distracting thoughts.</Text>
+              <Text style={styles.muted}>
+                {nextDeadline
+                  ? `${nextDeadline.title} is ${countdownLabel(nextDeadline)}.`
+                  : weaknessSummary.title}
+              </Text>
             </View>
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
 
-          <View style={styles.briefList}>
-            {quietBrief.map((item) => (
-              <View key={`${item.label}-${item.title}`} style={styles.briefItem}>
-                <View style={[styles.briefIcon, { backgroundColor: `${item.accent}18` }]}>
-                  <MaterialCommunityIcons name={item.icon} color={item.accent} size={20} />
-                </View>
-                <View style={styles.flexText}>
-                  <Text style={[styles.briefLabel, { color: item.accent }]}>{item.label}</Text>
-                  <Text style={styles.briefTitle}>{item.title}</Text>
-                  <Text style={styles.muted}>{item.body}</Text>
-                </View>
+          {primaryPlan ? (
+            <Pressable accessibilityRole="button" style={styles.planRow} onPress={() => openTimerForPlan(primaryPlan)}>
+              <View style={[styles.planIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
+                <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={19} />
               </View>
-            ))}
-          </View>
+              <View style={styles.flexText}>
+                <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
+                <Text style={styles.planTitle}>{primaryPlan.title}</Text>
+                <Text style={styles.muted} numberOfLines={2}>
+                  {primaryPlan.body}
+                </Text>
+              </View>
+              <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(primaryPlan.minutes))}</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.muted}>Add a subject, deadline, or saved question and Home will choose a cleaner next move.</Text>
+          )}
 
-          <View style={styles.actionRow}>
+          {secondaryPlan.length ? (
+            <View style={styles.nextUpRow}>
+              <Text style={styles.nextUpLabel}>Next</Text>
+              <Text style={styles.nextUpText} numberOfLines={1}>
+                {secondaryPlan.map((item) => item.title).join(" / ")}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.commandActions}>
             <Button
               mode="contained"
+              compact
               icon="timer-play-outline"
               disabled={!subjects.length}
               onPress={() =>
-                router.push({
-                  pathname: "/(tabs)/study",
-                  params: nextDeadlineSubject?.id ? { subjectId: nextDeadlineSubject.id } : {}
-                })
+                primaryPlan
+                  ? openTimerForPlan(primaryPlan)
+                  : router.push({
+                      pathname: "/(tabs)/study",
+                      params: rescueSubject?.id ? { subjectId: rescueSubject.id } : {}
+                    })
               }
             >
-              Start block
+              Start
             </Button>
-            <Button mode="outlined" icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
-              Make drill
+            <Button mode="outlined" compact icon="lifebuoy" disabled={!rescueSubject} onPress={() => startRescueMode(12)}>
+              Rescue
+            </Button>
+            <Button mode="outlined" compact icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
+              Drill
+            </Button>
+            <Button mode="text" compact icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(nextDeadline ?? undefined)}>
+              Panic plan
             </Button>
           </View>
 
-          <View style={styles.parkingBox}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.parkingTitle}>Parking lot</Text>
+          {streakShieldUnlocked && !studiedToday ? (
+            <View style={styles.commandAlert}>
+              <MaterialCommunityIcons name="shield-check-outline" color={palette.warning} size={18} />
+              <Text style={styles.commandAlertText}>Streak Shield is ready.</Text>
+              <Button mode="contained-tonal" compact onPress={() => startRescueMode(8)}>
+                8m
+              </Button>
+            </View>
+          ) : null}
+
+          <View style={styles.commandMetrics}>
+            <View style={styles.commandMetric}>
+              <Text style={styles.commandMetricValue}>{deadlineRadar.urgent + deadlineRadar.week}</Text>
+              <Text style={styles.commandMetricLabel}>deadlines</Text>
+            </View>
+            <View style={styles.commandMetric}>
+              <Text style={styles.commandMetricValue}>{revisionDebt.length}</Text>
+              <Text style={styles.commandMetricLabel}>repairs</Text>
+            </View>
+            <View style={styles.commandMetric}>
+              <Text style={styles.commandMetricValue}>{evidenceAverage}</Text>
+              <Text style={styles.commandMetricLabel}>evidence</Text>
+            </View>
+            <View style={styles.commandMetric}>
+              <Text style={styles.commandMetricValue}>{unlockedPerkCount}</Text>
+              <Text style={styles.commandMetricLabel}>perks</Text>
+            </View>
+          </View>
+
+          <View style={styles.commandToggles}>
+            <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
+              Capture
+            </Button>
+            <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
+              Details
+            </Button>
+            <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
+              Perks
+            </Button>
+          </View>
+
+          {captureOpen ? (
+            <View style={styles.parkingBox}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.parkingTitle}>Parking lot</Text>
+                {parkingLot.length ? (
+                  <Button compact mode="text" icon="note-plus-outline" loading={savingParkingNote} disabled={savingParkingNote} onPress={saveParkingLotAsNote}>
+                    Save
+                  </Button>
+                ) : null}
+              </View>
+              <View style={styles.parkingInputRow}>
+                <TextInput
+                  mode="outlined"
+                  dense
+                  label="Park a thought"
+                  value={parkingText}
+                  onChangeText={setParkingText}
+                  style={styles.parkingInput}
+                  onSubmitEditing={addParkingItem}
+                />
+                <Button mode="contained-tonal" compact icon="plus" disabled={!parkingText.trim()} onPress={addParkingItem}>
+                  Add
+                </Button>
+              </View>
               {parkingLot.length ? (
-                <Button compact mode="text" icon="note-plus-outline" loading={savingParkingNote} disabled={savingParkingNote} onPress={saveParkingLotAsNote}>
-                  Save
+                <View style={styles.parkingList}>
+                  {parkingLot.map((item) => (
+                    <View key={item.id} style={styles.parkingItem}>
+                      <Text style={styles.parkingText}>{item.text}</Text>
+                      <Pressable accessibilityRole="button" onPress={() => removeParkingItem(item.id)} style={styles.parkingRemove}>
+                        <MaterialCommunityIcons name="check" color={palette.success} size={17} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.muted}>Dump distractions here, then keep studying. They stay local until you save them.</Text>
+              )}
+              {parkingNotice ? <Text style={parkingNotice.includes("Saved") ? styles.successText : styles.error}>{parkingNotice}</Text> : null}
+
+              <View style={styles.winLogBox}>
+                <Text style={styles.consoleSectionTitle}>Tiny win log</Text>
+                <View style={styles.winInputRow}>
+                  <TextInput
+                    mode="outlined"
+                    dense
+                    label="What changed after studying?"
+                    value={winText}
+                    onChangeText={setWinText}
+                    style={styles.winInput}
+                    onSubmitEditing={saveWinLog}
+                  />
+                  <Button mode="contained-tonal" compact icon="check" loading={savingWin} disabled={!winText.trim() || savingWin} onPress={saveWinLog}>
+                    Log
+                  </Button>
+                </View>
+                {winNotice ? <Text style={winNotice.includes("Logged") ? styles.successText : styles.error}>{winNotice}</Text> : null}
+                {victoryVaultUnlocked ? (
+                  <View style={styles.vaultList}>
+                    {recentWinLogs.length ? (
+                      recentWinLogs.map((note) => (
+                        <View key={note.id} style={styles.vaultItem}>
+                          <MaterialCommunityIcons name="archive-star-outline" color={palette.warning} size={16} />
+                          <View style={styles.flexText}>
+                            <Text style={styles.vaultTitle} numberOfLines={1}>
+                              {note.body}
+                            </Text>
+                            <Text style={styles.muted}>{note.createdAt.slice(0, 10)}</Text>
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.muted}>Victory Vault unlocked. Log a tiny win and it will stay visible here.</Text>
+                    )}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {perksOpen ? (
+            <View style={styles.parkingBox}>
+              <View style={styles.perkRail}>
+                {PERK_SHOP_ITEMS.map((perk) => {
+                  const unlockedPerk = unlockedCosmetics.includes(perkCosmeticId(perk.id));
+                  return (
+                    <Pressable
+                      key={perk.id}
+                      accessibilityRole="button"
+                      style={[styles.perkChip, unlockedPerk && styles.perkChipUnlocked]}
+                      onPress={() => router.push({ pathname: "/(tabs)/shop", params: { mode: "perks" } })}
+                    >
+                      <MaterialCommunityIcons
+                        name={perk.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                        color={unlockedPerk ? palette.info : palette.muted}
+                        size={16}
+                      />
+                      <Text style={unlockedPerk ? styles.perkChipTextUnlocked : styles.perkChipText} numberOfLines={1}>
+                        {perk.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.perkCountText}>{unlockedPerkCount}/{PERK_SHOP_ITEMS.length} perks unlocked in Shop.</Text>
+              {focusAuraUnlocked ? (
+                <View style={styles.focusAuraNotice}>
+                  <MaterialCommunityIcons name="radar" color={palette.info} size={17} />
+                  <Text style={styles.focusAuraText}>Focus Aura is armed for timer sessions.</Text>
+                </View>
+              ) : null}
+              {bossBattleUnlocked ? (
+                <Button mode="contained-tonal" compact icon="sword-cross" disabled={!rescueSubject} onPress={openBossBattle}>
+                  Boss Battle Deck
                 </Button>
               ) : null}
             </View>
-            <View style={styles.parkingInputRow}>
-              <TextInput
-                mode="outlined"
-                dense
-                label="Park a thought"
-                value={parkingText}
-                onChangeText={setParkingText}
-                style={styles.parkingInput}
-                onSubmitEditing={addParkingItem}
-              />
-              <Button mode="contained-tonal" compact icon="plus" disabled={!parkingText.trim()} onPress={addParkingItem}>
-                Add
-              </Button>
-            </View>
-            {parkingLot.length ? (
-              <View style={styles.parkingList}>
-                {parkingLot.map((item) => (
-                  <View key={item.id} style={styles.parkingItem}>
-                    <Text style={styles.parkingText}>{item.text}</Text>
-                    <Pressable accessibilityRole="button" onPress={() => removeParkingItem(item.id)} style={styles.parkingRemove}>
-                      <MaterialCommunityIcons name="check" color={palette.success} size={17} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.muted}>Dump distractions here, then keep studying. They stay local until you save them.</Text>
-            )}
-            {parkingNotice ? <Text style={parkingNotice.includes("Saved") ? styles.successText : styles.error}>{parkingNotice}</Text> : null}
-          </View>
+          ) : null}
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(38)}>
-        <AppCard style={styles.consoleCard}>
+      {detailsOpen ? (
+        <Animated.View entering={motion.card(38)}>
+          <AppCard style={styles.consoleCard}>
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
               <Text variant="titleMedium" style={styles.cardTitle}>
@@ -1188,11 +1286,14 @@ export default function DashboardScreen() {
               </View>
             ) : null}
           </View>
-        </AppCard>
-      </Animated.View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
-      <Animated.View entering={motion.card(40)}>
-        <AppCard style={styles.panicCard}>
+      {detailsOpen ? (
+        <>
+          <Animated.View entering={motion.card(40)}>
+            <AppCard style={styles.panicCard}>
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
               <Text variant="titleMedium" style={styles.cardTitle}>
@@ -1209,11 +1310,11 @@ export default function DashboardScreen() {
               Fast pick: {nextDeadline.title} is {countdownLabel(nextDeadline)}.
             </Text>
           ) : null}
-        </AppCard>
-      </Animated.View>
+            </AppCard>
+          </Animated.View>
 
-      <Animated.View entering={motion.card(82)}>
-        <AppCard style={styles.weaknessCard}>
+          <Animated.View entering={motion.card(82)}>
+            <AppCard style={styles.weaknessCard}>
           <View style={styles.nextMoveTop}>
             <View style={styles.weaknessIcon}>
               <MaterialCommunityIcons name="brain" color={palette.warning} size={22} />
@@ -1244,11 +1345,11 @@ export default function DashboardScreen() {
             </Button>
           </View>
           <Text style={styles.nextActionText}>{weaknessSummary.nextAction}</Text>
-        </AppCard>
-      </Animated.View>
+            </AppCard>
+          </Animated.View>
 
-      <Animated.View entering={motion.card(96)}>
-        <AppCard style={styles.deadlineCard}>
+          <Animated.View entering={motion.card(96)}>
+            <AppCard style={styles.deadlineCard}>
           <View style={styles.nextMoveTop}>
             <View style={styles.nextMoveIcon}>
               <MaterialCommunityIcons name="calendar-alert" color={palette.primary} size={22} />
@@ -1284,8 +1385,10 @@ export default function DashboardScreen() {
               Calendar
             </Button>
           </View>
-        </AppCard>
-      </Animated.View>
+            </AppCard>
+          </Animated.View>
+        </>
+      ) : null}
 
       <Animated.View entering={motion.card(118)}>
         <AppCard style={styles.section}>
@@ -1677,6 +1780,85 @@ const styles = StyleSheet.create({
     gap: 14,
     borderColor: "rgba(56,189,248,0.22)",
     backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  nextUpRow: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  nextUpLabel: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  nextUpText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8
+  },
+  commandAlert: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.26)",
+    backgroundColor: "rgba(245,158,11,0.09)",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  commandAlertText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandMetrics: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  commandMetric: {
+    flex: 1,
+    minWidth: 80,
+    minHeight: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  commandMetricValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18,
+    lineHeight: 22
+  },
+  commandMetricLabel: {
+    color: palette.muted,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold"
+  },
+  commandToggles: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   briefList: {
     gap: 10
