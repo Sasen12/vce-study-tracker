@@ -11,6 +11,7 @@ import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
+import { contactRouter } from "./routes/contact.js";
 import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
 import { errorHandler } from "./utils/http.js";
@@ -59,6 +60,7 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
 app.use("/api/community", communityRouter);
+app.use("/api/contact", contactRouter);
 app.use("/api/memory", memoryRouter);
 
 app.use(errorHandler);

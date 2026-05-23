@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Text, TextInput } from "react-native-paper";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { palette } from "@/constants/theme";
+import { apiFetch } from "@/services/api";
 
 const contactEmail = "techsavvy356@gmail.com";
 
@@ -19,28 +20,10 @@ export default function ContactPage() {
   const [school, setSchool] = useState("");
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const canSubmit = name.trim().length > 1 && email.trim().length > 4 && question.trim().length > 8;
-  const mailtoUrl = useMemo(() => {
-    const subjectLine = encodeURIComponent("VCE Pulse question before signup");
-    const body = encodeURIComponent(
-      [
-        "A student sent a pre-account question from the VCE Pulse contact page.",
-        "",
-        `Name: ${name.trim() || "Not provided"}`,
-        `Email: ${email.trim() || "Not provided"}`,
-        `Year level: ${yearLevel.trim() || "Not provided"}`,
-        `School: ${school.trim() || "Not provided"}`,
-        `Subject or area: ${subject.trim() || "Not provided"}`,
-        "",
-        "Question:",
-        question.trim() || "Not provided"
-      ].join("\n")
-    );
-
-    return `mailto:${contactEmail}?subject=${subjectLine}&body=${body}`;
-  }, [email, name, question, school, subject, yearLevel]);
 
   const sendEmail = async () => {
     if (!canSubmit) {
@@ -48,8 +31,35 @@ export default function ContactPage() {
       return;
     }
 
-    const opened = await Linking.openURL(mailtoUrl);
-    setStatus(opened ? "Email draft opened. Send it from your mail app." : `Email ${contactEmail} directly.`);
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      const response = await apiFetch<{ ok: boolean; delivered: boolean; message: string }>("/contact", {
+        method: "POST",
+        skipAuth: true,
+        body: {
+          name,
+          email,
+          yearLevel,
+          school,
+          subject,
+          question
+        }
+      });
+      setStatus(response.message);
+      if (response.ok) {
+        setName("");
+        setEmail("");
+        setYearLevel("");
+        setSchool("");
+        setSubject("");
+        setQuestion("");
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not send the message. Try again soon.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -68,7 +78,7 @@ export default function ContactPage() {
                 Ask before you make an account.
               </Text>
               <Text style={styles.heroLead}>
-                Send your details, your VCE question, or what you are stuck on. It goes to {contactEmail}.
+                Send your details, your VCE question, or what you are stuck on. No mail app popup.
               </Text>
               <Text style={styles.heroBody}>
                 Good for setup questions, feature ideas, school access, subject support, or anything you want cleared
@@ -80,7 +90,7 @@ export default function ContactPage() {
               <Text style={styles.cardLabel}>Direct email</Text>
               <Text style={styles.emailText}>{contactEmail}</Text>
               <Text style={styles.cardBody}>
-                Include your year level, school, and subject if the question is about VCE setup.
+                The form sends inside VCE Pulse. This address is still here if you want it later.
               </Text>
             </View>
           </View>
@@ -95,7 +105,7 @@ export default function ContactPage() {
                 </Text>
                 <View style={styles.contactSignal}>
                   <MaterialCommunityIcons name="email-fast-outline" color={palette.success} size={22} />
-                  <Text style={styles.contactSignalText}>No account required.</Text>
+                  <Text style={styles.contactSignalText}>No account required. No mail app.</Text>
                 </View>
               </View>
 
@@ -158,7 +168,7 @@ export default function ContactPage() {
 
                 {status ? <Text style={styles.status}>{status}</Text> : null}
 
-                <Button mode="contained" icon="email-send-outline" disabled={!canSubmit} onPress={sendEmail}>
+                <Button mode="contained" icon="email-send-outline" loading={submitting} disabled={!canSubmit || submitting} onPress={sendEmail}>
                   Send email
                 </Button>
 

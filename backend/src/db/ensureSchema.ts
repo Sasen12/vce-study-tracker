@@ -81,9 +81,34 @@ const ensureStudentMemorySchema = async () => {
   await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS student_subject_memory_subject_idx ON student_subject_memory(subject_id)");
 };
 
+const ensurePublicContactSchema = async () => {
+  await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS public_contact_submissions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      year_level TEXT,
+      school TEXT,
+      subject TEXT,
+      question TEXT NOT NULL,
+      delivery_status TEXT NOT NULL DEFAULT 'pending',
+      delivery_error TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS public_contact_submissions_created_idx ON public_contact_submissions(created_at DESC)"
+  );
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS public_contact_submissions_email_idx ON public_contact_submissions(email)"
+  );
+};
+
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
   await ensureStudentMemorySchema();
+  await ensurePublicContactSchema();
 
   const usersMissingSchool = await prisma.user.findMany({
     where: {

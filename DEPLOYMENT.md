@@ -16,6 +16,10 @@ The OpenAI key must live only on the backend host. The browser receives only `EX
    - `vce-study-tracker-db`
 4. Add the secret environment variable on the web service:
    - `OPENAI_API_KEY`
+   - `SMTP_HOST`
+   - `SMTP_USER`
+   - `SMTP_PASS`
+   - `CONTACT_FROM_EMAIL`
 5. Deploy the service.
 6. Copy the public API URL, for example:
 
@@ -51,3 +55,4 @@ EXPO_PUBLIC_API_URL=https://your-render-api-url/api
 - `backend/.env` and root `.env` are ignored and should not be committed.
 - If you change `EXPO_PUBLIC_API_URL`, rebuild the Netlify site because Expo public environment variables are bundled at build time.
 - Public AI access spends the backend `OPENAI_API_KEY`. Add rate limits before a wide public launch if cost control becomes important.
+- The public contact form posts to `/api/contact`, stores the submission, and emails `CONTACT_RECIPIENT_EMAIL` when SMTP is configured.
