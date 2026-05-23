@@ -7,6 +7,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 type FeatureVisual = "deadlines" | "practice" | "coach" | "progress";
@@ -164,7 +165,7 @@ export function ProductLandingPage() {
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={[styles.scrollContent, isCompact && styles.scrollContentCompact]}>
         <View style={styles.shell}>
-          <Header isCompact={isCompact} />
+          <MarketingHeader active="home" isCompact={isCompact} />
 
           <View style={[styles.hero, isWide && styles.heroWide]}>
             <View style={[styles.heroCopy, isWide && styles.heroCopyWide]}>
@@ -248,33 +249,6 @@ export function ProductLandingPage() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Header({ isCompact }: { isCompact: boolean }) {
-  return (
-    <View style={styles.header}>
-      <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={styles.brand}>
-        <LinearGradient colors={[palette.primary, "#38BDF8", palette.success]} style={styles.logo}>
-          <View style={styles.logoCore} />
-        </LinearGradient>
-        <View>
-          <Text style={styles.brandName}>VCE Pulse</Text>
-          <Text style={styles.brandMeta}>Study command centre</Text>
-        </View>
-      </Pressable>
-
-      <View style={styles.headerActions}>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/login")} style={styles.headerButton}>
-          <MaterialCommunityIcons name="login" color={palette.text} size={17} />
-          {!isCompact ? <Text style={styles.headerButtonText}>Log in</Text> : null}
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.headerPrimary}>
-          <MaterialCommunityIcons name="account-plus" color="#06111F" size={17} />
-          <Text style={styles.headerPrimaryText}>Start</Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -629,77 +603,6 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1160,
     gap: 74
-  },
-  header: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14
-  },
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 0
-  },
-  logo: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  logoCore: {
-    width: 14,
-    height: 14,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#06111F"
-  },
-  brandName: {
-    color: palette.text,
-    fontFamily: "Outfit_700Bold",
-    fontSize: 18
-  },
-  brandMeta: {
-    color: palette.muted,
-    fontSize: 12
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10
-  },
-  headerButton: {
-    minHeight: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 14
-  },
-  headerButtonText: {
-    color: palette.text,
-    fontFamily: "Outfit_700Bold"
-  },
-  headerPrimary: {
-    minHeight: 42,
-    borderRadius: 8,
-    backgroundColor: "#38BDF8",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 15
-  },
-  headerPrimaryText: {
-    color: "#06111F",
-    fontFamily: "Outfit_700Bold"
   },
   hero: {
     gap: 36,
