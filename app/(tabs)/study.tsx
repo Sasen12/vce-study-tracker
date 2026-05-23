@@ -17,7 +17,7 @@ import { StudyNotesPanel } from "@/components/session/StudyNotesPanel";
 import { StudyResourcesPanel } from "@/components/session/StudyResourcesPanel";
 import { ScientificCalculator } from "@/components/tools/ScientificCalculator";
 import { palette } from "@/constants/theme";
-import { MOTIVATION_MESSAGES } from "@/constants/gamification";
+import { MOTIVATION_MESSAGES, hasUnlockedPerk } from "@/constants/gamification";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
@@ -263,6 +263,7 @@ export default function StudyScreen() {
   }, [releaseFocusLock]);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const focusAuraUnlocked = hasUnlockedPerk(gamification?.unlockedCosmetics, "focus_aura");
   const selectedSubjectTools = useMemo(() => subjectToolProfile(selectedSubject?.subjectName), [selectedSubject?.subjectName]);
   const calculatorSubjects = useMemo(
     () => subjects.filter((subject) => subjectToolProfile(subject.subjectName).calculator),
@@ -636,7 +637,7 @@ export default function StudyScreen() {
             <EmptyState title="No subjects found" body="Add a subject from Profile, then your sessions can earn XP." />
           )}
 
-          <AppCard style={styles.timerCard}>
+          <AppCard style={[styles.timerCard, focusAuraUnlocked && styles.timerCardAura]}>
             <Text style={styles.status}>{statusLabel}</Text>
             <TextInput
               mode="outlined"
@@ -682,6 +683,7 @@ export default function StudyScreen() {
             <View style={styles.timerMetaRow}>
               <Text style={styles.xp}>{xp} XP estimated</Text>
               <Text style={styles.progressPill}>{targetProgress}% target</Text>
+              {focusAuraUnlocked ? <Text style={styles.auraPill}>Aura active</Text> : null}
               {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} check-in XP</Text> : null}
             </View>
             <Button
@@ -892,6 +894,10 @@ const styles = StyleSheet.create({
     gap: 18,
     paddingVertical: 32
   },
+  timerCardAura: {
+    borderColor: "rgba(56,189,248,0.34)",
+    backgroundColor: "rgba(56,189,248,0.08)"
+  },
   topicInput: {
     width: "100%",
     maxWidth: 520,
@@ -999,6 +1005,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${palette.success}55`,
     backgroundColor: `${palette.success}18`,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  auraPill: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.34)",
+    backgroundColor: "rgba(56,189,248,0.12)",
     paddingHorizontal: 10,
     paddingVertical: 5
   },

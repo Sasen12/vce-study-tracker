@@ -146,6 +146,7 @@ type AppState = {
   unlockTitle: (titleId: string) => Promise<void>;
   applyTitle: (titleId: string) => Promise<void>;
   unlockBadge: (badgeId: string) => Promise<void>;
+  unlockPerk: (perkId: string) => Promise<void>;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -393,6 +394,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   unlockBadge: async (badgeId) => {
     const data = await studyApi.unlockBadge(badgeId);
+    set({ gamification: data.gamification });
+  },
+  unlockPerk: async (perkId) => {
+    const data = await studyApi.unlockPerk(perkId);
     set({ gamification: data.gamification });
   }
 }));

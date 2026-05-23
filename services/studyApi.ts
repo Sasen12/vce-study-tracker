@@ -29,6 +29,7 @@ import type {
   ThemeShopItem,
   TitleShopItem,
   BadgeShopItem,
+  PerkShopItem,
   EventRecurrence,
   EventType,
   UserGiftMessage,
@@ -233,7 +234,13 @@ export const studyApi = {
       body: { optIn }
     }),
   themeShop: () =>
-    apiFetch<{ items: ThemeShopItem[]; themes: ThemeShopItem[]; titles: TitleShopItem[]; badges: BadgeShopItem[] }>(
+    apiFetch<{
+      items: ThemeShopItem[];
+      themes: ThemeShopItem[];
+      titles: TitleShopItem[];
+      badges: BadgeShopItem[];
+      perks: PerkShopItem[];
+    }>(
       "/gamification/shop"
     ),
   unlockTheme: (themeId: string) =>
@@ -245,5 +252,7 @@ export const studyApi = {
   applyTitle: (titleId: string) =>
     apiFetch<{ gamification: Gamification }>(`/gamification/titles/${titleId}/apply`, { method: "POST" }),
   unlockBadge: (badgeId: string) =>
-    apiFetch<{ gamification: Gamification }>(`/gamification/badges/${badgeId}/unlock`, { method: "POST" })
+    apiFetch<{ gamification: Gamification }>(`/gamification/badges/${badgeId}/unlock`, { method: "POST" }),
+  unlockPerk: (perkId: string) =>
+    apiFetch<{ gamification: Gamification }>(`/gamification/perks/${perkId}/unlock`, { method: "POST" })
 };

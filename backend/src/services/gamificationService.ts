@@ -249,6 +249,44 @@ export const BADGE_SHOP_ITEMS = [
   }
 ] as const;
 
+export const PERK_SHOP_ITEMS = [
+  {
+    id: "rescue_plus",
+    label: "Rescue Plus",
+    price: 120,
+    icon: "lifebuoy",
+    description: "Unlock 8, 12 and 18 minute rescue presets on Home."
+  },
+  {
+    id: "focus_aura",
+    label: "Focus Aura",
+    price: 180,
+    icon: "radar",
+    description: "Give the study timer a subtle unlocked focus-state glow."
+  },
+  {
+    id: "streak_shield",
+    label: "Streak Shield",
+    price: 240,
+    icon: "shield-check-outline",
+    description: "Adds a quiet 8 minute save-the-streak launcher when today is empty."
+  },
+  {
+    id: "victory_vault",
+    label: "Victory Vault",
+    price: 300,
+    icon: "archive-star-outline",
+    description: "Unlocks a recent wins vault from your logged study evidence."
+  },
+  {
+    id: "boss_battle",
+    label: "Boss Battle Deck",
+    price: 420,
+    icon: "sword-cross",
+    description: "Jump straight into a hard battle drill from Home."
+  }
+] as const;
+
 export type ThemeShopItem = (typeof THEME_SHOP_ITEMS)[number];
 
 export const calculateSessionXp = (durationSeconds: number) => {
@@ -413,7 +451,9 @@ export const recordStudySessionEffects = async (input: {
 const themeById = (themeId: string) => THEME_SHOP_ITEMS.find((item) => item.id === themeId);
 const titleById = (titleId: string) => TITLE_SHOP_ITEMS.find((item) => item.id === titleId);
 const badgeById = (badgeId: string) => BADGE_SHOP_ITEMS.find((item) => item.id === badgeId);
+const perkById = (perkId: string) => PERK_SHOP_ITEMS.find((item) => item.id === perkId);
 const titleCosmeticId = (titleId: string) => `title:${titleId}`;
+const perkCosmeticId = (perkId: string) => `perk:${perkId}`;
 
 export const unlockTheme = async (userId: string, themeId: string) => {
   const theme = themeById(themeId);
@@ -545,6 +585,34 @@ export const unlockBadge = async (userId: string, badgeId: string) => {
     data: {
       xpBalance: { decrement: badge.price },
       badges: mergeBadges(gamification.badges, [badge.id])
+    }
+  });
+};
+
+export const unlockPerk = async (userId: string, perkId: string) => {
+  const perk = perkById(perkId);
+  if (!perk) throw new Error("Perk not found");
+
+  const gamification = await ensureGamification(userId);
+  const unlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
+  const cosmeticId = perkCosmeticId(perk.id);
+
+  if (unlocked.includes(cosmeticId)) {
+    return prisma.userGamification.update({
+      where: { userId },
+      data: { unlockedCosmetics: unlocked }
+    });
+  }
+
+  if (gamification.xpBalance < perk.price) {
+    throw new Error("Not enough XP coins");
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      xpBalance: { decrement: perk.price },
+      unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [cosmeticId])
     }
   });
 };

@@ -128,6 +128,49 @@ export const BADGE_SHOP_ITEMS = [
   }
 ];
 
+export const PERK_SHOP_ITEMS = [
+  {
+    id: "rescue_plus",
+    label: "Rescue Plus",
+    price: 120,
+    icon: "lifebuoy",
+    description: "Unlock 8, 12 and 18 minute rescue presets on Home."
+  },
+  {
+    id: "focus_aura",
+    label: "Focus Aura",
+    price: 180,
+    icon: "radar",
+    description: "Give the study timer a subtle unlocked focus-state glow."
+  },
+  {
+    id: "streak_shield",
+    label: "Streak Shield",
+    price: 240,
+    icon: "shield-check-outline",
+    description: "Adds a quiet 8 minute save-the-streak launcher when today is empty."
+  },
+  {
+    id: "victory_vault",
+    label: "Victory Vault",
+    price: 300,
+    icon: "archive-star-outline",
+    description: "Unlocks a recent wins vault from your logged study evidence."
+  },
+  {
+    id: "boss_battle",
+    label: "Boss Battle Deck",
+    price: 420,
+    icon: "sword-cross",
+    description: "Jump straight into a hard battle drill from Home."
+  }
+];
+
+export const perkCosmeticId = (perkId: string) => `perk:${perkId}`;
+
+export const hasUnlockedPerk = (unlockedCosmetics: string[] | undefined | null, perkId: string) =>
+  Boolean(unlockedCosmetics?.includes(perkCosmeticId(perkId)));
+
 export const titleLabelById = (titleId?: string | null) =>
   TITLE_SHOP_ITEMS.find((title) => title.id === titleId)?.label ??
   TITLE_SHOP_ITEMS.find((title) => title.id === DEFAULT_TITLE_ID)?.label ??

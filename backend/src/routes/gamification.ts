@@ -9,10 +9,12 @@ import {
   BADGE_SHOP_ITEMS,
   DEFAULT_TITLE_ID,
   ensureGamification,
+  PERK_SHOP_ITEMS,
   syncAllBadges,
   THEME_SHOP_ITEMS,
   TITLE_SHOP_ITEMS,
   unlockBadge,
+  unlockPerk,
   unlockTheme,
   unlockTitle
 } from "../services/gamificationService.js";
@@ -148,7 +150,13 @@ gamificationRouter.post(
 gamificationRouter.get(
   "/shop",
   asyncHandler(async (_req, res) => {
-    res.json({ items: THEME_SHOP_ITEMS, themes: THEME_SHOP_ITEMS, titles: TITLE_SHOP_ITEMS, badges: BADGE_SHOP_ITEMS });
+    res.json({
+      items: THEME_SHOP_ITEMS,
+      themes: THEME_SHOP_ITEMS,
+      titles: TITLE_SHOP_ITEMS,
+      badges: BADGE_SHOP_ITEMS,
+      perks: PERK_SHOP_ITEMS
+    });
   })
 );
 
@@ -213,6 +221,19 @@ gamificationRouter.post(
       res.json({ gamification });
     } catch (error) {
       throw new HttpError(error instanceof Error && error.message === "Badge not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock badge");
+    }
+  })
+);
+
+gamificationRouter.post(
+  "/perks/:perkId/unlock",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const gamification = await unlockPerk(authReq.user.id, req.params.perkId);
+      res.json({ gamification });
+    } catch (error) {
+      throw new HttpError(error instanceof Error && error.message === "Perk not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock perk");
     }
   })
 );

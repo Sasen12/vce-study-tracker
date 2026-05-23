@@ -1,22 +1,30 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Button, SegmentedButtons, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
-import { BADGE_SHOP_ITEMS, DEFAULT_TITLE_ID, STARTER_TITLE_IDS, TITLE_SHOP_ITEMS } from "@/constants/gamification";
+import {
+  BADGE_SHOP_ITEMS,
+  DEFAULT_TITLE_ID,
+  PERK_SHOP_ITEMS,
+  STARTER_TITLE_IDS,
+  TITLE_SHOP_ITEMS,
+  perkCosmeticId
+} from "@/constants/gamification";
 import { PRO_PLAN_VISIBLE } from "@/constants/proPlan";
 import { palette, themeShopItems } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 
-type ShopMode = "themes" | "titles" | "badges";
+type ShopMode = "themes" | "titles" | "badges" | "perks";
 
 export default function ShopScreen() {
   useTrackScreen("shop");
-  const { gamification, loading, fetchAll, unlockTheme, applyTheme, unlockTitle, applyTitle, unlockBadge } = useAppStore();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const { gamification, loading, fetchAll, unlockTheme, applyTheme, unlockTitle, applyTitle, unlockBadge, unlockPerk } = useAppStore();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shopError, setShopError] = useState<string | null>(null);
   const [mode, setMode] = useState<ShopMode>("themes");
@@ -26,6 +34,12 @@ export default function ShopScreen() {
       fetchAll();
     }, [fetchAll])
   );
+
+  useEffect(() => {
+    if (params.mode === "themes" || params.mode === "titles" || params.mode === "badges" || params.mode === "perks") {
+      setMode(params.mode);
+    }
+  }, [params.mode]);
 
   const xpBalance = gamification?.xpBalance ?? 0;
   const activeTheme = gamification?.activeTheme ?? "midnight";
@@ -38,13 +52,16 @@ export default function ShopScreen() {
   const unlockedCount = themeShopItems.filter((theme) => unlocked.has(theme.id)).length;
   const titleCount = TITLE_SHOP_ITEMS.filter((title) => unlocked.has(`title:${title.id}`)).length;
   const badgeCount = BADGE_SHOP_ITEMS.filter((badge) => badges.has(badge.id)).length;
+  const perkCount = PERK_SHOP_ITEMS.filter((perk) => unlocked.has(perkCosmeticId(perk.id))).length;
   const entryPrice = useMemo(() => {
     const prices =
       mode === "themes"
         ? themeShopItems.map((item) => item.price)
         : mode === "titles"
           ? TITLE_SHOP_ITEMS.map((item) => item.price)
-          : BADGE_SHOP_ITEMS.map((item) => item.price);
+          : mode === "badges"
+            ? BADGE_SHOP_ITEMS.map((item) => item.price)
+            : PERK_SHOP_ITEMS.map((item) => item.price);
     return Math.min(...prices.filter((price) => price > 0));
   }, [mode]);
 
@@ -87,6 +104,18 @@ export default function ShopScreen() {
       await unlockBadge(badgeId);
     } catch (error) {
       setShopError(error instanceof Error ? error.message : "Could not unlock badge");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const choosePerk = async (perkId: string) => {
+    setBusyId(`perk:${perkId}`);
+    setShopError(null);
+    try {
+      await unlockPerk(perkId);
+    } catch (error) {
+      setShopError(error instanceof Error ? error.message : "Could not unlock perk");
     } finally {
       setBusyId(null);
     }
@@ -136,21 +165,37 @@ export default function ShopScreen() {
         <View style={styles.summaryTop}>
           <View style={styles.summaryIcon}>
             <MaterialCommunityIcons
-              name={mode === "themes" ? "palette-swatch-outline" : mode === "titles" ? "tag-text-outline" : "medal-outline"}
+              name={
+                mode === "themes"
+                  ? "palette-swatch-outline"
+                  : mode === "titles"
+                    ? "tag-text-outline"
+                    : mode === "badges"
+                      ? "medal-outline"
+                      : "star-four-points-outline"
+              }
               color={palette.primary}
               size={24}
             />
           </View>
           <View style={styles.flexText}>
             <Text style={styles.cardTitle}>
-              {mode === "themes" ? "Theme unlocks" : mode === "titles" ? "Profile titles" : "Collectible badges"}
+              {mode === "themes"
+                ? "Theme unlocks"
+                : mode === "titles"
+                  ? "Profile titles"
+                  : mode === "badges"
+                    ? "Collectible badges"
+                    : "Study perks"}
             </Text>
             <Text style={styles.muted}>
               {mode === "themes"
                 ? `${unlockedCount}/${themeShopItems.length} unlocked`
                 : mode === "titles"
                   ? `${titleCount}/${TITLE_SHOP_ITEMS.length} unlocked`
-                  : `${badgeCount}/${BADGE_SHOP_ITEMS.length} collected`}
+                  : mode === "badges"
+                    ? `${badgeCount}/${BADGE_SHOP_ITEMS.length} collected`
+                    : `${perkCount}/${PERK_SHOP_ITEMS.length} unlocked`}
             </Text>
             <Text style={styles.muted}>Starter picks from {entryPrice} coins.</Text>
           </View>
@@ -163,7 +208,8 @@ export default function ShopScreen() {
         buttons={[
           { value: "themes", label: "Themes", icon: "palette-outline" },
           { value: "titles", label: "Titles", icon: "tag-text-outline" },
-          { value: "badges", label: "Badges", icon: "medal-outline" }
+          { value: "badges", label: "Badges", icon: "medal-outline" },
+          { value: "perks", label: "Perks", icon: "star-four-points-outline" }
         ]}
       />
 
@@ -298,6 +344,46 @@ export default function ShopScreen() {
                   disabled={loadingBadge || isUnlocked || !canAfford}
                   icon={isUnlocked ? "check" : "lock-open-outline"}
                   onPress={() => chooseBadge(badge.id)}
+                >
+                  {actionLabel}
+                </Button>
+              </AppCard>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {mode === "perks" ? (
+        <View style={styles.itemList}>
+          {PERK_SHOP_ITEMS.map((perk) => {
+            const isUnlocked = unlocked.has(perkCosmeticId(perk.id));
+            const canAfford = xpBalance >= perk.price;
+            const loadingPerk = busyId === `perk:${perk.id}`;
+            const actionLabel = isUnlocked ? "Unlocked" : canAfford ? "Unlock" : `${perk.price - xpBalance} more`;
+
+            return (
+              <AppCard key={perk.id} style={[styles.shopItemCard, isUnlocked && styles.shopItemCardActive]}>
+                <View style={styles.shopItemTop}>
+                  <View style={[styles.shopItemIcon, styles.perkIcon]}>
+                    <MaterialCommunityIcons
+                      name={perk.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                      color={palette.info}
+                      size={22}
+                    />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.shopItemTitle}>{perk.label}</Text>
+                    <Text style={styles.muted}>{perk.description}</Text>
+                    <Text style={styles.themePrice}>{perk.price} coins</Text>
+                  </View>
+                </View>
+                <Button
+                  mode={isUnlocked ? "outlined" : "contained"}
+                  compact
+                  loading={loadingPerk}
+                  disabled={loadingPerk || isUnlocked || !canAfford}
+                  icon={isUnlocked ? "check" : "lock-open-outline"}
+                  onPress={() => choosePerk(perk.id)}
                 >
                   {actionLabel}
                 </Button>
@@ -464,6 +550,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: `${palette.primary}18`
+  },
+  perkIcon: {
+    backgroundColor: `${palette.info}18`
   },
   shopItemTitle: {
     color: palette.text,

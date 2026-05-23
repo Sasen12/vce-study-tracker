@@ -272,6 +272,14 @@ export type BadgeShopItem = {
   description: string;
 };
 
+export type PerkShopItem = {
+  id: string;
+  label: string;
+  price: number;
+  icon: string;
+  description: string;
+};
+
 export type GeneratedQuestion = {
   question: string;
   marks: number;

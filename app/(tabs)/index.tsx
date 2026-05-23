@@ -13,6 +13,7 @@ import { SubjectSelector } from "@/components/ui/SubjectSelector";
 import { StreakWidget } from "@/components/gamification/StreakWidget";
 import { motion } from "@/constants/motion";
 import { palette } from "@/constants/theme";
+import { PERK_SHOP_ITEMS, hasUnlockedPerk, perkCosmeticId } from "@/constants/gamification";
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { studyApi } from "@/services/studyApi";
@@ -557,8 +558,25 @@ export default function DashboardScreen() {
   const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
   const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
   const rescueModeBody = rescueSubject
-    ? `12 minutes on ${rescueSubject.subjectName}${rescueTopic ? ` - ${rescueTopic}` : ""}. No setup spiral.`
+    ? `Quick pressure block for ${rescueSubject.subjectName}${rescueTopic ? ` - ${rescueTopic}` : ""}. No setup spiral.`
     : "Add a subject first, then rescue mode can choose the repair.";
+  const unlockedCosmetics = gamification?.unlockedCosmetics ?? [];
+  const rescuePlusUnlocked = hasUnlockedPerk(unlockedCosmetics, "rescue_plus");
+  const focusAuraUnlocked = hasUnlockedPerk(unlockedCosmetics, "focus_aura");
+  const streakShieldUnlocked = hasUnlockedPerk(unlockedCosmetics, "streak_shield");
+  const victoryVaultUnlocked = hasUnlockedPerk(unlockedCosmetics, "victory_vault");
+  const bossBattleUnlocked = hasUnlockedPerk(unlockedCosmetics, "boss_battle");
+  const unlockedPerkCount = PERK_SHOP_ITEMS.filter((perk) => unlockedCosmetics.includes(perkCosmeticId(perk.id))).length;
+  const rescuePresets = rescuePlusUnlocked ? [8, 12, 18] : [12];
+  const studiedToday = (stats?.todaySeconds ?? 0) > 0;
+  const recentWinLogs = useMemo(
+    () =>
+      notes
+        .filter((note) => note.tags.includes("win-log"))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 3),
+    [notes]
+  );
 
   const openPanicForEvent = (event?: StudyEvent) => {
     const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
@@ -691,16 +709,30 @@ export default function DashboardScreen() {
     });
   };
 
-  const startRescueMode = () => {
+  const startRescueMode = (minutes = 12) => {
     if (!rescueSubject) return;
     router.push({
       pathname: "/(tabs)/study",
       params: {
         mode: "timer",
-        targetMinutes: "12",
+        targetMinutes: String(minutes),
         subjectId: rescueSubject.id,
         rescueTopic,
         rescue: "1"
+      }
+    });
+  };
+
+  const openBossBattle = () => {
+    if (!rescueSubject) return;
+    router.push({
+      pathname: "/(tabs)/questions",
+      params: {
+        mode: "game",
+        subjectId: rescueSubject.id,
+        topic: rescueTopic,
+        difficulty: "hard",
+        count: "5"
       }
     });
   };
@@ -910,7 +942,7 @@ export default function DashboardScreen() {
               <Text variant="titleMedium" style={styles.cardTitle}>
                 Study Command Console
               </Text>
-              <Text style={styles.muted}>Five quiet tools that make the next move obvious.</Text>
+              <Text style={styles.muted}>Five quiet unlockable tools that make the next move obvious.</Text>
             </View>
             <View style={styles.consoleScore}>
               <Text style={styles.consoleScoreValue}>{evidenceAverage}</Text>
@@ -937,6 +969,37 @@ export default function DashboardScreen() {
               ? `Radar: ${deadlineRadar.nearest.title} is ${countdownLabel(deadlineRadar.nearest)}.`
               : "Radar: no deadline pressure logged yet."}
           </Text>
+
+          <View style={styles.perkRail}>
+            {PERK_SHOP_ITEMS.map((perk) => {
+              const unlockedPerk = unlockedCosmetics.includes(perkCosmeticId(perk.id));
+              return (
+                <Pressable
+                  key={perk.id}
+                  accessibilityRole="button"
+                  style={[styles.perkChip, unlockedPerk && styles.perkChipUnlocked]}
+                  onPress={() => router.push({ pathname: "/(tabs)/shop", params: { mode: "perks" } })}
+                >
+                  <MaterialCommunityIcons
+                    name={perk.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                    color={unlockedPerk ? palette.info : palette.muted}
+                    size={16}
+                  />
+                  <Text style={unlockedPerk ? styles.perkChipTextUnlocked : styles.perkChipText} numberOfLines={1}>
+                    {perk.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.perkCountText}>{unlockedPerkCount}/{PERK_SHOP_ITEMS.length} perks unlocked in Shop.</Text>
+
+          {focusAuraUnlocked ? (
+            <View style={styles.focusAuraNotice}>
+              <MaterialCommunityIcons name="radar" color={palette.info} size={17} />
+              <Text style={styles.focusAuraText}>Focus Aura is armed for timer sessions.</Text>
+            </View>
+          ) : null}
 
           <View style={styles.consoleSection}>
             <View style={styles.rowBetween}>
@@ -1035,13 +1098,58 @@ export default function DashboardScreen() {
               <MaterialCommunityIcons name="lifebuoy" color={palette.text} size={20} />
             </View>
             <View style={styles.flexText}>
-              <Text style={styles.rescueTitle}>12-minute rescue mode</Text>
+              <Text style={styles.rescueTitle}>Rescue mode</Text>
               <Text style={styles.muted}>{rescueModeBody}</Text>
             </View>
-            <Button mode="contained" compact icon="timer-sand" disabled={!rescueSubject} onPress={startRescueMode}>
-              Rescue
-            </Button>
+            <View style={styles.rescueActions}>
+              {rescuePresets.map((minutes) => (
+                <Button key={minutes} mode={minutes === 12 ? "contained" : "outlined"} compact disabled={!rescueSubject} onPress={() => startRescueMode(minutes)}>
+                  {minutes}m
+                </Button>
+              ))}
+              {!rescuePlusUnlocked ? (
+                <Pressable
+                  accessibilityRole="button"
+                  style={styles.lockedPerkButton}
+                  onPress={() => router.push({ pathname: "/(tabs)/shop", params: { mode: "perks" } })}
+                >
+                  <MaterialCommunityIcons name="lock-outline" color={palette.muted} size={15} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
+
+          {streakShieldUnlocked ? (
+            <View style={styles.streakShieldPanel}>
+              <View style={styles.shieldIcon}>
+                <MaterialCommunityIcons name="shield-check-outline" color={studiedToday ? palette.success : palette.warning} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.rescueTitle}>Streak Shield</Text>
+                <Text style={styles.muted}>
+                  {studiedToday ? "Shield quiet. Today already has study evidence." : "No study logged today. Launch an 8 minute shield block."}
+                </Text>
+              </View>
+              <Button mode={studiedToday ? "outlined" : "contained"} compact disabled={!rescueSubject} onPress={() => startRescueMode(8)}>
+                {studiedToday ? "Ready" : "8m"}
+              </Button>
+            </View>
+          ) : null}
+
+          {bossBattleUnlocked ? (
+            <View style={styles.bossBattlePanel}>
+              <View style={styles.bossIcon}>
+                <MaterialCommunityIcons name="sword-cross" color={palette.text} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.rescueTitle}>Boss Battle Deck</Text>
+                <Text style={styles.muted}>Hard-mode battle drill from the topic that needs pressure testing.</Text>
+              </View>
+              <Button mode="contained-tonal" compact disabled={!rescueSubject} onPress={openBossBattle}>
+                Battle
+              </Button>
+            </View>
+          ) : null}
 
           <View style={styles.winLogBox}>
             <Text style={styles.consoleSectionTitle}>Tiny win log</Text>
@@ -1060,6 +1168,25 @@ export default function DashboardScreen() {
               </Button>
             </View>
             {winNotice ? <Text style={winNotice.includes("Logged") ? styles.successText : styles.error}>{winNotice}</Text> : null}
+            {victoryVaultUnlocked ? (
+              <View style={styles.vaultList}>
+                {recentWinLogs.length ? (
+                  recentWinLogs.map((note) => (
+                    <View key={note.id} style={styles.vaultItem}>
+                      <MaterialCommunityIcons name="archive-star-outline" color={palette.warning} size={16} />
+                      <View style={styles.flexText}>
+                        <Text style={styles.vaultTitle} numberOfLines={1}>
+                          {note.body}
+                        </Text>
+                        <Text style={styles.muted}>{note.createdAt.slice(0, 10)}</Text>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.muted}>Victory Vault unlocked. Log a tiny win and it will stay visible here.</Text>
+                )}
+              </View>
+            ) : null}
           </View>
         </AppCard>
       </Animated.View>
@@ -1694,6 +1821,63 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: "Outfit_700Bold"
   },
+  perkRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  perkChip: {
+    minHeight: 34,
+    maxWidth: 170,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 9,
+    paddingVertical: 6
+  },
+  perkChipUnlocked: {
+    borderColor: "rgba(56,189,248,0.28)",
+    backgroundColor: "rgba(56,189,248,0.09)"
+  },
+  perkChipText: {
+    flexShrink: 1,
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  perkChipTextUnlocked: {
+    flexShrink: 1,
+    color: palette.text,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  perkCountText: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  focusAuraNotice: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.22)",
+    backgroundColor: "rgba(56,189,248,0.07)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  focusAuraText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
   consoleSection: {
     gap: 10,
     borderTopWidth: 1,
@@ -1808,6 +1992,23 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(56,189,248,0.07)",
     padding: 12
   },
+  rescueActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 8
+  },
+  lockedPerkButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
   rescueIcon: {
     width: 40,
     height: 40,
@@ -1819,6 +2020,44 @@ const styles = StyleSheet.create({
   rescueTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  streakShieldPanel: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.22)",
+    backgroundColor: "rgba(74,222,128,0.07)",
+    padding: 12
+  },
+  shieldIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(74,222,128,0.14)"
+  },
+  bossBattlePanel: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,107,0.24)",
+    backgroundColor: "rgba(255,107,107,0.08)",
+    padding: 12
+  },
+  bossIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,107,107,0.14)"
   },
   winLogBox: {
     gap: 10,
@@ -1834,6 +2073,23 @@ const styles = StyleSheet.create({
   winInput: {
     flex: 1,
     minWidth: 0
+  },
+  vaultList: {
+    gap: 8
+  },
+  vaultItem: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  vaultTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
   },
   weaknessCard: {
     gap: 12,

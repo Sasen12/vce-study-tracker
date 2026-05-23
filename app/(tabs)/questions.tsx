@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
@@ -307,6 +307,13 @@ function FlashcardReview({
 
 export default function QuestionsScreen() {
   useTrackScreen("questions");
+  const params = useLocalSearchParams<{
+    mode?: string;
+    subjectId?: string;
+    topic?: string;
+    difficulty?: string;
+    count?: string;
+  }>();
   const screenRef = useRef<ScrollView | null>(null);
   const { subjects, generatedQuestions, savedQuestions, notes, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer, createNote, deleteNote } =
     useAppStore();
@@ -369,6 +376,32 @@ export default function QuestionsScreen() {
       fetchAll();
     }, [fetchAll])
   );
+
+  useEffect(() => {
+    if (params.mode === "game" || params.mode === "generate" || params.mode === "saved" || params.mode === "tools") {
+      setMode(params.mode);
+    }
+  }, [params.mode]);
+
+  useEffect(() => {
+    if (params.subjectId) setSubjectId(params.subjectId);
+  }, [params.subjectId]);
+
+  useEffect(() => {
+    if (params.topic) setTopic(params.topic);
+  }, [params.topic]);
+
+  useEffect(() => {
+    if (params.difficulty === "easy" || params.difficulty === "medium" || params.difficulty === "hard") {
+      setDifficulty(params.difficulty);
+    }
+  }, [params.difficulty]);
+
+  useEffect(() => {
+    if (params.count === "1" || params.count === "3" || params.count === "5") {
+      setCount(Number(params.count) as 1 | 3 | 5);
+    }
+  }, [params.count]);
 
   useEffect(() => {
     let active = true;
