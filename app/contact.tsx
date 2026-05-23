@@ -8,8 +8,6 @@ import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { palette } from "@/constants/theme";
 import { apiFetch } from "@/services/api";
 
-const contactEmail = "techsavvy356@gmail.com";
-
 export default function ContactPage() {
   const { width } = useWindowDimensions();
   const isWide = width >= 940;
@@ -87,10 +85,10 @@ export default function ContactPage() {
             </View>
 
             <View style={styles.directCard}>
-              <Text style={styles.cardLabel}>Direct email</Text>
-              <Text style={styles.emailText}>{contactEmail}</Text>
+              <Text style={styles.cardLabel}>VCE Pulse inbox</Text>
+              <Text style={styles.emailText}>Private by default</Text>
               <Text style={styles.cardBody}>
-                The form sends inside VCE Pulse. This address is still here if you want it later.
+                Send the form below and it lands inside the app admin inbox. No public address, no mail app jump.
               </Text>
             </View>
           </View>
@@ -101,7 +99,7 @@ export default function ContactPage() {
                 <Text style={styles.sectionLabel}>Student details</Text>
                 <Text style={styles.sectionTitle}>Send the context in one clean message.</Text>
                 <Text style={styles.sectionBody}>
-                  The form prepares an email with everything needed to reply properly.
+                  The form sends your details to the VCE Pulse inbox with everything needed to reply properly.
                 </Text>
                 <View style={styles.contactSignal}>
                   <MaterialCommunityIcons name="email-fast-outline" color={palette.success} size={22} />
@@ -169,7 +167,7 @@ export default function ContactPage() {
                 {status ? <Text style={styles.status}>{status}</Text> : null}
 
                 <Button mode="contained" icon="email-send-outline" loading={submitting} disabled={!canSubmit || submitting} onPress={sendEmail}>
-                  Send email
+                  Send message
                 </Button>
 
                 <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.startLink}>

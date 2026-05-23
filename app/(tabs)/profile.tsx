@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
@@ -16,6 +17,13 @@ import { estimateAtarFromScaledScores, scaleStudyScoreForAtar } from "@/constant
 import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
+import {
+  DEFAULT_TAB_OPTIONS,
+  defaultTabLabelFor,
+  loadDefaultTab,
+  saveDefaultTab,
+  type DefaultTabId
+} from "@/utils/defaultTab";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
 
 const clampStudyScore = (score: number) => Math.max(0, Math.min(50, score));
@@ -390,6 +398,8 @@ export default function ProfileScreen() {
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [deletingSubject, setDeletingSubject] = useState<UserSubject | null>(null);
   const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
+  const [defaultTab, setDefaultTab] = useState<DefaultTabId>("home");
+  const [defaultTabMessage, setDefaultTabMessage] = useState<string | null>(null);
   const subjectLimit = maxSubjects;
 
   useFocusEffect(
@@ -397,6 +407,27 @@ export default function ProfileScreen() {
       fetchAll();
     }, [fetchAll])
   );
+
+  useEffect(() => {
+    let active = true;
+    loadDefaultTab(user?.id).then((tab) => {
+      if (active) setDefaultTab(tab);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const chooseDefaultTab = async (nextTab: DefaultTabId) => {
+    setDefaultTab(nextTab);
+    setDefaultTabMessage(null);
+    try {
+      await saveDefaultTab(user?.id, nextTab);
+      setDefaultTabMessage(`${defaultTabLabelFor(nextTab)} will open first after login.`);
+    } catch {
+      setDefaultTabMessage("Could not save that start tab. Try again.");
+    }
+  };
 
   const weekStart = useMemo(startOfWeek, []);
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
@@ -526,6 +557,44 @@ export default function ProfileScreen() {
 
       <AppCard>
         <XPBar gamification={gamification} />
+      </AppCard>
+
+      <AppCard style={styles.preferenceCard}>
+        <View>
+          <Text variant="titleMedium" style={styles.cardTitle}>
+            Start tab
+          </Text>
+          <Text style={styles.muted}>Choose what opens first after login.</Text>
+        </View>
+        <View style={styles.defaultTabGrid}>
+          {DEFAULT_TAB_OPTIONS.map((option) => {
+            const active = option.id === defaultTab;
+            return (
+              <Pressable
+                key={option.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => chooseDefaultTab(option.id)}
+                style={[styles.defaultTabOption, active && styles.defaultTabOptionActive]}
+              >
+                <MaterialCommunityIcons
+                  name={option.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                  color={active ? palette.primary : palette.muted}
+                  size={20}
+                />
+                <View style={styles.defaultTabTextWrap}>
+                  <Text style={[styles.defaultTabTitle, active && styles.defaultTabTitleActive]} numberOfLines={1}>
+                    {option.label}
+                  </Text>
+                  <Text style={styles.defaultTabDescription} numberOfLines={1}>
+                    {option.description}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        {defaultTabMessage ? <Text style={styles.preferenceMessage}>{defaultTabMessage}</Text> : null}
       </AppCard>
 
       <AppCard style={styles.atarCard}>
@@ -700,6 +769,54 @@ const styles = StyleSheet.create({
   muted: {
     color: palette.muted,
     lineHeight: 20
+  },
+  preferenceCard: {
+    gap: 14
+  },
+  defaultTabGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  defaultTabOption: {
+    flexGrow: 1,
+    flexBasis: 150,
+    minWidth: 128,
+    minHeight: 64,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  defaultTabOptionActive: {
+    borderColor: palette.primary,
+    backgroundColor: `${palette.primary}18`
+  },
+  defaultTabTextWrap: {
+    flex: 1,
+    minWidth: 0
+  },
+  defaultTabTitle: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold"
+  },
+  defaultTabTitleActive: {
+    color: palette.text
+  },
+  defaultTabDescription: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
+  },
+  preferenceMessage: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 13
   },
   atarCard: {
     gap: 10

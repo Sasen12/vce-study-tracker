@@ -7,6 +7,7 @@ import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
 import { useAuthStore } from "@/store/authStore";
+import { defaultTabRouteFor, loadDefaultTab } from "@/utils/defaultTab";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -18,7 +19,9 @@ export default function LoginScreen() {
   const submit = async () => {
     try {
       await login(email, password);
-      router.replace("/(tabs)");
+      const userId = useAuthStore.getState().user?.id;
+      const defaultTab = await loadDefaultTab(userId);
+      router.replace(defaultTabRouteFor(defaultTab));
     } catch {
       // The auth store surfaces the message inline.
     }
