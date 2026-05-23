@@ -117,6 +117,9 @@ export default function StudyScreen() {
   const params = useLocalSearchParams<{
     subjectId?: string;
     mode?: string;
+    targetMinutes?: string;
+    rescueTopic?: string;
+    rescue?: string;
     tutorTopic?: string;
     tutorGoal?: string;
     tutorEventId?: string;
@@ -173,10 +176,26 @@ export default function StudyScreen() {
   }, [params.subjectId, selectedSubjectId, subjects]);
 
   useEffect(() => {
-    if (params.mode === "coach") {
-      setMode("coach");
+    if (params.mode === "coach" || params.mode === "timer") {
+      setMode(params.mode);
     }
   }, [params.mode]);
+
+  useEffect(() => {
+    if (!params.targetMinutes || running) return;
+    const parsed = Number(params.targetMinutes);
+    if (!Number.isFinite(parsed)) return;
+    const minutes = Math.min(90, Math.max(10, Math.round(parsed)));
+    setTargetMinutes(String(minutes));
+  }, [params.targetMinutes, running]);
+
+  useEffect(() => {
+    if (!params.rescueTopic || running) return;
+    setStudyTopic(params.rescueTopic);
+    if (params.rescue === "1") {
+      setMessage("Rescue mode loaded: 12 minutes, one topic, no setup spiral.");
+    }
+  }, [params.rescue, params.rescueTopic, running]);
 
   useEffect(() => {
     if (running) {
@@ -292,6 +311,15 @@ export default function StudyScreen() {
     [checkpointQuestion]
   );
   const minutesUntilCheckpoint = Math.max(0, Math.ceil((nextCheckpointAt - elapsed) / 60));
+  const targetLengthButtons = useMemo(() => {
+    const base = [
+      { value: "25", label: "25m" },
+      { value: "50", label: "50m" },
+      { value: "75", label: "75m" }
+    ];
+    if (base.some((button) => button.value === targetMinutes)) return base;
+    return [{ value: targetMinutes, label: `${targetMinutes}m` }, ...base].sort((a, b) => Number(a.value) - Number(b.value));
+  }, [targetMinutes]);
 
   const askCheckpoint = useCallback(async () => {
     if (!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen) return;
@@ -638,11 +666,7 @@ export default function StudyScreen() {
               <SegmentedButtons
                 value={targetMinutes}
                 onValueChange={setTargetMinutes}
-                buttons={[
-                  { value: "25", label: "25m" },
-                  { value: "50", label: "50m" },
-                  { value: "75", label: "75m" }
-                ]}
+                buttons={targetLengthButtons}
               />
             </View>
             <Animated.View style={timerStyle}>

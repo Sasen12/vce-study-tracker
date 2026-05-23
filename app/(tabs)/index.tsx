@@ -17,7 +17,17 @@ import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { studyApi } from "@/services/studyApi";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
-import type { DailyInspiration, StudyEvent, UserGiftMessage, UserSubject } from "@/types";
+import type {
+  AdaptiveStudyTask,
+  DailyInspiration,
+  SavedQuestion,
+  StudyEvent,
+  StudyNote,
+  StudyResource,
+  StudySession,
+  UserGiftMessage,
+  UserSubject
+} from "@/types";
 import { isStudyTimeEvent } from "@/utils/studyEvents";
 import {
   buildSacPanicPlan,
@@ -91,6 +101,43 @@ type ParkingLotItem = {
   createdAt: string;
 };
 
+type DeadlineRadar = {
+  urgent: number;
+  week: number;
+  runway: number;
+  nearest?: StudyEvent | null;
+};
+
+type TonightPlanItem = {
+  id: string;
+  label: string;
+  title: string;
+  body: string;
+  subjectId?: string | null;
+  topic?: string | null;
+  minutes: number;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  accent: string;
+};
+
+type RevisionDebtItem = {
+  subject: UserSubject;
+  staleQuestions: number;
+  mistakeLogs: number;
+  recentMinutes: number;
+  score: number;
+};
+
+type EvidenceItem = {
+  subject: UserSubject;
+  weekMinutes: number;
+  notesCount: number;
+  questionCount: number;
+  resourceCount: number;
+  score: number;
+  verdict: string;
+};
+
 const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
 
 const briefFallback = (subjects: UserSubject[]): BriefItem => ({
@@ -100,6 +147,140 @@ const briefFallback = (subjects: UserSubject[]): BriefItem => ({
   icon: subjects.length ? "timer-outline" : "book-plus-outline",
   accent: subjects.length ? palette.success : palette.info
 });
+
+const weekStartDate = () => {
+  const date = new Date();
+  const dayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - dayOffset);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const formatMinutes = (minutes: number) => {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+};
+
+const clampStudyMinutes = (minutes?: number | null) => {
+  const safe = Number.isFinite(minutes ?? NaN) ? Math.round(minutes ?? 25) : 25;
+  return Math.min(90, Math.max(10, safe));
+};
+
+const topicFromEvent = (event?: StudyEvent | null) =>
+  event?.description?.trim() || event?.title.replace(/\b(SAC|SAT|exam|task)\b/gi, "").trim() || null;
+
+const subjectForPlanTask = (task: AdaptiveStudyTask, subjects: UserSubject[]) => {
+  const subjectLabel = normaliseLabel(task.subject ?? "");
+  return (
+    subjects.find((subject) => {
+      const subjectName = normaliseLabel(subject.subjectName);
+      return Boolean(subjectName) && (subjectLabel.includes(subjectName) || subjectName.includes(subjectLabel));
+    }) ?? null
+  );
+};
+
+const isMistakeEvidence = (note: StudyNote) =>
+  note.noteType === "mistake_log" || note.tags.includes("mistake-log") || note.tags.includes("timer-check");
+
+const weekMinutesForSubject = (sessions: StudySession[], subjectId: string, start: Date) =>
+  Math.round(
+    sessions
+      .filter((session) => session.subjectId === subjectId && new Date(session.createdAt) >= start)
+      .reduce((sum, session) => sum + session.durationSeconds, 0) / 60
+  );
+
+const buildDeadlineRadar = (events: StudyEvent[]): DeadlineRadar => {
+  const active = events.filter((event) => !event.completed && !isStudyTimeEvent(event) && daysUntil(event.eventDate) >= 0);
+  return active.reduce<DeadlineRadar>(
+    (radar, event) => {
+      const days = daysUntil(event.eventDate);
+      if (days <= 2) radar.urgent += 1;
+      else if (days <= 7) radar.week += 1;
+      else if (days <= 21) radar.runway += 1;
+      if (!radar.nearest || event.eventDate.localeCompare(radar.nearest.eventDate) < 0) radar.nearest = event;
+      return radar;
+    },
+    { urgent: 0, week: 0, runway: 0, nearest: null }
+  );
+};
+
+const buildRevisionDebt = ({
+  subjects,
+  sessions,
+  notes,
+  savedQuestions
+}: {
+  subjects: UserSubject[];
+  sessions: StudySession[];
+  notes: StudyNote[];
+  savedQuestions: SavedQuestion[];
+}) => {
+  const weekStart = weekStartDate();
+  const staleCutoff = addDays(new Date(), -7);
+
+  return subjects
+    .map<RevisionDebtItem>((subject) => {
+      const staleQuestions = savedQuestions.filter(
+        (question) => question.subjectId === subject.id && new Date(question.createdAt) < staleCutoff
+      ).length;
+      const mistakeLogs = notes.filter((note) => note.subjectId === subject.id && isMistakeEvidence(note)).length;
+      const recentMinutes = weekMinutesForSubject(sessions, subject.id, weekStart);
+      const score = staleQuestions * 2 + mistakeLogs + (recentMinutes === 0 && (staleQuestions || mistakeLogs) ? 2 : 0);
+      return { subject, staleQuestions, mistakeLogs, recentMinutes, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+};
+
+const buildEvidenceItems = ({
+  subjects,
+  sessions,
+  goals,
+  notes,
+  savedQuestions,
+  resources
+}: {
+  subjects: UserSubject[];
+  sessions: StudySession[];
+  goals: { subjectId?: string | null; weeklyHoursTarget?: number | null }[];
+  notes: StudyNote[];
+  savedQuestions: SavedQuestion[];
+  resources: StudyResource[];
+}) => {
+  const weekStart = weekStartDate();
+
+  return subjects
+    .map<EvidenceItem>((subject) => {
+      const weekMinutes = weekMinutesForSubject(sessions, subject.id, weekStart);
+      const targetMinutes = Math.max(Number(goals.find((goal) => goal.subjectId === subject.id)?.weeklyHoursTarget ?? 4) * 60, 60);
+      const notesCount = notes.filter((note) => note.subjectId === subject.id).length;
+      const questionCount = savedQuestions.filter((question) => question.subjectId === subject.id).length;
+      const resourceCount = resources.filter((resource) => resource.subjectId === subject.id).length;
+      const score = Math.min(
+        100,
+        Math.round(
+          Math.min(45, (weekMinutes / targetMinutes) * 45) +
+            Math.min(18, notesCount * 6) +
+            Math.min(18, questionCount * 6) +
+            Math.min(12, resourceCount * 6) +
+            (weekMinutes > 0 ? 7 : 0)
+        )
+      );
+      const verdict = score >= 75 ? "Covered" : score >= 45 ? "Building" : "Needs proof";
+      return { subject, weekMinutes, notesCount, questionCount, resourceCount, score, verdict };
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3);
+};
 
 export default function DashboardScreen() {
   useTrackScreen("home");
@@ -113,6 +294,7 @@ export default function DashboardScreen() {
     savedQuestions,
     notes,
     resources,
+    latestPlan,
     gamification,
     loading,
     error,
@@ -135,6 +317,9 @@ export default function DashboardScreen() {
   const [parkingLot, setParkingLot] = useState<ParkingLotItem[]>([]);
   const [parkingNotice, setParkingNotice] = useState<string | null>(null);
   const [savingParkingNote, setSavingParkingNote] = useState(false);
+  const [winText, setWinText] = useState("");
+  const [winNotice, setWinNotice] = useState<string | null>(null);
+  const [savingWin, setSavingWin] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
@@ -266,6 +451,114 @@ export default function DashboardScreen() {
     () => globalStudySearch({ query: searchQuery, notes, savedQuestions, events, resources }),
     [events, notes, resources, savedQuestions, searchQuery]
   );
+  const deadlineRadar = useMemo(() => buildDeadlineRadar(events), [events]);
+  const revisionDebt = useMemo(
+    () => buildRevisionDebt({ subjects, sessions, notes, savedQuestions }),
+    [notes, savedQuestions, sessions, subjects]
+  );
+  const evidenceItems = useMemo(
+    () => buildEvidenceItems({ subjects, sessions, goals, notes, savedQuestions, resources }),
+    [goals, notes, resources, savedQuestions, sessions, subjects]
+  );
+  const evidenceAverage = useMemo(
+    () => Math.round(evidenceItems.reduce((sum, item) => sum + item.score, 0) / Math.max(evidenceItems.length, 1)),
+    [evidenceItems]
+  );
+  const tonightPlan = useMemo(() => {
+    const items: TonightPlanItem[] = [];
+    const addItem = (item: TonightPlanItem) => {
+      if (items.some((current) => current.title === item.title && current.label === item.label)) return;
+      items.push(item);
+    };
+
+    latestPlan?.tasks?.slice(0, 2).forEach((task, index) => {
+      const taskSubject = subjectForPlanTask(task, subjects);
+      addItem({
+        id: `coach-${index}-${task.title}`,
+        label: "Coach plan",
+        title: task.title,
+        body: `${formatMinutes(clampStudyMinutes(task.minutes))} - ${task.reason}`,
+        subjectId: taskSubject?.id ?? null,
+        topic: task.topic ?? task.title,
+        minutes: clampStudyMinutes(task.minutes),
+        icon: "clipboard-list-outline",
+        accent: palette.primary
+      });
+    });
+
+    if (nextDeadline) {
+      addItem({
+        id: `deadline-${nextDeadline.id}`,
+        label: "Deadline shield",
+        title: nextDeadline.title,
+        body: `${countdownLabel(nextDeadline)}. Do the smallest piece that reduces tomorrow's panic.`,
+        subjectId: nextDeadlineSubject?.id ?? nextDeadline.subjectId ?? null,
+        topic: topicFromEvent(nextDeadline),
+        minutes: daysUntil(nextDeadline.eventDate) <= 2 ? 25 : 35,
+        icon: "shield-alert-outline",
+        accent: palette.warning
+      });
+    }
+
+    if (weaknessSummary.weakSubject) {
+      addItem({
+        id: `weak-${weaknessSummary.weakSubject.id}`,
+        label: "Weakness repair",
+        title: weaknessSummary.weakSubject.subjectName,
+        body: weaknessSummary.nextAction,
+        subjectId: weaknessSummary.weakSubject.id,
+        topic: weaknessSummary.weakTopic ?? weaknessSummary.weakSubject.subjectName,
+        minutes: 25,
+        icon: "brain",
+        accent: palette.info
+      });
+    }
+
+    if (revisionDebt[0]) {
+      addItem({
+        id: `debt-${revisionDebt[0].subject.id}`,
+        label: "Debt clear",
+        title: revisionDebt[0].subject.subjectName,
+        body: `${revisionDebt[0].staleQuestions} old drill${revisionDebt[0].staleQuestions === 1 ? "" : "s"}, ${revisionDebt[0].mistakeLogs} mistake log${revisionDebt[0].mistakeLogs === 1 ? "" : "s"}.`,
+        subjectId: revisionDebt[0].subject.id,
+        topic: "revision debt",
+        minutes: 20,
+        icon: "backup-restore",
+        accent: palette.secondary
+      });
+    }
+
+    if (!items.length && defaultSubject) {
+      addItem({
+        id: `starter-${defaultSubject.id}`,
+        label: "First move",
+        title: defaultSubject.subjectName,
+        body: "Open the timer and create one visible piece of evidence.",
+        subjectId: defaultSubject.id,
+        topic: defaultSubject.subjectName,
+        minutes: 25,
+        icon: "timer-outline",
+        accent: palette.success
+      });
+    }
+
+    return items.slice(0, 3);
+  }, [
+    defaultSubject,
+    latestPlan?.tasks,
+    nextDeadline,
+    nextDeadlineSubject?.id,
+    revisionDebt,
+    subjects,
+    weaknessSummary.nextAction,
+    weaknessSummary.weakSubject,
+    weaknessSummary.weakTopic
+  ]);
+  const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
+  const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
+  const rescueModeBody = rescueSubject
+    ? `12 minutes on ${rescueSubject.subjectName}${rescueTopic ? ` - ${rescueTopic}` : ""}. No setup spiral.`
+    : "Add a subject first, then rescue mode can choose the repair.";
 
   const openPanicForEvent = (event?: StudyEvent) => {
     const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
@@ -383,6 +676,56 @@ export default function DashboardScreen() {
       setParkingNotice(error instanceof Error ? error.message : "Could not save parking lot.");
     } finally {
       setSavingParkingNote(false);
+    }
+  };
+
+  const openTimerForPlan = (item: TonightPlanItem) => {
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: String(clampStudyMinutes(item.minutes)),
+        ...(item.subjectId ? { subjectId: item.subjectId } : {}),
+        ...(item.topic ? { rescueTopic: item.topic } : {})
+      }
+    });
+  };
+
+  const startRescueMode = () => {
+    if (!rescueSubject) return;
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: "12",
+        subjectId: rescueSubject.id,
+        rescueTopic,
+        rescue: "1"
+      }
+    });
+  };
+
+  const saveWinLog = async () => {
+    const cleanText = winText.trim();
+    if (!cleanText) return;
+    setSavingWin(true);
+    setWinNotice(null);
+    try {
+      const now = new Date();
+      await createNote({
+        subjectId: rescueSubject?.id,
+        title: `Win log - ${now.toISOString().slice(0, 10)}`,
+        noteType: "general",
+        tags: ["win-log", "evidence"],
+        body: cleanText
+      });
+      setWinText("");
+      setWinNotice("Logged. Tiny proof counts.");
+      await fetchAll();
+    } catch (error) {
+      setWinNotice(error instanceof Error ? error.message : "Could not log that win.");
+    } finally {
+      setSavingWin(false);
     }
   };
 
@@ -556,6 +899,167 @@ export default function DashboardScreen() {
               <Text style={styles.muted}>Dump distractions here, then keep studying. They stay local until you save them.</Text>
             )}
             {parkingNotice ? <Text style={parkingNotice.includes("Saved") ? styles.successText : styles.error}>{parkingNotice}</Text> : null}
+          </View>
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(38)}>
+        <AppCard style={styles.consoleCard}>
+          <View style={styles.rowBetween}>
+            <View style={styles.flexText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Study Command Console
+              </Text>
+              <Text style={styles.muted}>Five quiet tools that make the next move obvious.</Text>
+            </View>
+            <View style={styles.consoleScore}>
+              <Text style={styles.consoleScoreValue}>{evidenceAverage}</Text>
+              <Text style={styles.consoleScoreLabel}>evidence</Text>
+            </View>
+          </View>
+
+          <View style={styles.radarGrid}>
+            <View style={[styles.radarCell, styles.radarHot]}>
+              <Text style={styles.radarValue}>{deadlineRadar.urgent}</Text>
+              <Text style={styles.radarLabel}>0-2 days</Text>
+            </View>
+            <View style={[styles.radarCell, styles.radarWarm]}>
+              <Text style={styles.radarValue}>{deadlineRadar.week}</Text>
+              <Text style={styles.radarLabel}>this week</Text>
+            </View>
+            <View style={[styles.radarCell, styles.radarCool]}>
+              <Text style={styles.radarValue}>{deadlineRadar.runway}</Text>
+              <Text style={styles.radarLabel}>next 21</Text>
+            </View>
+          </View>
+          <Text style={styles.consoleHint}>
+            {deadlineRadar.nearest
+              ? `Radar: ${deadlineRadar.nearest.title} is ${countdownLabel(deadlineRadar.nearest)}.`
+              : "Radar: no deadline pressure logged yet."}
+          </Text>
+
+          <View style={styles.consoleSection}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.consoleSectionTitle}>Tonight plan</Text>
+              <Button compact mode="text" icon="auto-fix" onPress={() => router.push({ pathname: "/(tabs)/study", params: { mode: "coach" } })}>
+                Coach
+              </Button>
+            </View>
+            {tonightPlan.length ? (
+              <View style={styles.planList}>
+                {tonightPlan.map((item) => (
+                  <Pressable key={item.id} accessibilityRole="button" style={styles.planRow} onPress={() => openTimerForPlan(item)}>
+                    <View style={[styles.planIcon, { backgroundColor: `${item.accent}18` }]}>
+                      <MaterialCommunityIcons name={item.icon} color={item.accent} size={19} />
+                    </View>
+                    <View style={styles.flexText}>
+                      <Text style={[styles.briefLabel, { color: item.accent }]}>{item.label}</Text>
+                      <Text style={styles.planTitle}>{item.title}</Text>
+                      <Text style={styles.muted} numberOfLines={2}>
+                        {item.body}
+                      </Text>
+                    </View>
+                    <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(item.minutes))}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.muted}>Add a subject or deadline and this becomes a clean nightly checklist.</Text>
+            )}
+          </View>
+
+          <View style={styles.consoleSplit}>
+            <View style={styles.consolePane}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.consoleSectionTitle}>Revision debt</Text>
+                <MaterialCommunityIcons name="backup-restore" color={palette.secondary} size={19} />
+              </View>
+              {revisionDebt.length ? (
+                revisionDebt.map((item) => (
+                  <Pressable
+                    key={item.subject.id}
+                    accessibilityRole="button"
+                    style={styles.debtRow}
+                    onPress={() => router.push("/(tabs)/questions")}
+                  >
+                    <View style={[styles.subjectDot, { backgroundColor: item.subject.color || palette.secondary }]} />
+                    <View style={styles.flexText}>
+                      <Text style={styles.debtTitle}>{item.subject.subjectName}</Text>
+                      <Text style={styles.muted} numberOfLines={1}>
+                        {item.staleQuestions} old drills, {item.mistakeLogs} mistake logs
+                      </Text>
+                    </View>
+                    <Text style={styles.debtScore}>{item.score}</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.muted}>No stale drills waiting. Keep saving marked mistakes as you find them.</Text>
+              )}
+            </View>
+
+            <View style={styles.consolePane}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.consoleSectionTitle}>Evidence meter</Text>
+                <MaterialCommunityIcons name="chart-timeline-variant" color={palette.success} size={19} />
+              </View>
+              {evidenceItems.length ? (
+                evidenceItems.map((item) => (
+                  <View key={item.subject.id} style={styles.evidenceRow}>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.evidenceSubject} numberOfLines={1}>
+                        {item.subject.subjectName}
+                      </Text>
+                      <Text style={styles.evidenceVerdict}>{item.verdict}</Text>
+                    </View>
+                    <View style={styles.evidenceTrack}>
+                      <View
+                        style={[
+                          styles.evidenceFill,
+                          { width: `${item.score}%`, backgroundColor: item.subject.color || palette.success }
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {formatMinutes(item.weekMinutes)} studied, {item.notesCount} notes, {item.questionCount} drills, {item.resourceCount} files
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.muted}>Evidence appears when subjects, notes, questions or files exist.</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.rescuePanel}>
+            <View style={styles.rescueIcon}>
+              <MaterialCommunityIcons name="lifebuoy" color={palette.text} size={20} />
+            </View>
+            <View style={styles.flexText}>
+              <Text style={styles.rescueTitle}>12-minute rescue mode</Text>
+              <Text style={styles.muted}>{rescueModeBody}</Text>
+            </View>
+            <Button mode="contained" compact icon="timer-sand" disabled={!rescueSubject} onPress={startRescueMode}>
+              Rescue
+            </Button>
+          </View>
+
+          <View style={styles.winLogBox}>
+            <Text style={styles.consoleSectionTitle}>Tiny win log</Text>
+            <View style={styles.winInputRow}>
+              <TextInput
+                mode="outlined"
+                dense
+                label="What changed after studying?"
+                value={winText}
+                onChangeText={setWinText}
+                style={styles.winInput}
+                onSubmitEditing={saveWinLog}
+              />
+              <Button mode="contained-tonal" compact icon="check" loading={savingWin} disabled={!winText.trim() || savingWin} onPress={saveWinLog}>
+                Log
+              </Button>
+            </View>
+            {winNotice ? <Text style={winNotice.includes("Logged") ? styles.successText : styles.error}>{winNotice}</Text> : null}
           </View>
         </AppCard>
       </Animated.View>
@@ -1119,6 +1623,217 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(74,222,128,0.12)"
+  },
+  consoleCard: {
+    gap: 14,
+    borderColor: "rgba(124,110,255,0.24)",
+    backgroundColor: "rgba(124,110,255,0.06)"
+  },
+  consoleScore: {
+    width: 82,
+    minHeight: 56,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.34)",
+    backgroundColor: "rgba(74,222,128,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8
+  },
+  consoleScoreValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 20,
+    lineHeight: 24
+  },
+  consoleScoreLabel: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 10
+  },
+  radarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  radarCell: {
+    flex: 1,
+    minWidth: 92,
+    minHeight: 58,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  radarHot: {
+    borderColor: "rgba(255,107,107,0.28)",
+    backgroundColor: "rgba(255,107,107,0.09)"
+  },
+  radarWarm: {
+    borderColor: "rgba(245,158,11,0.28)",
+    backgroundColor: "rgba(245,158,11,0.09)"
+  },
+  radarCool: {
+    borderColor: "rgba(56,189,248,0.28)",
+    backgroundColor: "rgba(56,189,248,0.08)"
+  },
+  radarValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 21
+  },
+  radarLabel: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textTransform: "uppercase"
+  },
+  consoleHint: {
+    color: palette.info,
+    lineHeight: 20,
+    fontFamily: "Outfit_700Bold"
+  },
+  consoleSection: {
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 12
+  },
+  consoleSectionTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  planList: {
+    gap: 8
+  },
+  planRow: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  planIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  planTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  planMinutes: {
+    minWidth: 46,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "right"
+  },
+  consoleSplit: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  consolePane: {
+    flex: 1,
+    minWidth: 260,
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12
+  },
+  debtRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9
+  },
+  subjectDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 8
+  },
+  debtTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  debtScore: {
+    minWidth: 30,
+    color: palette.secondary,
+    textAlign: "right",
+    fontFamily: "Outfit_700Bold"
+  },
+  evidenceRow: {
+    gap: 6
+  },
+  evidenceSubject: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  evidenceVerdict: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  evidenceTrack: {
+    height: 8,
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)"
+  },
+  evidenceFill: {
+    height: "100%",
+    borderRadius: 8
+  },
+  rescuePanel: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.22)",
+    backgroundColor: "rgba(56,189,248,0.07)",
+    padding: 12
+  },
+  rescueIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(56,189,248,0.2)"
+  },
+  rescueTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  winLogBox: {
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 12
+  },
+  winInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  winInput: {
+    flex: 1,
+    minWidth: 0
   },
   weaknessCard: {
     gap: 12,
