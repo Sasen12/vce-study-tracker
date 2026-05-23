@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Dialog, Portal, Text, TextInput } from "react-native-paper";
 import Animated from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -76,6 +77,30 @@ const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? 
 
 const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : "Nice");
 
+type BriefItem = {
+  label: string;
+  title: string;
+  body: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  accent: string;
+};
+
+type ParkingLotItem = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
+
+const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
+
+const briefFallback = (subjects: UserSubject[]): BriefItem => ({
+  label: "Warm-up",
+  title: subjects.length ? "Start with the subject that feels easiest to open." : "Add subjects when you are ready.",
+  body: subjects.length ? "A small clean start beats waiting for perfect motivation." : "Once subjects exist, Home can build a sharper brief.",
+  icon: subjects.length ? "timer-outline" : "book-plus-outline",
+  accent: subjects.length ? palette.success : palette.info
+});
+
 export default function DashboardScreen() {
   useTrackScreen("home");
   const user = useAuthStore((state) => state.user);
@@ -106,13 +131,47 @@ export default function DashboardScreen() {
   const [panicConfidenceAfter, setPanicConfidenceAfter] = useState("3");
   const [panicMessage, setPanicMessage] = useState<string | null>(null);
   const [savingPanicPlan, setSavingPanicPlan] = useState(false);
+  const [parkingText, setParkingText] = useState("");
+  const [parkingLot, setParkingLot] = useState<ParkingLotItem[]>([]);
+  const [parkingNotice, setParkingNotice] = useState<string | null>(null);
+  const [savingParkingNote, setSavingParkingNote] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      const parkingKey = parkingLotKeyFor(user?.id);
       fetchAll();
+      AsyncStorage.getItem(parkingKey)
+        .then((value) => {
+          if (!active) return;
+          if (!value) {
+            setParkingLot([]);
+            return;
+          }
+          const parsed = JSON.parse(value) as unknown;
+          if (Array.isArray(parsed)) {
+            setParkingLot(
+              parsed.filter(
+                (item): item is ParkingLotItem =>
+                  Boolean(item) &&
+                  typeof item === "object" &&
+                  "id" in item &&
+                  "text" in item &&
+                  "createdAt" in item &&
+                  typeof item.id === "string" &&
+                  typeof item.text === "string" &&
+                  typeof item.createdAt === "string"
+              )
+            );
+            return;
+          }
+          setParkingLot([]);
+        })
+        .catch(() => {
+          if (active) setParkingLot([]);
+        });
       studyApi
         .dailyInspiration()
         .then(({ inspiration }) => {
@@ -129,7 +188,7 @@ export default function DashboardScreen() {
       return () => {
         active = false;
       };
-    }, [fetchAll])
+    }, [fetchAll, user?.id])
   );
 
   const todayLabel = useMemo(
@@ -166,6 +225,43 @@ export default function DashboardScreen() {
     () => buildWeaknessSummary({ subjects, sessions, goals, notes, savedQuestions, events }),
     [events, goals, notes, savedQuestions, sessions, subjects]
   );
+  const quietBrief = useMemo(() => {
+    const items: BriefItem[] = [];
+
+    if (nextDeadline) {
+      items.push({
+        label: "Protect",
+        title: nextDeadline.title,
+        body: `${countdownLabel(nextDeadline)}. Start with one thing you can finish tonight.`,
+        icon: "calendar-alert",
+        accent: palette.warning
+      });
+    }
+
+    if (weaknessSummary.weakSubject) {
+      items.push({
+        label: "Repair",
+        title: weaknessSummary.weakSubject.subjectName,
+        body: weaknessSummary.nextAction,
+        icon: "brain",
+        accent: palette.info
+      });
+    }
+
+    if (subjects.length) {
+      const todaySeconds = stats?.todaySeconds ?? 0;
+      items.push({
+        label: todaySeconds > 0 ? "Keep warm" : "Start",
+        title: todaySeconds > 0 ? "Bank one more clean block." : "Do the first 25 minutes.",
+        body: todaySeconds > 0 ? "Momentum is already open. Add one focused repair before stopping." : "No drama: timer on, one topic, one visible result.",
+        icon: "timer-sand",
+        accent: palette.success
+      });
+    }
+
+    if (!items.length) items.push(briefFallback(subjects));
+    return items.slice(0, 3);
+  }, [nextDeadline, stats?.todaySeconds, subjects, weaknessSummary.nextAction, weaknessSummary.weakSubject]);
   const searchResults = useMemo(
     () => globalStudySearch({ query: searchQuery, notes, savedQuestions, events, resources }),
     [events, notes, resources, savedQuestions, searchQuery]
@@ -237,6 +333,56 @@ export default function DashboardScreen() {
       await studyApi.markGiftMessageRead(id);
     } catch {
       // The message can safely stay dismissed locally; it will retry on next login if the server update failed.
+    }
+  };
+
+  const persistParkingLot = async (items: ParkingLotItem[]) => {
+    setParkingLot(items);
+    await AsyncStorage.setItem(parkingLotKeyFor(user?.id), JSON.stringify(items));
+  };
+
+  const addParkingItem = async () => {
+    const cleanText = parkingText.trim();
+    if (!cleanText) return;
+    const nextItems = [
+      { id: `${Date.now()}`, text: cleanText, createdAt: new Date().toISOString() },
+      ...parkingLot
+    ].slice(0, 6);
+    setParkingText("");
+    setParkingNotice(null);
+    await persistParkingLot(nextItems);
+  };
+
+  const removeParkingItem = async (id: string) => {
+    setParkingNotice(null);
+    await persistParkingLot(parkingLot.filter((item) => item.id !== id));
+  };
+
+  const saveParkingLotAsNote = async () => {
+    if (!parkingLot.length) return;
+    setSavingParkingNote(true);
+    setParkingNotice(null);
+    try {
+      const title = `Parking Lot - ${new Date().toISOString().slice(0, 10)}`;
+      const body = parkingLot
+        .map((item) => {
+          const time = new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit" }).format(new Date(item.createdAt));
+          return `- ${item.text} (${time})`;
+        })
+        .join("\n");
+      await createNote({
+        title,
+        noteType: "general",
+        tags: ["parking-lot", "quick-capture"],
+        body
+      });
+      await persistParkingLot([]);
+      setParkingNotice("Saved to Notes and cleared.");
+      await fetchAll();
+    } catch (error) {
+      setParkingNotice(error instanceof Error ? error.message : "Could not save parking lot.");
+    } finally {
+      setSavingParkingNote(false);
     }
   };
 
@@ -323,6 +469,94 @@ export default function DashboardScreen() {
             <Text style={styles.inspirationTip}>{dailyInspiration.tip}</Text>
           </View>
           <Text style={styles.actionText}>Try today: {dailyInspiration.action}</Text>
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(34)}>
+        <AppCard style={styles.launchpadCard}>
+          <View style={styles.rowBetween}>
+            <View style={styles.flexText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Quiet Launchpad
+              </Text>
+              <Text style={styles.muted}>A clean brief plus a place to park distracting thoughts.</Text>
+            </View>
+            <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
+          </View>
+
+          <View style={styles.briefList}>
+            {quietBrief.map((item) => (
+              <View key={`${item.label}-${item.title}`} style={styles.briefItem}>
+                <View style={[styles.briefIcon, { backgroundColor: `${item.accent}18` }]}>
+                  <MaterialCommunityIcons name={item.icon} color={item.accent} size={20} />
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={[styles.briefLabel, { color: item.accent }]}>{item.label}</Text>
+                  <Text style={styles.briefTitle}>{item.title}</Text>
+                  <Text style={styles.muted}>{item.body}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.actionRow}>
+            <Button
+              mode="contained"
+              icon="timer-play-outline"
+              disabled={!subjects.length}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/study",
+                  params: nextDeadlineSubject?.id ? { subjectId: nextDeadlineSubject.id } : {}
+                })
+              }
+            >
+              Start block
+            </Button>
+            <Button mode="outlined" icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
+              Make drill
+            </Button>
+          </View>
+
+          <View style={styles.parkingBox}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.parkingTitle}>Parking lot</Text>
+              {parkingLot.length ? (
+                <Button compact mode="text" icon="note-plus-outline" loading={savingParkingNote} disabled={savingParkingNote} onPress={saveParkingLotAsNote}>
+                  Save
+                </Button>
+              ) : null}
+            </View>
+            <View style={styles.parkingInputRow}>
+              <TextInput
+                mode="outlined"
+                dense
+                label="Park a thought"
+                value={parkingText}
+                onChangeText={setParkingText}
+                style={styles.parkingInput}
+                onSubmitEditing={addParkingItem}
+              />
+              <Button mode="contained-tonal" compact icon="plus" disabled={!parkingText.trim()} onPress={addParkingItem}>
+                Add
+              </Button>
+            </View>
+            {parkingLot.length ? (
+              <View style={styles.parkingList}>
+                {parkingLot.map((item) => (
+                  <View key={item.id} style={styles.parkingItem}>
+                    <Text style={styles.parkingText}>{item.text}</Text>
+                    <Pressable accessibilityRole="button" onPress={() => removeParkingItem(item.id)} style={styles.parkingRemove}>
+                      <MaterialCommunityIcons name="check" color={palette.success} size={17} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.muted}>Dump distractions here, then keep studying. They stay local until you save them.</Text>
+            )}
+            {parkingNotice ? <Text style={parkingNotice.includes("Saved") ? styles.successText : styles.error}>{parkingNotice}</Text> : null}
+          </View>
         </AppCard>
       </Animated.View>
 
@@ -807,6 +1041,84 @@ const styles = StyleSheet.create({
   searchTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  launchpadCard: {
+    gap: 14,
+    borderColor: "rgba(56,189,248,0.22)",
+    backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  briefList: {
+    gap: 10
+  },
+  briefItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
+    paddingVertical: 2
+  },
+  briefIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  briefLabel: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textTransform: "uppercase",
+    marginBottom: 2
+  },
+  briefTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  parkingBox: {
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 12
+  },
+  parkingTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  parkingInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  parkingInput: {
+    flex: 1,
+    minWidth: 0
+  },
+  parkingList: {
+    gap: 8
+  },
+  parkingItem: {
+    minHeight: 40,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  parkingText: {
+    flex: 1,
+    color: palette.text,
+    lineHeight: 19
+  },
+  parkingRemove: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(74,222,128,0.12)"
   },
   weaknessCard: {
     gap: 12,
