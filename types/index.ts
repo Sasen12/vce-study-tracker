@@ -113,6 +113,20 @@ export type UserFeedback = {
   };
 };
 
+export type PublicContactSubmission = {
+  id: string;
+  name: string;
+  email: string;
+  yearLevel?: string | null;
+  school?: string | null;
+  subject?: string | null;
+  question: string;
+  deliveryStatus: string;
+  deliveryError?: string | null;
+  adminStatus: "new" | "replied" | "archived";
+  createdAt: string;
+};
+
 export type CommunityChatMessage = {
   id: string;
   userId: string;

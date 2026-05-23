@@ -94,14 +94,19 @@ const ensurePublicContactSchema = async () => {
       question TEXT NOT NULL,
       delivery_status TEXT NOT NULL DEFAULT 'pending',
       delivery_error TEXT,
+      admin_status TEXT NOT NULL DEFAULT 'new',
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+  await prisma.$executeRawUnsafe("ALTER TABLE public_contact_submissions ADD COLUMN IF NOT EXISTS admin_status TEXT NOT NULL DEFAULT 'new'");
   await prisma.$executeRawUnsafe(
     "CREATE INDEX IF NOT EXISTS public_contact_submissions_created_idx ON public_contact_submissions(created_at DESC)"
   );
   await prisma.$executeRawUnsafe(
     "CREATE INDEX IF NOT EXISTS public_contact_submissions_email_idx ON public_contact_submissions(email)"
+  );
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS public_contact_submissions_admin_status_idx ON public_contact_submissions(admin_status)"
   );
 };
 

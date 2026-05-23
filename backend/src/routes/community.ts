@@ -86,6 +86,59 @@ const serialiseFeedback = (
     : {})
 });
 
+type PublicContactRow = {
+  id: string;
+  name: string;
+  email: string;
+  yearLevel: string | null;
+  school: string | null;
+  subject: string | null;
+  question: string;
+  deliveryStatus: string;
+  deliveryError: string | null;
+  adminStatus: "new" | "replied" | "archived";
+  createdAt: Date;
+};
+
+const serialisePublicContact = (row: PublicContactRow) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  yearLevel: row.yearLevel,
+  school: row.school,
+  subject: row.subject,
+  question: row.question,
+  deliveryStatus: row.deliveryStatus,
+  deliveryError: row.deliveryError,
+  adminStatus: row.adminStatus,
+  createdAt: row.createdAt
+});
+
+const publicContactsForAdmin = async () =>
+  prisma.$queryRaw<PublicContactRow[]>`
+    SELECT
+      id,
+      name,
+      email,
+      year_level AS "yearLevel",
+      school,
+      subject,
+      question,
+      delivery_status AS "deliveryStatus",
+      delivery_error AS "deliveryError",
+      admin_status AS "adminStatus",
+      created_at AS "createdAt"
+    FROM public_contact_submissions
+    ORDER BY
+      CASE admin_status
+        WHEN 'new' THEN 0
+        WHEN 'replied' THEN 1
+        ELSE 2
+      END,
+      created_at DESC
+    LIMIT 100
+  `;
+
 const todayRange = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -353,7 +406,7 @@ const chatAllowanceFor = async (userId: string) => {
 
 const communityPayload = async (user: AuthenticatedRequest["user"]) => {
   const isAdmin = isAdminEmail(user.email);
-  const [feedback, chatDesc, allowance, users] = await Promise.all([
+  const [feedback, chatDesc, allowance, users, landingContacts] = await Promise.all([
     prisma.userFeedback.findMany({
       where: isAdmin ? {} : { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -377,7 +430,8 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
       }
     }),
     chatAllowanceFor(user.id),
-    isAdmin ? adminUsers() : Promise.resolve([])
+    isAdmin ? adminUsers() : Promise.resolve([]),
+    isAdmin ? publicContactsForAdmin() : Promise.resolve([])
   ]);
 
   const chat = chatDesc
@@ -386,7 +440,14 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     .reverse()
     .map((message) => serialiseChatMessage(message, user.id));
 
-  return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance, users };
+  return {
+    isAdmin,
+    feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)),
+    landingContacts: landingContacts.map(serialisePublicContact),
+    chat,
+    allowance,
+    users
+  };
 };
 
 const serialiseGiftMessage = (gift: {

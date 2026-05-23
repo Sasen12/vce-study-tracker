@@ -20,6 +20,7 @@ import type {
   CommunitySubjectRoom,
   CommunityUserSummary,
   LeaderboardEntry,
+  PublicContactSubmission,
   UsageScreen,
   UserSubject,
   UserFeedback
@@ -37,6 +38,12 @@ const categoryCopy: Record<FeedbackCategory, string> = {
   feature: "Feature",
   content: "Content",
   other: "Other"
+};
+
+const contactStatusCopy: Record<PublicContactSubmission["adminStatus"], string> = {
+  new: "New",
+  replied: "Replied",
+  archived: "Archived"
 };
 
 const formatTime = (value: string) =>
@@ -180,6 +187,71 @@ function FeedbackItem({ item, showSender }: { item: UserFeedback; showSender?: b
         </View>
       ) : null}
       <Text style={styles.feedbackMessage}>{item.message}</Text>
+    </View>
+  );
+}
+
+function LandingContactItem({
+  item,
+  updating,
+  onStatus
+}: {
+  item: PublicContactSubmission;
+  updating?: boolean;
+  onStatus: (id: string, status: PublicContactSubmission["adminStatus"]) => void;
+}) {
+  return (
+    <View style={styles.feedbackItem}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.feedbackMeta}>
+          <Text style={styles.feedbackCategory}>Landing page</Text>
+          <Text style={styles.feedbackStatus}>{contactStatusCopy[item.adminStatus]}</Text>
+        </View>
+        <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+      </View>
+      <View style={styles.senderRow}>
+        <MaterialCommunityIcons name="account-question-outline" color={palette.info} size={18} />
+        <View style={styles.flexText}>
+          <Text style={styles.feedbackSender} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.mutedSmall} numberOfLines={1}>
+            {item.email}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.contactMetaGrid}>
+        {item.yearLevel ? <Text style={styles.userStat}>{item.yearLevel}</Text> : null}
+        {item.school ? <Text style={styles.userStat}>{item.school}</Text> : null}
+        {item.subject ? <Text style={styles.userStat}>{item.subject}</Text> : null}
+        <Text style={styles.userStat}>Delivery: {item.deliveryStatus}</Text>
+      </View>
+      <Text style={styles.feedbackMessage}>{item.question}</Text>
+      <View style={styles.contactActions}>
+        <Button
+          mode={item.adminStatus === "new" ? "contained" : "outlined"}
+          compact
+          icon="email-check-outline"
+          disabled={updating || item.adminStatus === "replied"}
+          onPress={() => onStatus(item.id, "replied")}
+        >
+          Replied
+        </Button>
+        <Button
+          mode="outlined"
+          compact
+          icon="archive-outline"
+          disabled={updating || item.adminStatus === "archived"}
+          onPress={() => onStatus(item.id, "archived")}
+        >
+          Archive
+        </Button>
+        {item.adminStatus !== "new" ? (
+          <Button mode="outlined" compact icon="restore" disabled={updating} onPress={() => onStatus(item.id, "new")}>
+            Reopen
+          </Button>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -453,6 +525,7 @@ export default function CommunityScreen() {
   const [mode, setMode] = useState<Mode>("chat");
   const [chatScope, setChatScope] = useState<ChatScope>("school");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
+  const [landingContacts, setLandingContacts] = useState<PublicContactSubmission[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
   const [roomChat, setRoomChat] = useState<Record<string, CommunityChatMessage[]>>({});
   const [joinedRoomIds, setJoinedRoomIds] = useState<string[]>([]);
@@ -466,6 +539,7 @@ export default function CommunityScreen() {
   const [roomLoading, setRoomLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [category, setCategory] = useState<FeedbackCategory>("feature");
@@ -485,6 +559,7 @@ export default function CommunityScreen() {
     try {
       const data = await studyApi.community();
       setFeedback(data.feedback);
+      setLandingContacts(data.landingContacts ?? []);
       setChat(data.chat);
       setUsers(data.users ?? []);
       setAllowance(data.allowance);
@@ -607,6 +682,21 @@ export default function CommunityScreen() {
       setError(error instanceof Error ? error.message : "Could not send feedback");
     } finally {
       setSending(false);
+    }
+  };
+
+  const updateContactStatus = async (id: string, adminStatus: PublicContactSubmission["adminStatus"]) => {
+    setUpdatingContactId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.updateContactSubmissionStatus(id, adminStatus);
+      setLandingContacts((current) => current.map((item) => (item.id === id ? data.submission : item)));
+      setNotice(`Landing inquiry marked ${contactStatusCopy[adminStatus].toLowerCase()}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update landing inquiry");
+    } finally {
+      setUpdatingContactId(null);
     }
   };
 
@@ -906,21 +996,46 @@ export default function CommunityScreen() {
         </>
       ) : mode === "feedback" ? (
         isAdmin ? (
-          <AppCard style={styles.listCard}>
-            <View style={styles.feedbackHeader}>
-              <Text style={styles.cardTitle}>Feedback inbox</Text>
-              <Text style={styles.muted}>{feedback.length} received</Text>
-            </View>
-            {feedback.length ? (
-              <View style={styles.list}>
-                {feedback.map((item) => (
-                  <FeedbackItem key={item.id} item={item} showSender />
-                ))}
+          <>
+            <AppCard style={styles.listCard}>
+              <View style={styles.feedbackHeader}>
+                <Text style={styles.cardTitle}>Landing inquiries</Text>
+                <Text style={styles.muted}>
+                  {landingContacts.filter((item) => item.adminStatus === "new").length} new / {landingContacts.length} total
+                </Text>
               </View>
-            ) : (
-              <EmptyState title="Inbox empty" body="When students send feedback, it will land here with their name and email." />
-            )}
-          </AppCard>
+              {landingContacts.length ? (
+                <View style={styles.list}>
+                  {landingContacts.map((item) => (
+                    <LandingContactItem
+                      key={item.id}
+                      item={item}
+                      updating={updatingContactId === item.id}
+                      onStatus={updateContactStatus}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <EmptyState title="No landing inquiries" body="Pre-account contact messages from the landing page will appear here." />
+              )}
+            </AppCard>
+
+            <AppCard style={styles.listCard}>
+              <View style={styles.feedbackHeader}>
+                <Text style={styles.cardTitle}>Feedback inbox</Text>
+                <Text style={styles.muted}>{feedback.length} received</Text>
+              </View>
+              {feedback.length ? (
+                <View style={styles.list}>
+                  {feedback.map((item) => (
+                    <FeedbackItem key={item.id} item={item} showSender />
+                  ))}
+                </View>
+              ) : (
+                <EmptyState title="Inbox empty" body="When students send feedback, it will land here with their name and email." />
+              )}
+            </AppCard>
+          </>
         ) : (
           <>
             <AppCard style={styles.formCard}>
@@ -1489,6 +1604,16 @@ const styles = StyleSheet.create({
     fontSize: 11
   },
   userStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  contactMetaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  contactActions: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8

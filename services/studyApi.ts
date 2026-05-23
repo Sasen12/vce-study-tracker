@@ -14,6 +14,7 @@ import type {
   GeneratedQuestion,
   Goal,
   Leaderboard,
+  PublicContactSubmission,
   SavedQuestion,
   StudyAnswer,
   StudyEvent,
@@ -179,10 +180,16 @@ export const studyApi = {
     apiFetch<{
       isAdmin: boolean;
       feedback: UserFeedback[];
+      landingContacts?: PublicContactSubmission[];
       chat: CommunityChatMessage[];
       allowance: ChatAllowance;
       users: CommunityUserSummary[];
     }>("/community"),
+  updateContactSubmissionStatus: (id: string, adminStatus: PublicContactSubmission["adminStatus"]) =>
+    apiFetch<{ submission: PublicContactSubmission }>(`/contact/${id}/status`, {
+      method: "PATCH",
+      body: { adminStatus }
+    }),
   giftMessages: () => apiFetch<{ gifts: UserGiftMessage[] }>("/community/gifts"),
   markGiftMessageRead: (id: string) =>
     apiFetch<{ gift: UserGiftMessage }>(`/community/gifts/${id}/read`, { method: "PATCH" }),

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
+import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { requireAdmin } from "../services/adminService.js";
 import { sendContactEmail } from "../services/contactEmailService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
@@ -18,6 +20,37 @@ const contactSchema = z.object({
 const recentSubmissions = new Map<string, number[]>();
 const RATE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_SUBMISSIONS_PER_WINDOW = 5;
+const adminStatusSchema = z.object({
+  adminStatus: z.enum(["new", "replied", "archived"])
+});
+
+type PublicContactRow = {
+  id: string;
+  name: string;
+  email: string;
+  yearLevel: string | null;
+  school: string | null;
+  subject: string | null;
+  question: string;
+  deliveryStatus: string;
+  deliveryError: string | null;
+  adminStatus: "new" | "replied" | "archived";
+  createdAt: Date;
+};
+
+const serialiseContactSubmission = (row: PublicContactRow) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  yearLevel: row.yearLevel,
+  school: row.school,
+  subject: row.subject,
+  question: row.question,
+  deliveryStatus: row.deliveryStatus,
+  deliveryError: row.deliveryError,
+  adminStatus: row.adminStatus,
+  createdAt: row.createdAt
+});
 
 const checkRateLimit = (key: string) => {
   const now = Date.now();
@@ -83,5 +116,41 @@ contactRouter.post(
         ? "Message sent. I will reply as soon as I can."
         : "Message received. I will reply as soon as I can."
     });
+  })
+);
+
+contactRouter.patch(
+  "/:id/status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const id = z.string().uuid().parse(req.params.id);
+    const payload = adminStatusSchema.parse(req.body);
+    const rows = await prisma.$queryRaw<PublicContactRow[]>`
+      UPDATE public_contact_submissions
+      SET admin_status = ${payload.adminStatus}
+      WHERE id = ${id}::uuid
+      RETURNING
+        id,
+        name,
+        email,
+        year_level AS "yearLevel",
+        school,
+        subject,
+        question,
+        delivery_status AS "deliveryStatus",
+        delivery_error AS "deliveryError",
+        admin_status AS "adminStatus",
+        created_at AS "createdAt"
+    `;
+
+    const submission = rows[0];
+    if (!submission) {
+      throw new HttpError(404, "Contact message not found");
+    }
+
+    res.json({ submission: serialiseContactSubmission(submission) });
   })
 );
