@@ -1,8 +1,9 @@
 import { Redirect } from "expo-router";
+import { ProductLandingPage } from "@/components/marketing/ProductLandingPage";
 import { useAuthStore } from "@/store/authStore";
 
 export default function IndexRoute() {
   const user = useAuthStore((state) => state.user);
-  return <Redirect href={user ? "/(tabs)" : "/(auth)/login"} />;
+  if (user) return <Redirect href="/(tabs)" />;
+  return <ProductLandingPage />;
 }
-
