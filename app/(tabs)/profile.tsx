@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, IconButton, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/ui/Screen";
 import { AppCard } from "@/components/ui/AppCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -11,6 +11,7 @@ import { SkeletonStack } from "@/components/ui/Skeleton";
 import { XPBar } from "@/components/gamification/XPBar";
 import { BadgeGrid } from "@/components/gamification/BadgeGrid";
 import { titleLabelById } from "@/constants/gamification";
+import { STUDY_SESSION_PRESETS } from "@/constants/studySessionPresets";
 import { subjectColors, palette } from "@/constants/theme";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { estimateAtarFromScaledScores, scaleStudyScoreForAtar } from "@/constants/atarEstimate";
@@ -24,6 +25,13 @@ import {
   saveDefaultTab,
   type DefaultTabId
 } from "@/utils/defaultTab";
+import {
+  DEFAULT_STUDY_PREFERENCES,
+  loadStudyPreferences,
+  saveStudyPreferences,
+  type CheckInRhythmMinutes,
+  type StudyPreferences
+} from "@/utils/studyPreferences";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
 
 const clampStudyScore = (score: number) => Math.max(0, Math.min(50, score));
@@ -400,6 +408,9 @@ export default function ProfileScreen() {
   const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
   const [defaultTab, setDefaultTab] = useState<DefaultTabId>("home");
   const [defaultTabMessage, setDefaultTabMessage] = useState<string | null>(null);
+  const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
+  const [studyPreferenceMessage, setStudyPreferenceMessage] = useState<string | null>(null);
+  const [defaultAimDraft, setDefaultAimDraft] = useState("");
   const subjectLimit = maxSubjects;
 
   useFocusEffect(
@@ -418,6 +429,18 @@ export default function ProfileScreen() {
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    let active = true;
+    loadStudyPreferences(user?.id).then((preferences) => {
+      if (!active) return;
+      setStudyPreferences(preferences);
+      setDefaultAimDraft(preferences.defaultAim);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
   const chooseDefaultTab = async (nextTab: DefaultTabId) => {
     setDefaultTab(nextTab);
     setDefaultTabMessage(null);
@@ -427,6 +450,24 @@ export default function ProfileScreen() {
     } catch {
       setDefaultTabMessage("Could not save that start tab. Try again.");
     }
+  };
+
+  const updateStudyPreferences = async (patch: Partial<StudyPreferences>, message?: string) => {
+    const nextPreferences = { ...studyPreferences, ...patch };
+    setStudyPreferences(nextPreferences);
+    setStudyPreferenceMessage(null);
+    try {
+      const saved = await saveStudyPreferences(user?.id, nextPreferences);
+      setStudyPreferences(saved);
+      setDefaultAimDraft(saved.defaultAim);
+      setStudyPreferenceMessage(message ?? "Study defaults saved.");
+    } catch {
+      setStudyPreferenceMessage("Could not save study defaults. Try again.");
+    }
+  };
+
+  const saveDefaultAim = () => {
+    void updateStudyPreferences({ defaultAim: defaultAimDraft.trim() }, "Default aim saved.");
   };
 
   const weekStart = useMemo(startOfWeek, []);
@@ -595,6 +636,95 @@ export default function ProfileScreen() {
           })}
         </View>
         {defaultTabMessage ? <Text style={styles.preferenceMessage}>{defaultTabMessage}</Text> : null}
+      </AppCard>
+
+      <AppCard style={styles.preferenceCard}>
+        <View>
+          <Text variant="titleMedium" style={styles.cardTitle}>
+            Study defaults
+          </Text>
+          <Text style={styles.muted}>Pre-load timer sessions with your preferred setup.</Text>
+        </View>
+        <View style={styles.defaultTabGrid}>
+          {STUDY_SESSION_PRESETS.map((preset) => {
+            const active = preset.id === studyPreferences.defaultPresetId;
+            return (
+              <Pressable
+                key={preset.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() =>
+                  updateStudyPreferences(
+                    { defaultPresetId: preset.id },
+                    `${preset.label} will load first in Study.`
+                  )
+                }
+                style={[styles.defaultTabOption, active && styles.defaultTabOptionActive]}
+              >
+                <MaterialCommunityIcons name={preset.icon} color={active ? preset.accent : palette.muted} size={20} />
+                <View style={styles.defaultTabTextWrap}>
+                  <Text style={[styles.defaultTabTitle, active && styles.defaultTabTitleActive]} numberOfLines={1}>
+                    {preset.label}
+                  </Text>
+                  <Text style={styles.defaultTabDescription} numberOfLines={1}>
+                    {preset.minutes}m {preset.focus ? "- focus" : "- flexible"}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.preferenceSettingsGrid}>
+          <View style={styles.preferenceSetting}>
+            <View style={styles.preferenceSettingText}>
+              <Text style={styles.preferenceSettingTitle}>Check-ins</Text>
+              <Text style={styles.defaultTabDescription}>Start sessions with timer questions on.</Text>
+            </View>
+            <Switch
+              value={studyPreferences.checkInsEnabled}
+              onValueChange={(value) => void updateStudyPreferences({ checkInsEnabled: value })}
+              color={palette.primary}
+            />
+          </View>
+          <View style={styles.preferenceSetting}>
+            <View style={styles.preferenceSettingText}>
+              <Text style={styles.preferenceSettingTitle}>Focus filter</Text>
+              <Text style={styles.defaultTabDescription}>Open Study with distraction controls ready.</Text>
+            </View>
+            <Switch
+              value={studyPreferences.focusFilterByDefault}
+              onValueChange={(value) => void updateStudyPreferences({ focusFilterByDefault: value })}
+              color={palette.primary}
+            />
+          </View>
+        </View>
+        <View style={styles.preferenceInputBlock}>
+          <Text style={styles.preferenceLabel}>Check-in rhythm</Text>
+          <SegmentedButtons
+            value={studyPreferences.checkInIntervalMinutes}
+            onValueChange={(value) =>
+              void updateStudyPreferences({ checkInIntervalMinutes: value as CheckInRhythmMinutes }, `${value} minute check-ins saved.`)
+            }
+            buttons={[
+              { value: "8", label: "8m" },
+              { value: "10", label: "10m" },
+              { value: "15", label: "15m" }
+            ]}
+          />
+        </View>
+        <View style={styles.preferenceInputBlock}>
+          <TextInput
+            mode="outlined"
+            label="Default aim"
+            value={defaultAimDraft}
+            onChangeText={setDefaultAimDraft}
+            placeholder="Fix one weak area, build evidence, finish corrections..."
+          />
+          <Button mode="outlined" icon="content-save-outline" onPress={saveDefaultAim}>
+            Save aim
+          </Button>
+        </View>
+        {studyPreferenceMessage ? <Text style={styles.preferenceMessage}>{studyPreferenceMessage}</Text> : null}
       </AppCard>
 
       <AppCard style={styles.atarCard}>
@@ -817,6 +947,43 @@ const styles = StyleSheet.create({
     color: palette.success,
     fontFamily: "Outfit_700Bold",
     fontSize: 13
+  },
+  preferenceSettingsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  preferenceSetting: {
+    flex: 1,
+    minWidth: 210,
+    minHeight: 70,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  preferenceSettingText: {
+    flex: 1,
+    minWidth: 0
+  },
+  preferenceSettingTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  preferenceInputBlock: {
+    gap: 8
+  },
+  preferenceLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
   },
   atarCard: {
     gap: 10

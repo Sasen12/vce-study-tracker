@@ -17,11 +17,14 @@ import { StudyMusicPanel } from "@/components/session/StudyMusicPanel";
 import { StudyNotesPanel } from "@/components/session/StudyNotesPanel";
 import { StudyResourcesPanel } from "@/components/session/StudyResourcesPanel";
 import { ScientificCalculator } from "@/components/tools/ScientificCalculator";
+import { STUDY_SESSION_PRESETS, type StudySessionPreset } from "@/constants/studySessionPresets";
 import { palette } from "@/constants/theme";
 import { MOTIVATION_MESSAGES, hasUnlockedPerk } from "@/constants/gamification";
 import { useAppStore } from "@/store/appStore";
+import { useAuthStore } from "@/store/authStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
+import { loadStudyPreferences } from "@/utils/studyPreferences";
 import { subjectToolProfile } from "@/utils/subjectTools";
 
 const formatElapsed = (seconds: number) => {
@@ -45,76 +48,6 @@ const formatStudyDuration = (seconds: number) => {
 const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (seconds > 3600 ? 25 : 0);
 const defaultCheckpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
-
-type SessionPreset = {
-  id: string;
-  label: string;
-  minutes: number;
-  topicHint: string;
-  goal: string;
-  checkIns: boolean;
-  focus: boolean;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  accent: string;
-};
-
-const sessionPresets: SessionPreset[] = [
-  {
-    id: "rescue",
-    label: "Rescue sprint",
-    minutes: 12,
-    topicHint: "one weak point",
-    goal: "Make one weak area less annoying.",
-    checkIns: false,
-    focus: true,
-    icon: "lifebuoy",
-    accent: palette.secondary
-  },
-  {
-    id: "mistake",
-    label: "Mistake repair",
-    minutes: 25,
-    topicHint: "mistake log repair",
-    goal: "Redo one mistake and write the rule that fixes it.",
-    checkIns: true,
-    focus: false,
-    icon: "backup-restore",
-    accent: palette.warning
-  },
-  {
-    id: "sac",
-    label: "SAC drill",
-    minutes: 35,
-    topicHint: "SAC-style response",
-    goal: "Attempt, mark, correct, then repeat the weakest bit.",
-    checkIns: true,
-    focus: false,
-    icon: "file-document-edit-outline",
-    accent: palette.info
-  },
-  {
-    id: "deep",
-    label: "Deep work",
-    minutes: 50,
-    topicHint: "deep work block",
-    goal: "Build one complete piece of evidence.",
-    checkIns: true,
-    focus: true,
-    icon: "timer-sand-full",
-    accent: palette.primary
-  },
-  {
-    id: "low-energy",
-    label: "Low energy",
-    minutes: 10,
-    topicHint: "easy restart",
-    goal: "Start gently and protect the streak.",
-    checkIns: false,
-    focus: false,
-    icon: "battery-30",
-    accent: palette.success
-  }
-];
 
 const confidenceButtons = ["1", "2", "3", "4", "5"].map((value) => ({ value, label: value }));
 
@@ -195,6 +128,7 @@ const exitBrowserFullscreen = async () => {
 
 export default function StudyScreen() {
   useTrackScreen("study");
+  const userId = useAuthStore((state) => state.user?.id);
   const params = useLocalSearchParams<{
     subjectId?: string;
     mode?: string;
@@ -238,6 +172,7 @@ export default function StudyScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intentionalFullscreenExitRef = useRef(false);
   const fullscreenLockActiveRef = useRef(false);
+  const preferencesAppliedRef = useRef(false);
 
   const releaseFocusLock = useCallback(() => {
     fullscreenLockActiveRef.current = false;
@@ -262,6 +197,10 @@ export default function StudyScreen() {
   }, [params.subjectId, selectedSubjectId, subjects]);
 
   useEffect(() => {
+    preferencesAppliedRef.current = false;
+  }, [userId]);
+
+  useEffect(() => {
     if (params.mode === "coach" || params.mode === "timer") {
       setMode(params.mode);
     }
@@ -282,6 +221,29 @@ export default function StudyScreen() {
       setMessage("Rescue mode loaded: 12 minutes, one topic, no setup spiral.");
     }
   }, [params.rescue, params.rescueTopic, running]);
+
+  useEffect(() => {
+    let active = true;
+    const hasRouteSession = Boolean(params.targetMinutes || params.rescueTopic || params.tutorTopic);
+    if (preferencesAppliedRef.current || running || elapsed > 0 || hasRouteSession) return undefined;
+
+    loadStudyPreferences(userId).then((preferences) => {
+      if (!active || preferencesAppliedRef.current || running || elapsed > 0) return;
+      const preset = STUDY_SESSION_PRESETS.find((item) => item.id === preferences.defaultPresetId) ?? STUDY_SESSION_PRESETS[1];
+      preferencesAppliedRef.current = true;
+      setTargetMinutes(String(preset.minutes));
+      setCheckInsEnabled(preferences.checkInsEnabled);
+      setCheckInIntervalMinutes(preferences.checkInIntervalMinutes);
+      setNextCheckpointAt(Number(preferences.checkInIntervalMinutes) * 60);
+      setFocusMode(preferences.focusFilterByDefault);
+      setSessionGoal(preferences.defaultAim.trim() || preset.goal);
+      setStudyTopic((current) => current.trim() || preset.topicHint);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [elapsed, params.rescueTopic, params.targetMinutes, params.tutorTopic, running, userId]);
 
   useEffect(() => {
     if (running) {
@@ -441,7 +403,7 @@ export default function StudyScreen() {
     if (!running) setNextCheckpointAt(checkpointIntervalSeconds);
   }, [checkpointIntervalSeconds, running]);
 
-  const applySessionPreset = (preset: SessionPreset) => {
+  const applySessionPreset = (preset: StudySessionPreset) => {
     if (running) return;
     const presetCheckInMinutes = preset.minutes <= 12 ? "8" : preset.minutes >= 50 ? "15" : "10";
     setTargetMinutes(String(preset.minutes));
@@ -799,7 +761,7 @@ export default function StudyScreen() {
                 <Text style={styles.presetHint}>Sprint, repair, drill, deep work, restart.</Text>
               </View>
               <View style={styles.presetGrid}>
-                {sessionPresets.map((preset) => {
+                {STUDY_SESSION_PRESETS.map((preset) => {
                   const activePreset = targetMinutes === String(preset.minutes) && sessionGoal === preset.goal;
                   return (
                     <Pressable
