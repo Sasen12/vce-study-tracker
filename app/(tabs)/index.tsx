@@ -37,6 +37,13 @@ import {
   sacPanicTag
 } from "@/utils/vceCoach";
 import { buildPersonalRituals, buildUserStudySignature, type PersonalRitual } from "@/utils/personalization";
+import {
+  DEFAULT_STUDY_PREFERENCES,
+  loadStudyPreferences,
+  saveStudyPreferences,
+  type CoachTone,
+  type StudyPreferences
+} from "@/utils/studyPreferences";
 import { getActiveStreak } from "@/utils/streaks";
 
 const daysUntil = (eventDate: string) => {
@@ -132,6 +139,14 @@ type EvidenceItem = {
   verdict: string;
 };
 
+type WeakTopicMemory = {
+  subject?: UserSubject | null;
+  topic: string;
+  count: number;
+  latestAt: string;
+  fixed: boolean;
+};
+
 const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
 
 const weekStartDate = () => {
@@ -162,6 +177,17 @@ const clampStudyMinutes = (minutes?: number | null) => {
 
 const topicFromEvent = (event?: StudyEvent | null) =>
   event?.description?.trim() || event?.title.replace(/\b(SAC|SAT|exam|task)\b/gi, "").trim() || null;
+
+const autopsyTagFor = (eventId: string) => `event-${eventId}`;
+
+const isAssessmentDeadline = (event: StudyEvent) => !isStudyTimeEvent(event) && event.eventType !== "TASK";
+
+const pastDeadlineLabel = (event: StudyEvent) => {
+  const days = daysUntil(event.eventDate);
+  if (days === -1) return "yesterday";
+  if (days < -1) return `${Math.abs(days)} days ago`;
+  return countdownLabel(event);
+};
 
 const subjectForPlanTask = (task: AdaptiveStudyTask, subjects: UserSubject[]) => {
   const subjectLabel = normaliseLabel(task.subject ?? "");
@@ -215,6 +241,65 @@ const planReasonWithFreshDeadline = (reason: string, event?: StudyEvent | null) 
 
 const isMistakeEvidence = (note: StudyNote) =>
   note.noteType === "mistake_log" || note.tags.includes("mistake-log") || note.tags.includes("timer-check");
+
+const topicFromNote = (note: StudyNote) =>
+  note.tags.find((tag) => tag.length > 3 && !["timer-check", "mistake-log", "roadmap", "sac-autopsy", "weak-topic-memory"].includes(tag)) ??
+  note.title.replace(/\b(timer gap|mistake|log|sac autopsy|session notes)\b/gi, "").trim() ??
+  "weak topic";
+
+const buildWeakTopicMemory = ({
+  subjects,
+  sessions,
+  notes,
+  savedQuestions
+}: {
+  subjects: UserSubject[];
+  sessions: StudySession[];
+  notes: StudyNote[];
+  savedQuestions: SavedQuestion[];
+}): WeakTopicMemory | null => {
+  const groups = new Map<string, WeakTopicMemory>();
+  notes
+    .filter((note) => isMistakeEvidence(note) || note.tags.includes("sac-autopsy") || note.tags.includes("weak-topic-memory"))
+    .forEach((note) => {
+      const topic = topicFromNote(note);
+      const normalizedTopic = normaliseLabel(topic || "weak topic");
+      const key = `${note.subjectId ?? "general"}-${normalizedTopic}`;
+      const current = groups.get(key);
+      const subject = subjects.find((item) => item.id === note.subjectId) ?? null;
+      groups.set(key, {
+        subject,
+        topic: topic || subject?.subjectName || "weak topic",
+        count: (current?.count ?? 0) + 1,
+        latestAt: current && current.latestAt > note.updatedAt ? current.latestAt : note.updatedAt,
+        fixed: false
+      });
+    });
+
+  const candidates = [...groups.values()].map((memory) => {
+    const normalizedTopic = normaliseLabel(memory.topic);
+    const fixedByQuestion = savedQuestions.some(
+      (question) =>
+        (!memory.subject?.id || question.subjectId === memory.subject.id) &&
+        question.createdAt > memory.latestAt &&
+        normaliseLabel(question.topic ?? "").includes(normalizedTopic)
+    );
+    const fixedBySession = sessions.some(
+      (session) =>
+        (!memory.subject?.id || session.subjectId === memory.subject.id) &&
+        session.createdAt > memory.latestAt &&
+        normaliseLabel(session.notes ?? "").includes(normalizedTopic) &&
+        /correct|fixed|redo|marked/i.test(session.notes ?? "")
+    );
+    return { ...memory, fixed: fixedByQuestion || fixedBySession };
+  });
+
+  return (
+    candidates
+      .filter((memory) => !memory.fixed && (memory.count >= 2 || memory.topic.length > 0))
+      .sort((a, b) => b.count - a.count || b.latestAt.localeCompare(a.latestAt))[0] ?? null
+  );
+};
 
 const weekMinutesForSubject = (sessions: StudySession[], subjectId: string, start: Date) =>
   Math.round(
@@ -326,10 +411,12 @@ export default function DashboardScreen() {
     error,
     fetchAll,
     createNote,
+    updateEvent,
     setLeaderboardPreference
   } = useAppStore();
   const [dailyInspiration, setDailyInspiration] = useState<DailyInspiration>(fallbackDailyInspiration);
   const [giftMessages, setGiftMessages] = useState<UserGiftMessage[]>([]);
+  const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
   const [searchQuery, setSearchQuery] = useState("");
   const [panicOpen, setPanicOpen] = useState(false);
   const [panicSubjectId, setPanicSubjectId] = useState<string | null>(null);
@@ -351,12 +438,25 @@ export default function DashboardScreen() {
   const [perksOpen, setPerksOpen] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [autopsyOpen, setAutopsyOpen] = useState(false);
+  const [autopsyEvent, setAutopsyEvent] = useState<StudyEvent | null>(null);
+  const [autopsyResult, setAutopsyResult] = useState("");
+  const [autopsyLostMarks, setAutopsyLostMarks] = useState("");
+  const [autopsySurprise, setAutopsySurprise] = useState("");
+  const [autopsyNext, setAutopsyNext] = useState("");
+  const [autopsySaving, setAutopsySaving] = useState(false);
+  const [autopsyMessage, setAutopsyMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const parkingKey = parkingLotKeyFor(user?.id);
       fetchAll();
+      loadStudyPreferences(user?.id)
+        .then((preferences) => {
+          if (active) setStudyPreferences(preferences);
+        })
+        .catch(() => undefined);
       AsyncStorage.getItem(parkingKey)
         .then((value) => {
           if (!active) return;
@@ -465,6 +565,51 @@ export default function DashboardScreen() {
     [events, goals, notes, resources, savedQuestions, sessions, subjects]
   );
   const primaryRitual = personalRituals[0] ?? null;
+  const coachTone = studyPreferences.coachTone;
+  const examWeekMode = studyPreferences.examWeekMode;
+  const toneCopy = useMemo(() => {
+    const copy: Record<CoachTone, { exam: string; weak: string; autopsy: string }> = {
+      calm: {
+        exam: "Only the next useful move is showing. Keep the load light and specific.",
+        weak: "Still waiting for one clean repair.",
+        autopsy: "Capture what happened while it is still fresh."
+      },
+      sharp: {
+        exam: "Noise off. Next deadline, next block, weakest repair.",
+        weak: "Not fixed yet. Turn it into evidence.",
+        autopsy: "Lock the lesson before the next SAC repeats it."
+      },
+      brutal: {
+        exam: "No drift. Do the block, mark the work, move.",
+        weak: "Still leaking marks. Fix it properly.",
+        autopsy: "Do not waste the SAC. Extract the marks you dropped."
+      }
+    };
+    return copy[coachTone];
+  }, [coachTone]);
+  const weakTopicMemory = useMemo(
+    () => buildWeakTopicMemory({ subjects, sessions, notes, savedQuestions }),
+    [notes, savedQuestions, sessions, subjects]
+  );
+  const autopsiedEventIds = useMemo(
+    () =>
+      new Set(
+        notes
+          .filter((note) => note.tags.includes("sac-autopsy"))
+          .flatMap((note) => note.tags.filter((tag) => tag.startsWith("event-")).map((tag) => tag.replace(/^event-/, "")))
+      ),
+    [notes]
+  );
+  const autopsyCandidate = useMemo(
+    () =>
+      events
+        .filter((event) => {
+          const days = daysUntil(event.eventDate);
+          return isAssessmentDeadline(event) && days < 0 && days >= -21 && !autopsiedEventIds.has(event.id);
+        })
+        .sort((a, b) => b.eventDate.localeCompare(a.eventDate))[0] ?? null,
+    [autopsiedEventIds, events]
+  );
   const tonightPlan = useMemo(() => {
     const items: TonightPlanItem[] = [];
     const addItem = (item: TonightPlanItem) => {
@@ -517,6 +662,20 @@ export default function DashboardScreen() {
       });
     }
 
+    if (weakTopicMemory) {
+      addItem({
+        id: `memory-${weakTopicMemory.subject?.id ?? "general"}-${normaliseLabel(weakTopicMemory.topic)}`,
+        label: "Not fixed yet",
+        title: weakTopicMemory.subject?.subjectName ?? weakTopicMemory.topic,
+        body: `${toneCopy.weak} ${weakTopicMemory.count} signal${weakTopicMemory.count === 1 ? "" : "s"} around ${weakTopicMemory.topic}.`,
+        subjectId: weakTopicMemory.subject?.id ?? null,
+        topic: weakTopicMemory.topic,
+        minutes: 20,
+        icon: "alert-decagram-outline",
+        accent: palette.warning
+      });
+    }
+
     if (revisionDebt[0]) {
       addItem({
         id: `debt-${revisionDebt[0].subject.id}`,
@@ -554,9 +713,11 @@ export default function DashboardScreen() {
     revisionDebt,
     subjects,
     upcomingEvents,
+    toneCopy.weak,
     weaknessSummary.nextAction,
     weaknessSummary.weakSubject,
-    weaknessSummary.weakTopic
+    weaknessSummary.weakTopic,
+    weakTopicMemory
   ]);
   const primaryPlan = tonightPlan[0] ?? null;
   const secondaryPlan = tonightPlan.slice(1, 3);
@@ -640,6 +801,76 @@ export default function DashboardScreen() {
       setLeaderboardError(error instanceof Error ? error.message : "Could not update leaderboard choice");
     } finally {
       setLeaderboardSaving(false);
+    }
+  };
+
+  const updateHomePreferences = async (patch: Partial<StudyPreferences>) => {
+    const nextPreferences = { ...studyPreferences, ...patch };
+    setStudyPreferences(nextPreferences);
+    try {
+      const saved = await saveStudyPreferences(user?.id, nextPreferences);
+      setStudyPreferences(saved);
+      if (saved.examWeekMode) {
+        setCaptureOpen(false);
+        setDetailsOpen(false);
+        setPerksOpen(false);
+      }
+    } catch {
+      setStudyPreferences(studyPreferences);
+    }
+  };
+
+  const openAutopsyForEvent = (event: StudyEvent) => {
+    setAutopsyEvent(event);
+    setAutopsyResult("");
+    setAutopsyLostMarks("");
+    setAutopsySurprise("");
+    setAutopsyNext("");
+    setAutopsyMessage(null);
+    setAutopsyOpen(true);
+  };
+
+  const saveAutopsy = async () => {
+    if (!autopsyEvent) return;
+    const result = autopsyResult.trim();
+    const lostMarks = autopsyLostMarks.trim();
+    const surprise = autopsySurprise.trim();
+    const next = autopsyNext.trim();
+    if (!result && !lostMarks && !surprise && !next) {
+      setAutopsyMessage("Add at least one useful detail before saving.");
+      return;
+    }
+
+    const eventSubject = subjectForDeadline(autopsyEvent, subjects);
+    const topic = topicFromEvent(autopsyEvent) ?? autopsyEvent.title;
+    setAutopsySaving(true);
+    setAutopsyMessage(null);
+    try {
+      await createNote({
+        subjectId: eventSubject?.id ?? autopsyEvent.subjectId ?? undefined,
+        title: `SAC Autopsy: ${autopsyEvent.title}`.slice(0, 140),
+        noteType: "mistake_log",
+        tags: ["sac-autopsy", autopsyTagFor(autopsyEvent.id), "weak-topic-memory", normaliseLabel(topic).slice(0, 36)],
+        body: [
+          `${autopsyEvent.title} happened ${pastDeadlineLabel(autopsyEvent)}.`,
+          result ? `Result or feeling: ${result}` : "",
+          lostMarks ? `Lost marks on: ${lostMarks}` : "",
+          surprise ? `Surprised by: ${surprise}` : "",
+          next ? `Next repair: ${next}` : `Next repair: turn ${topic} into one drill and one correction.`
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      });
+      if (!autopsyEvent.completed) {
+        await updateEvent(autopsyEvent.id, { completed: true });
+      }
+      setAutopsyOpen(false);
+      setAutopsyEvent(null);
+      await fetchAll();
+    } catch (error) {
+      setAutopsyMessage(error instanceof Error ? error.message : "Could not save that autopsy.");
+    } finally {
+      setAutopsySaving(false);
     }
   };
 
@@ -816,8 +1047,9 @@ export default function DashboardScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Animated.View entering={motion.card(14)}>
-        <AppCard style={styles.searchCard}>
+      {!examWeekMode ? (
+        <Animated.View entering={motion.card(14)}>
+          <AppCard style={styles.searchCard}>
           <View style={styles.browserSearchRow}>
             <MaterialCommunityIcons name="magnify" color={palette.muted} size={22} />
             <TextInput
@@ -860,11 +1092,13 @@ export default function DashboardScreen() {
           ) : searchQuery.trim().length > 1 ? (
             <Text style={styles.muted}>No match yet. Try a subject, topic, file name, or command term.</Text>
           ) : null}
-        </AppCard>
-      </Animated.View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
-      <Animated.View entering={motion.card(25)}>
-        <AppCard style={styles.inspirationCard}>
+      {!examWeekMode ? (
+        <Animated.View entering={motion.card(25)}>
+          <AppCard style={styles.inspirationCard}>
           <View style={styles.inspirationTop}>
             <View style={styles.inspirationBadge}>
               <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={18} />
@@ -877,8 +1111,9 @@ export default function DashboardScreen() {
             <Text style={styles.inspirationTip}>{dailyInspiration.tip}</Text>
           </View>
           <Text style={styles.actionText}>Try today: {dailyInspiration.action}</Text>
-        </AppCard>
-      </Animated.View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={motion.card(34)}>
         <AppCard style={styles.launchpadCard}>
@@ -992,7 +1227,15 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          <View style={styles.commandMetrics}>
+          {examWeekMode ? (
+            <View style={styles.commandAlert}>
+              <MaterialCommunityIcons name="weather-lightning" color={palette.warning} size={18} />
+              <Text style={styles.commandAlertText}>{toneCopy.exam}</Text>
+            </View>
+          ) : null}
+
+          {!examWeekMode ? (
+            <View style={styles.commandMetrics}>
             <View style={styles.commandMetric}>
               <Text style={styles.commandMetricValue}>{deadlineRadar.urgent + deadlineRadar.week}</Text>
               <Text style={styles.commandMetricLabel}>deadlines</Text>
@@ -1009,21 +1252,34 @@ export default function DashboardScreen() {
               <Text style={styles.commandMetricValue}>{unlockedPerkCount}</Text>
               <Text style={styles.commandMetricLabel}>perks</Text>
             </View>
-          </View>
+            </View>
+          ) : null}
 
           <View style={styles.commandToggles}>
-            <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
-              Capture
+            <Button
+              compact
+              mode={examWeekMode ? "contained-tonal" : "outlined"}
+              icon="weather-lightning"
+              onPress={() => void updateHomePreferences({ examWeekMode: !examWeekMode })}
+            >
+              Exam Week
             </Button>
-            <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
-              Details
-            </Button>
-            <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
-              Perks
-            </Button>
+            {!examWeekMode ? (
+              <>
+                <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
+                  Capture
+                </Button>
+                <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
+                  Details
+                </Button>
+                <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
+                  Perks
+                </Button>
+              </>
+            ) : null}
           </View>
 
-          {captureOpen ? (
+          {captureOpen && !examWeekMode ? (
             <View style={styles.parkingBox}>
               <View style={styles.rowBetween}>
                 <Text style={styles.parkingTitle}>Parking lot</Text>
@@ -1103,7 +1359,7 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          {perksOpen ? (
+          {perksOpen && !examWeekMode ? (
             <View style={styles.parkingBox}>
               <View style={styles.perkRail}>
                 {PERK_SHOP_ITEMS.map((perk) => {
@@ -1144,7 +1400,26 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
-      {detailsOpen ? (
+      {autopsyCandidate ? (
+        <Animated.View entering={motion.card(36)}>
+          <AppCard style={styles.autopsyCard}>
+            <View style={styles.rowBetween}>
+              <View style={styles.flexText}>
+                <Text style={styles.autopsyLabel}>SAC Autopsy</Text>
+                <Text style={styles.autopsyTitle}>{autopsyCandidate.title}</Text>
+                <Text style={styles.muted}>
+                  {pastDeadlineLabel(autopsyCandidate)}. {toneCopy.autopsy}
+                </Text>
+              </View>
+              <Button mode="contained-tonal" compact icon="clipboard-search-outline" onPress={() => openAutopsyForEvent(autopsyCandidate)}>
+                Review
+              </Button>
+            </View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
+
+      {detailsOpen && !examWeekMode ? (
         <Animated.View entering={motion.card(38)}>
           <AppCard style={styles.consoleCard}>
           <View style={styles.rowBetween}>
@@ -1402,7 +1677,7 @@ export default function DashboardScreen() {
         </Animated.View>
       ) : null}
 
-      {detailsOpen ? (
+      {detailsOpen && !examWeekMode ? (
         <>
           <Animated.View entering={motion.card(40)}>
             <AppCard style={styles.panicCard}>
@@ -1502,7 +1777,8 @@ export default function DashboardScreen() {
         </>
       ) : null}
 
-      <Animated.View entering={motion.card(118)}>
+      {!examWeekMode ? (
+        <Animated.View entering={motion.card(118)}>
         <AppCard style={styles.section}>
           <Text variant="titleMedium" style={styles.cardTitle}>
             Upcoming
@@ -1546,9 +1822,10 @@ export default function DashboardScreen() {
             <EmptyState title="No upcoming dates" body="Add SACs, SATs, exams, and tasks from the calendar tab." />
           )}
         </AppCard>
-      </Animated.View>
+        </Animated.View>
+      ) : null}
 
-      {giftMessages.map((gift) => (
+      {!examWeekMode ? giftMessages.map((gift) => (
         <Animated.View key={gift.id} entering={motion.card(140)}>
           <AppCard style={styles.giftCard}>
             <View style={styles.giftIcon}>
@@ -1563,9 +1840,9 @@ export default function DashboardScreen() {
             </Button>
           </AppCard>
         </Animated.View>
-      ))}
+      )) : null}
 
-      {showThemeRequestThankYou ? (
+      {showThemeRequestThankYou && !examWeekMode ? (
         <Animated.View entering={motion.card(150)}>
           <AppCard style={styles.thankYouCard}>
             <View style={styles.thankYouIcon}>
@@ -1627,6 +1904,54 @@ export default function DashboardScreen() {
           </Dialog.Actions>
         </Dialog>
 
+        <Dialog visible={autopsyOpen} onDismiss={() => setAutopsyOpen(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>SAC Autopsy</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.dialogBody}>
+              {autopsyEvent
+                ? `${autopsyEvent.title} happened ${pastDeadlineLabel(autopsyEvent)}. Turn the result into the next repair.`
+                : "Turn the result into the next repair."}
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Result or feeling"
+              value={autopsyResult}
+              onChangeText={setAutopsyResult}
+              placeholder="Score, confidence, or rough feeling"
+            />
+            <TextInput
+              mode="outlined"
+              label="Lost marks on"
+              value={autopsyLostMarks}
+              onChangeText={setAutopsyLostMarks}
+              placeholder="Command terms, timing, examples, definitions..."
+            />
+            <TextInput
+              mode="outlined"
+              label="What surprised you?"
+              value={autopsySurprise}
+              onChangeText={setAutopsySurprise}
+              placeholder="The part you did not expect"
+            />
+            <TextInput
+              mode="outlined"
+              label="Next repair"
+              value={autopsyNext}
+              onChangeText={setAutopsyNext}
+              placeholder="Redo one question, make a correction, drill..."
+            />
+            {autopsyMessage ? <Text style={styles.error}>{autopsyMessage}</Text> : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={autopsySaving} onPress={() => setAutopsyOpen(false)}>
+              Close
+            </Button>
+            <Button mode="contained" loading={autopsySaving} disabled={autopsySaving} onPress={saveAutopsy}>
+              Save autopsy
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
         <Dialog visible={leaderboardPromptVisible} onDismiss={() => undefined} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>Join the weekly leaderboard?</Dialog.Title>
           <Dialog.Content>
@@ -1666,6 +1991,23 @@ const styles = StyleSheet.create({
   },
   error: {
     color: palette.secondary
+  },
+  autopsyCard: {
+    gap: 10,
+    borderColor: "rgba(245,158,11,0.32)",
+    backgroundColor: "rgba(245,158,11,0.09)"
+  },
+  autopsyLabel: {
+    color: palette.warning,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  autopsyTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    lineHeight: 21
   },
   giftCard: {
     flexDirection: "row",

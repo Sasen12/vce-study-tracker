@@ -9,7 +9,7 @@ import { StudyAskCard } from "@/components/session/StudyAskCard";
 import { motion } from "@/constants/motion";
 import { palette } from "@/constants/theme";
 import { useAppStore } from "@/store/appStore";
-import type { AdaptiveStudyTask, DailyStudyPlan, PlanSourceEvent, StudyReflection, SubjectRoadmap, UserSubject } from "@/types";
+import type { AdaptiveStudyTask, DailyStudyPlan, PlanSourceEvent, StudyEvent, StudyReflection, SubjectRoadmap, UserSubject } from "@/types";
 import { eventDateKey, isAssessmentEvent, isStudyTimeEvent, recurrenceLabel } from "@/utils/studyEvents";
 
 type StudyCoachPanelProps = {
@@ -59,6 +59,30 @@ const dateDiffDays = (from?: string, to?: string) => {
   const toTime = Date.parse(`${to.slice(0, 10)}T00:00:00.000Z`);
   if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return null;
   return Math.max(0, Math.ceil((toTime - fromTime) / 86_400_000));
+};
+const liveAssessmentForTask = (task: AdaptiveStudyTask, assessments: StudyEvent[]) => {
+  const taskText = `${task.title} ${task.topic ?? ""} ${task.assessment_title ?? ""}`.toLowerCase();
+  return (
+    assessments.find((event) => {
+      const eventTitle = event.title.toLowerCase();
+      const eventSubject = event.subject?.subjectName ?? "";
+      const subjectMatch = !eventSubject || normalizeSubject(eventSubject) === normalizeSubject(task.subject);
+      const titleMatch =
+        taskText.includes(eventTitle) ||
+        Boolean(task.assessment_title && eventTitle.includes(task.assessment_title.toLowerCase()));
+      return subjectMatch && titleMatch;
+    }) ?? null
+  );
+};
+const refreshTaskDeadline = (task: AdaptiveStudyTask, assessments: StudyEvent[]): AdaptiveStudyTask => {
+  const assessment = liveAssessmentForTask(task, assessments);
+  if (!assessment) return task;
+  return {
+    ...task,
+    assessment_title: assessment.title,
+    assessment_date: eventDateKey(assessment),
+    event_type: assessment.eventType
+  };
 };
 const cleanTopic = (task: AdaptiveStudyTask) => {
   const rawTopic = task.topic || task.assessment_title || task.title;
@@ -671,21 +695,44 @@ export function StudyCoachPanel({
   const allSubjectRoadmaps = useMemo(() => latestPlan?.subjectRoadmaps ?? [], [latestPlan?.subjectRoadmaps]);
   const allSourceEvents = useMemo(() => latestPlan?.sourceEvents ?? [], [latestPlan?.sourceEvents]);
   const dailyPlan = useMemo(
-    () =>
-      allDailyPlan.length
+    () => {
+      const plan = allDailyPlan.length
         ? filterDailyPlanBySubject(allDailyPlan, selectedSubject)
         : latestPlan
           ? fallbackDailyPlanBySubject(latestPlan.tasks, latestPlan.planDate, selectedSubject)
-          : [],
-    [allDailyPlan, latestPlan, selectedSubject]
+          : [];
+      return plan.map((day) => ({
+        ...day,
+        tasks: day.tasks.map((task) => refreshTaskDeadline(task, upcomingAssessments))
+      }));
+    },
+    [allDailyPlan, latestPlan, selectedSubject, upcomingAssessments]
   );
   const subjectRoadmaps = useMemo(
     () => allSubjectRoadmaps.filter((roadmap: SubjectRoadmap) => subjectMatches(selectedSubject, roadmap.subject)),
     [allSubjectRoadmaps, selectedSubject]
   );
   const sourceEvents = useMemo(
-    () => allSourceEvents.filter((event: PlanSourceEvent) => sourceMatchesSubject(selectedSubject, event)),
-    [allSourceEvents, selectedSubject]
+    () => {
+      const liveEvents = new Map(upcomingAssessments.map((event) => [event.id, event]));
+      return allSourceEvents
+        .map((event: PlanSourceEvent) => {
+          const liveEvent = liveEvents.get(event.id);
+          if (!liveEvent) return event;
+          const liveDate = eventDateKey(liveEvent);
+          return {
+            ...event,
+            title: liveEvent.title,
+            subject: liveEvent.subject?.subjectName ?? event.subject,
+            event_type: liveEvent.eventType,
+            event_date: liveDate,
+            topic: liveEvent.description?.trim() || liveEvent.title,
+            days_until: dateDiffDays(todayString(), liveDate) ?? event.days_until
+          };
+        })
+        .filter((event: PlanSourceEvent) => sourceMatchesSubject(selectedSubject, event));
+    },
+    [allSourceEvents, selectedSubject, upcomingAssessments]
   );
   const assessmentSources = useMemo(
     () => sourceEvents.filter((event) => event.event_type !== "STUDY_TIME"),

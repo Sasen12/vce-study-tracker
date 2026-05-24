@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STUDY_SESSION_PRESETS, type StudySessionPresetId } from "@/constants/studySessionPresets";
 
 export type CheckInRhythmMinutes = "8" | "10" | "15";
+export type CoachTone = "calm" | "sharp" | "brutal";
 
 export type StudyPreferences = {
   defaultPresetId: StudySessionPresetId;
@@ -9,6 +10,8 @@ export type StudyPreferences = {
   checkInIntervalMinutes: CheckInRhythmMinutes;
   focusFilterByDefault: boolean;
   defaultAim: string;
+  coachTone: CoachTone;
+  examWeekMode: boolean;
 };
 
 export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
@@ -16,11 +19,14 @@ export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
   checkInsEnabled: true,
   checkInIntervalMinutes: "10",
   focusFilterByDefault: false,
-  defaultAim: ""
+  defaultAim: "",
+  coachTone: "sharp",
+  examWeekMode: false
 };
 
 const allowedPresetIds = new Set(STUDY_SESSION_PRESETS.map((preset) => preset.id));
 const allowedRhythms = new Set(["8", "10", "15"]);
+const allowedCoachTones = new Set(["calm", "sharp", "brutal"]);
 
 const studyPreferencesKeyFor = (userId?: string | null) => `vce_study_preferences_${userId ?? "guest"}`;
 
@@ -42,7 +48,11 @@ export const normalizeStudyPreferences = (input: unknown): StudyPreferences => {
       typeof value.focusFilterByDefault === "boolean"
         ? value.focusFilterByDefault
         : DEFAULT_STUDY_PREFERENCES.focusFilterByDefault,
-    defaultAim: typeof value.defaultAim === "string" ? value.defaultAim.slice(0, 180) : DEFAULT_STUDY_PREFERENCES.defaultAim
+    defaultAim: typeof value.defaultAim === "string" ? value.defaultAim.slice(0, 180) : DEFAULT_STUDY_PREFERENCES.defaultAim,
+    coachTone: allowedCoachTones.has(value.coachTone ?? "")
+      ? (value.coachTone as CoachTone)
+      : DEFAULT_STUDY_PREFERENCES.coachTone,
+    examWeekMode: typeof value.examWeekMode === "boolean" ? value.examWeekMode : DEFAULT_STUDY_PREFERENCES.examWeekMode
   };
 };
 

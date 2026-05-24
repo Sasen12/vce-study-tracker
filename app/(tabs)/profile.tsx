@@ -31,6 +31,7 @@ import {
   loadStudyPreferences,
   saveStudyPreferences,
   type CheckInRhythmMinutes,
+  type CoachTone,
   type StudyPreferences
 } from "@/utils/studyPreferences";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
@@ -741,6 +742,33 @@ export default function ProfileScreen() {
               color={palette.primary}
             />
           </View>
+          <View style={styles.preferenceSetting}>
+            <View style={styles.preferenceSettingText}>
+              <Text style={styles.preferenceSettingTitle}>Exam Week</Text>
+              <Text style={styles.defaultTabDescription}>Keep Home stripped down under pressure.</Text>
+            </View>
+            <Switch
+              value={studyPreferences.examWeekMode}
+              onValueChange={(value) =>
+                void updateStudyPreferences({ examWeekMode: value }, value ? "Exam Week mode on." : "Exam Week mode off.")
+              }
+              color={palette.primary}
+            />
+          </View>
+        </View>
+        <View style={styles.preferenceInputBlock}>
+          <Text style={styles.preferenceLabel}>Forge tone</Text>
+          <SegmentedButtons
+            value={studyPreferences.coachTone}
+            onValueChange={(value) =>
+              void updateStudyPreferences({ coachTone: value as CoachTone }, `${value[0].toUpperCase()}${value.slice(1)} tone saved.`)
+            }
+            buttons={[
+              { value: "calm", label: "Calm" },
+              { value: "sharp", label: "Sharp" },
+              { value: "brutal", label: "Brutal" }
+            ]}
+          />
         </View>
         <View style={styles.preferenceInputBlock}>
           <Text style={styles.preferenceLabel}>Check-in rhythm</Text>

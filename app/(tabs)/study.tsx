@@ -384,6 +384,17 @@ export default function StudyScreen() {
   const checkInsActive = checkInsEnabled && Boolean(trimmedStudyTopic);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const xp = calculateXp(elapsed) + timerBonusXp;
+  const evidenceBonusXp = useMemo(() => {
+    const typedNotes = notes.trim();
+    const nextStep = nextAction.trim();
+    const confidenceGain = Math.max(0, Number(confidenceAfter) - Number(confidenceBefore));
+    return (
+      (typedNotes.length >= 24 ? 6 : 0) +
+      (nextStep.length >= 8 ? 4 : 0) +
+      Math.min(6, confidenceGain * 2)
+    );
+  }, [confidenceAfter, confidenceBefore, nextAction, notes]);
+  const summaryXp = xp + evidenceBonusXp;
   const targetSeconds = Number(targetMinutes) * 60;
   const targetProgress = targetSeconds ? Math.min(100, Math.round((elapsed / targetSeconds) * 100)) : 0;
   const remainingSeconds = Math.max(0, targetSeconds - elapsed);
@@ -604,7 +615,8 @@ export default function StudyScreen() {
       `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`,
       nextStep ? `Next action: ${nextStep}` : "",
       checkInsActive ? `Check-in rhythm: every ${checkInIntervalMinutes} minutes` : "Check-ins: off",
-      timerBonusXp ? `Timer bonus: ${timerBonusXp} XP` : ""
+      timerBonusXp ? `Timer bonus: ${timerBonusXp} XP` : "",
+      evidenceBonusXp ? `Evidence bonus: ${evidenceBonusXp} XP` : ""
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -614,7 +626,7 @@ export default function StudyScreen() {
         subjectId: selectedSubject.id,
         durationSeconds: elapsed,
         notes: sessionNotes || null,
-        bonusXp: timerBonusXp
+        bonusXp: timerBonusXp + evidenceBonusXp
       });
 
       let noteMirrorError: string | null = null;
@@ -1066,7 +1078,7 @@ export default function StudyScreen() {
             <Text variant="titleMedium" style={styles.cardTitle}>
               XP rules
             </Text>
-            <Text style={styles.muted}>10 XP per 10 minutes, plus 25 XP for sessions over an hour.</Text>
+            <Text style={styles.muted}>10 XP per 10 minutes, plus bonuses for check-ins, ritual steps and saved evidence.</Text>
           </AppCard>
         </>
       ) : null}
@@ -1078,8 +1090,9 @@ export default function StudyScreen() {
           <Dialog.Title style={styles.dialogTitle}>Session summary</Dialog.Title>
           <Dialog.Content style={styles.dialogContent}>
             <Text style={styles.summaryLine}>{formatElapsed(elapsed)} focused</Text>
-            <Text style={styles.summaryLine}>{xp} XP earned</Text>
+            <Text style={styles.summaryLine}>{summaryXp} XP earned</Text>
             {timerBonusXp ? <Text style={styles.summaryBonus}>Includes {timerBonusXp} XP from timer bonuses</Text> : null}
+            {evidenceBonusXp ? <Text style={styles.summaryBonus}>Includes {evidenceBonusXp} XP from study evidence</Text> : null}
             <View style={styles.confidenceGrid}>
               <View style={styles.confidenceBlock}>
                 <Text style={styles.confidenceLabel}>Before</Text>
