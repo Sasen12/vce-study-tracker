@@ -173,6 +173,46 @@ const subjectForPlanTask = (task: AdaptiveStudyTask, subjects: UserSubject[]) =>
   );
 };
 
+const usefulDeadlineTokens = (value: string) =>
+  normaliseLabel(value)
+    .split(" ")
+    .filter((token) => token.length >= 5 && !["actual", "practice"].includes(token));
+
+const deadlineForPlanTask = (task: AdaptiveStudyTask, activeEvents: StudyEvent[], subjects: UserSubject[]) => {
+  const taskSubject = subjectForPlanTask(task, subjects);
+  const taskText = normaliseLabel([task.title, task.topic, task.reason, task.assessment_title, task.subject].filter(Boolean).join(" "));
+  const assessmentTitle = normaliseLabel(task.assessment_title ?? "");
+
+  return activeEvents
+    .map((event) => {
+      const eventSubject = subjectForDeadline(event, subjects);
+      const eventTitle = normaliseLabel(event.title);
+      const eventText = normaliseLabel([event.title, event.description, eventSubject?.subjectName].filter(Boolean).join(" "));
+      const subjectMatch = Boolean(taskSubject?.id && eventSubject?.id && taskSubject.id === eventSubject.id);
+      const directAssessmentMatch = Boolean(
+        assessmentTitle && (eventText.includes(assessmentTitle) || assessmentTitle.includes(eventTitle))
+      );
+      const directTitleMatch = Boolean(eventTitle && taskText.includes(eventTitle));
+      const overlap = usefulDeadlineTokens(event.title).filter((token) => taskText.includes(token)).length;
+      const score = (directAssessmentMatch ? 8 : 0) + (directTitleMatch ? 6 : 0) + (subjectMatch ? 2 : 0) + overlap;
+      return { event, score };
+    })
+    .filter(({ score }) => score >= 4)
+    .sort((a, b) => b.score - a.score || a.event.eventDate.localeCompare(b.event.eventDate))[0]?.event ?? null;
+};
+
+const planReasonWithFreshDeadline = (reason: string, event?: StudyEvent | null) => {
+  if (!event) return reason;
+  const freshLabel = countdownLabel(event);
+  if (/\bis\s+(today|tomorrow|in\s+\d+\s+days?)\b/i.test(reason)) {
+    return reason.replace(/\bis\s+(today|tomorrow|in\s+\d+\s+days?)\b/i, `is ${freshLabel}`);
+  }
+  if (/\b(today|tomorrow|in\s+\d+\s+days?)\b/i.test(reason)) {
+    return reason.replace(/\b(today|tomorrow|in\s+\d+\s+days?)\b/i, freshLabel);
+  }
+  return `${event.title} is ${freshLabel}. ${reason}`;
+};
+
 const isMistakeEvidence = (note: StudyNote) =>
   note.noteType === "mistake_log" || note.tags.includes("mistake-log") || note.tags.includes("timer-check");
 
@@ -434,13 +474,15 @@ export default function DashboardScreen() {
 
     latestPlan?.tasks?.slice(0, 2).forEach((task, index) => {
       const taskSubject = subjectForPlanTask(task, subjects);
+      const matchingDeadline = deadlineForPlanTask(task, upcomingEvents, subjects);
+      const planReason = planReasonWithFreshDeadline(task.reason, matchingDeadline);
       addItem({
         id: `coach-${index}-${task.title}`,
         label: "Coach plan",
         title: task.title,
-        body: `${formatMinutes(clampStudyMinutes(task.minutes))} - ${task.reason}`,
+        body: `${formatMinutes(clampStudyMinutes(task.minutes))} - ${planReason}`,
         subjectId: taskSubject?.id ?? null,
-        topic: task.topic ?? task.title,
+        topic: task.topic ?? topicFromEvent(matchingDeadline) ?? task.title,
         minutes: clampStudyMinutes(task.minutes),
         icon: "clipboard-list-outline",
         accent: palette.primary
@@ -511,6 +553,7 @@ export default function DashboardScreen() {
     nextDeadlineSubject?.id,
     revisionDebt,
     subjects,
+    upcomingEvents,
     weaknessSummary.nextAction,
     weaknessSummary.weakSubject,
     weaknessSummary.weakTopic
