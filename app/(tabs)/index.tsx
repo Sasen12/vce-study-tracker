@@ -88,6 +88,34 @@ const fallbackDailyInspiration: DailyInspiration = {
 
 const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
 const themeRequestThankYouThemeId = "cherry_blossom";
+const appGuideKeyFor = (userId?: string) => `vce_app_guide_seen_${userId ?? "guest"}`;
+
+const guideSteps = [
+  {
+    title: "Home chooses the next move",
+    body: "Start here when you feel overloaded. Today Command picks one useful block from deadlines, weak areas and saved evidence.",
+    icon: "view-dashboard-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.info
+  },
+  {
+    title: "Study is the workbench",
+    body: "Timer, coach, notes and files live together. Start a block, ask for help, then save evidence.",
+    icon: "timer-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.success
+  },
+  {
+    title: "Questions turns gaps into drills",
+    body: "Generate VCE-style practice, battle mode, exam mode and saved corrections when a topic needs pressure.",
+    icon: "cards-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.primary
+  },
+  {
+    title: "Calendar protects deadlines",
+    body: "Add SACs, SATs and exams so the app can count down, plan backwards and stop surprise panic.",
+    icon: "calendar-alert" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.warning
+  }
+];
 
 const messageIconFor = (giftType: string): keyof typeof MaterialCommunityIcons.glyphMap =>
   giftType === "leaderboard" ? "trophy-outline" : "gift-outline";
@@ -446,6 +474,7 @@ export default function DashboardScreen() {
   const [autopsyNext, setAutopsyNext] = useState("");
   const [autopsySaving, setAutopsySaving] = useState(false);
   const [autopsyMessage, setAutopsyMessage] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -486,6 +515,11 @@ export default function DashboardScreen() {
         .catch(() => {
           if (active) setParkingLot([]);
         });
+      AsyncStorage.getItem(appGuideKeyFor(user?.id))
+        .then((value) => {
+          if (active && value !== "seen") setGuideOpen(true);
+        })
+        .catch(() => undefined);
       studyApi
         .dailyInspiration()
         .then(({ inspiration }) => {
@@ -504,6 +538,11 @@ export default function DashboardScreen() {
       };
     }, [fetchAll, user?.id])
   );
+
+  const closeGuide = async () => {
+    setGuideOpen(false);
+    await AsyncStorage.setItem(appGuideKeyFor(user?.id), "seen").catch(() => undefined);
+  };
 
   const todayLabel = useMemo(
     () =>
@@ -1042,7 +1081,13 @@ export default function DashboardScreen() {
             Hey {user?.displayName ?? "there"}
           </Text>
         </View>
-        <StreakWidget streak={activeStreak} />
+        <View style={styles.headerActions}>
+          <Pressable accessibilityRole="button" style={styles.guideButton} onPress={() => setGuideOpen(true)}>
+            <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
+            <Text style={styles.guideButtonText}>Guide</Text>
+          </Pressable>
+          <StreakWidget streak={activeStreak} />
+        </View>
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -1099,18 +1144,18 @@ export default function DashboardScreen() {
       {!examWeekMode ? (
         <Animated.View entering={motion.card(25)}>
           <AppCard style={styles.inspirationCard}>
-          <View style={styles.inspirationTop}>
             <View style={styles.inspirationBadge}>
               <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={18} />
               <Text style={styles.inspirationLabel}>Daily spark</Text>
             </View>
-          </View>
-          <Text style={styles.quote}>{dailyInspiration.quote}</Text>
-          <View style={styles.tipRow}>
-            <MaterialCommunityIcons name="school-outline" color={palette.info} size={18} />
-            <Text style={styles.inspirationTip}>{dailyInspiration.tip}</Text>
-          </View>
-          <Text style={styles.actionText}>Try today: {dailyInspiration.action}</Text>
+            <View style={styles.flexText}>
+              <Text style={styles.quote} numberOfLines={1}>
+                {dailyInspiration.quote}
+              </Text>
+              <Text style={styles.actionText} numberOfLines={1}>
+                {dailyInspiration.action}
+              </Text>
+            </View>
           </AppCard>
         </Animated.View>
       ) : null}
@@ -1427,7 +1472,7 @@ export default function DashboardScreen() {
               <Text variant="titleMedium" style={styles.cardTitle}>
                 Study Command Console
               </Text>
-              <Text style={styles.muted}>Five quiet unlockable tools that make the next move obvious.</Text>
+              <Text style={styles.muted}>Open this when you want the deeper deadline, debt and evidence view.</Text>
             </View>
             <View style={styles.consoleScore}>
               <Text style={styles.consoleScoreValue}>{evidenceAverage}</Text>
@@ -1454,37 +1499,6 @@ export default function DashboardScreen() {
               ? `Radar: ${deadlineRadar.nearest.title} is ${countdownLabel(deadlineRadar.nearest)}.`
               : "Radar: no deadline pressure logged yet."}
           </Text>
-
-          <View style={styles.perkRail}>
-            {PERK_SHOP_ITEMS.map((perk) => {
-              const unlockedPerk = unlockedCosmetics.includes(perkCosmeticId(perk.id));
-              return (
-                <Pressable
-                  key={perk.id}
-                  accessibilityRole="button"
-                  style={[styles.perkChip, unlockedPerk && styles.perkChipUnlocked]}
-                  onPress={() => router.push({ pathname: "/(tabs)/shop", params: { mode: "perks" } })}
-                >
-                  <MaterialCommunityIcons
-                    name={perk.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                    color={unlockedPerk ? palette.info : palette.muted}
-                    size={16}
-                  />
-                  <Text style={unlockedPerk ? styles.perkChipTextUnlocked : styles.perkChipText} numberOfLines={1}>
-                    {perk.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.perkCountText}>{unlockedPerkCount}/{PERK_SHOP_ITEMS.length} perks unlocked in Shop.</Text>
-
-          {focusAuraUnlocked ? (
-            <View style={styles.focusAuraNotice}>
-              <MaterialCommunityIcons name="radar" color={palette.info} size={17} />
-              <Text style={styles.focusAuraText}>Focus Aura is armed for timer sessions.</Text>
-            </View>
-          ) : null}
 
           <View style={styles.consoleSection}>
             <View style={styles.rowBetween}>
@@ -1970,6 +1984,41 @@ export default function DashboardScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog visible={guideOpen && !leaderboardPromptVisible} onDismiss={closeGuide} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Start here</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.dialogBody}>VCE Forge has a lot inside it. You only need four moves to get oriented.</Text>
+            <View style={styles.guideStepList}>
+              {guideSteps.map((step, index) => (
+                <View key={step.title} style={styles.guideStep}>
+                  <View style={[styles.guideStepIcon, { backgroundColor: `${step.color}18` }]}>
+                    <MaterialCommunityIcons name={step.icon} color={step.color} size={20} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.guideStepTitle}>
+                      {index + 1}. {step.title}
+                    </Text>
+                    <Text style={styles.guideStepBody}>{step.body}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={closeGuide}>Got it</Button>
+            <Button
+              mode="contained"
+              icon="timer-play-outline"
+              onPress={() => {
+                void closeGuide();
+                router.push({ pathname: "/(tabs)/study", params: { mode: "timer" } });
+              }}
+            >
+              Start studying
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </Screen>
   );
@@ -1979,7 +2028,32 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
+    gap: 12
+  },
+  headerActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10
+  },
+  guideButton: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}10`,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  guideButtonText: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
   },
   date: {
     color: palette.muted,
@@ -2068,6 +2142,9 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   inspirationCard: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     borderColor: "rgba(96,165,250,0.22)",
     backgroundColor: "rgba(96,165,250,0.08)"
@@ -2080,7 +2157,8 @@ const styles = StyleSheet.create({
   inspirationBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8
+    gap: 8,
+    minWidth: 126
   },
   inspirationLabel: {
     color: palette.warning,
@@ -2090,8 +2168,8 @@ const styles = StyleSheet.create({
   },
   quote: {
     color: palette.text,
-    fontSize: 20,
-    lineHeight: 27,
+    fontSize: 17,
+    lineHeight: 22,
     fontFamily: "Outfit_700Bold"
   },
   tipRow: {
@@ -2106,7 +2184,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: palette.muted,
-    lineHeight: 20
+    lineHeight: 18
   },
   summary: {
     flexDirection: "row",
@@ -2898,6 +2976,36 @@ const styles = StyleSheet.create({
   dialogBody: {
     color: palette.muted,
     lineHeight: 21
+  },
+  guideStepList: {
+    gap: 10
+  },
+  guideStep: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10
+  },
+  guideStepIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  guideStepTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  guideStepBody: {
+    color: palette.muted,
+    lineHeight: 19
   },
   confidenceGrid: {
     flexDirection: "row",
