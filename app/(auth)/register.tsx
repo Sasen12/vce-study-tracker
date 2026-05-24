@@ -7,7 +7,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { VCE_SUBJECTS, VCE_SUBJECT_CATEGORIES } from "@/constants/vceSubjects";
 import { palette, subjectColors } from "@/constants/theme";
 import { useAuthStore } from "@/store/authStore";
-import { defaultTabRouteFor, loadDefaultTab } from "@/utils/defaultTab";
+import { initialAppRouteFor } from "@/utils/appGuide";
 import { inferSchoolNameFromEmail } from "@/utils/schoolEmail";
 
 type SelectedSubject = {
@@ -111,8 +111,7 @@ export default function RegisterScreen() {
         subjects: selected
       });
       const userId = useAuthStore.getState().user?.id;
-      const defaultTab = await loadDefaultTab(userId);
-      router.replace(defaultTabRouteFor(defaultTab));
+      router.replace(await initialAppRouteFor(userId));
     } catch {
       // The auth store surfaces the message inline.
     }
