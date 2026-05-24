@@ -26,6 +26,7 @@ import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
 import { loadStudyPreferences } from "@/utils/studyPreferences";
 import { subjectToolProfile } from "@/utils/subjectTools";
+import { setTimerActivity } from "@/utils/timerActivity";
 
 const formatElapsed = (seconds: number) => {
   const minutes = Math.floor(seconds / 60)
@@ -307,6 +308,16 @@ export default function StudyScreen() {
       cancelAnimation(scale);
     };
   }, [running, scale]);
+
+  useEffect(() => {
+    setTimerActivity({ running });
+  }, [running]);
+
+  useEffect(() => {
+    return () => {
+      setTimerActivity({ running: false });
+    };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return undefined;

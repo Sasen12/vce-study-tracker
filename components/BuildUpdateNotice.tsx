@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet } from "react-native";
 import { Button, Dialog, Portal, Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
+import { useTimerActivity } from "@/utils/timerActivity";
 
 type BuildInfo = {
   buildId: string;
@@ -42,6 +43,7 @@ const formatBuildDate = (value?: string | null) => {
 };
 
 export function BuildUpdateNotice() {
+  const timerActivity = useTimerActivity();
   const currentBuildId = useRef<string | null>(null);
   const [update, setUpdate] = useState<BuildInfo | null>(null);
 
@@ -61,7 +63,7 @@ export function BuildUpdateNotice() {
         }
 
         if (info.buildId !== currentBuildId.current) {
-          setUpdate(info);
+          setUpdate((current) => (current?.buildId === info.buildId ? current : info));
         }
       } catch {
         // Missing build metadata is expected in local dev.
@@ -91,15 +93,20 @@ export function BuildUpdateNotice() {
   };
 
   const changedAt = formatBuildDate(update?.committedAt ?? update?.builtAt);
-  const changes = update?.changes?.length ? update.changes.slice(0, 5) : [update?.message ?? "New app update"];
+  const changes = update?.changes?.length
+    ? update.changes.slice(0, 5)
+    : [update?.message ?? "Fresh fixes and improvements are ready."];
+  const visible = Boolean(update) && !timerActivity.running;
 
   return (
     <Portal>
-      <Dialog visible={Boolean(update)} onDismiss={() => setUpdate(null)} style={styles.dialog}>
-        <Dialog.Title style={styles.dialogTitle}>Update available</Dialog.Title>
+      <Dialog visible={visible} onDismiss={() => setUpdate(null)} style={styles.dialog}>
+        <Dialog.Title style={styles.dialogTitle}>Update ready</Dialog.Title>
         <Dialog.Content style={styles.dialogContent}>
-          <Text style={styles.body}>A newer VCE Forge build is live. Reload to use the latest version.</Text>
-          <Text style={styles.label}>What changed</Text>
+          <Text style={styles.body}>
+            A new VCE Forge build is ready. Reload between tasks to pick up the latest fixes and features.
+          </Text>
+          <Text style={styles.label}>Latest changes</Text>
           {changes.map((change) => (
             <Text key={change} style={styles.changeText}>
               - {change}
@@ -113,7 +120,7 @@ export function BuildUpdateNotice() {
         <Dialog.Actions>
           <Button onPress={() => setUpdate(null)}>Later</Button>
           <Button mode="contained" icon="refresh" onPress={reload}>
-            Reload
+            Reload app
           </Button>
         </Dialog.Actions>
       </Dialog>
