@@ -242,6 +242,11 @@ export const studyApi = {
       method: "POST",
       body
     }),
+  giftCoins: (userId: string, body: { amount: number; message?: string | null }) =>
+    apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/coins`, {
+      method: "POST",
+      body
+    }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>

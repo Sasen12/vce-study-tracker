@@ -275,10 +275,12 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
 
 function UserRow({
   item,
-  onGiftTheme
+  onGiftTheme,
+  onGiftCoins
 }: {
   item: CommunityUserSummary;
   onGiftTheme: (user: CommunityUserSummary) => void;
+  onGiftCoins: (user: CommunityUserSummary) => void;
 }) {
   const unlockedThemeCount = themeShopItems.filter((theme) => item.unlockedCosmetics.includes(theme.id)).length;
 
@@ -308,17 +310,23 @@ function UserRow({
             Active theme: {themeNameById(item.activeTheme)}
           </Text>
           <Text style={styles.mutedSmall}>
-            {unlockedThemeCount}/{themeShopItems.length} themes unlocked
+            {item.xpBalance} coins - {unlockedThemeCount}/{themeShopItems.length} themes unlocked
           </Text>
         </View>
-        <Button mode="outlined" compact icon="gift-outline" onPress={() => onGiftTheme(item)}>
-          Gift theme
-        </Button>
+        <View style={styles.giftActions}>
+          <Button mode="outlined" compact icon="cash-multiple" onPress={() => onGiftCoins(item)}>
+            Gift coins
+          </Button>
+          <Button mode="outlined" compact icon="gift-outline" onPress={() => onGiftTheme(item)}>
+            Gift theme
+          </Button>
+        </View>
       </View>
       <View style={styles.userStats}>
         <Text style={styles.userStat}>Level {item.level}</Text>
         <Text style={styles.userStat}>{titleLabelById(item.activeTitle)}</Text>
         <Text style={styles.userStat}>{item.totalXp} XP</Text>
+        <Text style={styles.userStat}>{item.xpBalance} coins</Text>
         <Text style={styles.userStat}>{item.sessionCount} sessions</Text>
         <Text style={styles.userStat}>{item.subjectCount} subjects</Text>
         <Text style={styles.userStat}>{item.feedbackCount} feedback</Text>
@@ -552,6 +560,9 @@ export default function CommunityScreen() {
   const [resendingLeaderboardInvite, setResendingLeaderboardInvite] = useState(false);
   const [giftUser, setGiftUser] = useState<CommunityUserSummary | null>(null);
   const [giftThemeId, setGiftThemeId] = useState("cherry_blossom");
+  const [coinGiftUser, setCoinGiftUser] = useState<CommunityUserSummary | null>(null);
+  const [coinGiftAmount, setCoinGiftAmount] = useState("120");
+  const [coinGiftMessage, setCoinGiftMessage] = useState("");
   const [gifting, setGifting] = useState(false);
 
   const loadCommunity = useCallback(async () => {
@@ -819,6 +830,14 @@ export default function CommunityScreen() {
     setGiftThemeId(firstGiftThemeFor(user));
   };
 
+  const openGiftCoins = (user: CommunityUserSummary) => {
+    setError(null);
+    setNotice(null);
+    setCoinGiftUser(user);
+    setCoinGiftAmount("120");
+    setCoinGiftMessage(`A little boost from Sasen. Spend these coins on something that makes study feel sharper.`);
+  };
+
   const sendThemeGift = async () => {
     if (!giftUser) return;
     setGifting(true);
@@ -831,6 +850,32 @@ export default function CommunityScreen() {
       setNotice(`Gifted ${themeNameById(giftThemeId)} to ${data.user.displayName}.`);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not gift theme");
+    } finally {
+      setGifting(false);
+    }
+  };
+
+  const sendCoinGift = async () => {
+    if (!coinGiftUser) return;
+    const amount = Number(coinGiftAmount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setError("Enter a whole coin amount.");
+      return;
+    }
+
+    setGifting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.giftCoins(coinGiftUser.id, {
+        amount,
+        message: coinGiftMessage.trim() || null
+      });
+      setUsers((current) => current.map((user) => (user.id === data.user.id ? data.user : user)));
+      setCoinGiftUser(data.user);
+      setNotice(`Gifted ${amount} coins to ${data.user.displayName}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not gift coins");
     } finally {
       setGifting(false);
     }
@@ -893,7 +938,7 @@ export default function CommunityScreen() {
           {users.length ? (
             <View style={styles.list}>
               {users.map((item) => (
-                <UserRow key={item.id} item={item} onGiftTheme={openGiftTheme} />
+                <UserRow key={item.id} item={item} onGiftTheme={openGiftTheme} onGiftCoins={openGiftCoins} />
               ))}
             </View>
           ) : (
@@ -1338,6 +1383,39 @@ export default function CommunityScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog visible={Boolean(coinGiftUser)} onDismiss={() => setCoinGiftUser(null)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Gift coins</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.muted}>
+              {coinGiftUser ? `Send shop coins to ${coinGiftUser.displayName}. They will also receive the message below on Home.` : ""}
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Coins"
+              value={coinGiftAmount}
+              keyboardType="number-pad"
+              onChangeText={setCoinGiftAmount}
+            />
+            <TextInput
+              mode="outlined"
+              label="Short message"
+              value={coinGiftMessage}
+              multiline
+              maxLength={180}
+              onChangeText={setCoinGiftMessage}
+            />
+            <Text style={styles.mutedSmall}>{coinGiftMessage.length}/180 characters</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={gifting} onPress={() => setCoinGiftUser(null)}>
+              Close
+            </Button>
+            <Button mode="contained" icon="cash-multiple" loading={gifting} disabled={gifting || !coinGiftUser} onPress={sendCoinGift}>
+              Gift coins
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </Screen>
   );
@@ -1620,12 +1698,18 @@ const styles = StyleSheet.create({
   },
   giftRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: palette.border,
     paddingTop: 8
+  },
+  giftActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   userThemeText: {
     color: palette.text,

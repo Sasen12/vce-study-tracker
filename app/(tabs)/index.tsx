@@ -90,11 +90,11 @@ const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
 const themeRequestThankYouThemeId = "cherry_blossom";
 
 const messageIconFor = (giftType: string): keyof typeof MaterialCommunityIcons.glyphMap =>
-  giftType === "leaderboard" ? "trophy-outline" : "gift-outline";
+  giftType === "leaderboard" ? "trophy-outline" : giftType === "coins" ? "cash-multiple" : "gift-outline";
 
-const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? palette.warning : palette.warning);
+const messageIconColorFor = (giftType: string) => (giftType === "leaderboard" ? palette.warning : giftType === "coins" ? palette.success : palette.warning);
 
-const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : "Nice");
+const messageActionFor = (giftType: string) => (giftType === "leaderboard" ? "Got it" : giftType === "coins" ? "Claimed" : "Nice");
 
 type ParkingLotItem = {
   id: string;

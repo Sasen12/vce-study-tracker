@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
-import { DEFAULT_TITLE_ID, grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
+import { DEFAULT_TITLE_ID, ensureGamification, grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 
 export const communityRouter = Router();
@@ -23,6 +23,11 @@ const subjectRoomIdSchema = z.string().trim().min(1).max(80).regex(/^[a-z0-9-]+$
 const giftThemeSchema = z.object({
   themeId: z.string().trim().min(1),
   equip: z.boolean().default(true)
+});
+
+const giftCoinsSchema = z.object({
+  amount: z.coerce.number().int().min(1).max(5000),
+  message: z.string().trim().min(3).max(180).optional().nullable()
 });
 
 const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "pro", "profile"] as const;
@@ -917,6 +922,46 @@ communityRouter.post(
         giftId: payload.themeId
       }
     });
+
+    const user = await adminUserById(userId);
+    res.json({ user });
+  })
+);
+
+communityRouter.post(
+  "/users/:id/gifts/coins",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+
+    const userId = z.string().uuid().parse(req.params.id);
+    const payload = giftCoinsSchema.parse(req.body);
+    const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!existing) {
+      throw new HttpError(404, "User not found");
+    }
+
+    await ensureGamification(userId);
+    const giftMessage =
+      payload.message?.trim() || `Sasen gifted you ${payload.amount} coins. Spend them in the Shop when you are ready.`;
+
+    await prisma.$transaction([
+      prisma.userGamification.update({
+        where: { userId },
+        data: {
+          xpBalance: { increment: payload.amount }
+        }
+      }),
+      prisma.userGiftMessage.create({
+        data: {
+          userId,
+          title: `${payload.amount} coin gift`,
+          message: giftMessage,
+          giftType: "coins",
+          giftId: `coins:${payload.amount}:${Date.now()}`
+        }
+      })
+    ]);
 
     const user = await adminUserById(userId);
     res.json({ user });
