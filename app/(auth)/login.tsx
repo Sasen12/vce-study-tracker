@@ -33,7 +33,7 @@ export default function LoginScreen() {
         <View style={styles.brand}>
           <LinearGradient colors={[palette.primary, palette.secondary]} style={styles.mark} />
           <Text variant="displaySmall" style={styles.title}>
-            VCE Pulse
+            VCE Forge
           </Text>
           <Text style={styles.subtitle}>Study sessions, SAC dates, AI drills, and the small wins that add up.</Text>
         </View>

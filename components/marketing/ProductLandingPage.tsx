@@ -180,7 +180,7 @@ export function ProductLandingPage() {
                 Your SACs, study sessions, weak topics, notes, AI drills, and revision plan in one place.
               </Text>
               <Text style={styles.heroBody}>
-                VCE Pulse is a study command centre for Year 11 and Year 12 students who need tonight's plan, not
+                VCE Forge is a study command centre for Year 11 and Year 12 students who need tonight's plan, not
                 another blank planner.
               </Text>
               <View style={styles.ctaRow}>
@@ -200,7 +200,7 @@ export function ProductLandingPage() {
           <SectionHeader
             label="The problem"
             title="VCE does not fail neatly."
-            body="It piles up: SACs, weak topics, random notes, forgotten deadlines, and panic revision. VCE Pulse turns that mess into a single command centre."
+            body="It piles up: SACs, weak topics, random notes, forgotten deadlines, and panic revision. VCE Forge turns that mess into a single command centre."
           />
           <View style={[styles.problemGrid, isWide && styles.problemGridWide]}>
             {problems.map((problem) => (
@@ -570,7 +570,7 @@ function FinalCta({ isCompact }: { isCompact: boolean }) {
   return (
     <LinearGradient colors={["rgba(124,110,255,0.22)", "rgba(56,189,248,0.13)"]} style={styles.finalCta}>
       <View style={styles.finalInner}>
-        <Text style={styles.finalLabel}>VCE Pulse</Text>
+        <Text style={styles.finalLabel}>VCE Forge</Text>
         <Text style={[styles.finalTitle, isCompact && styles.finalTitleCompact]}>
           Register before the next SAC becomes damage control.
         </Text>

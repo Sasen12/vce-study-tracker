@@ -83,11 +83,11 @@ cron.schedule(
 const start = async () => {
   await ensureDatabaseSchema();
   app.listen(port, () => {
-    console.log(`VCE Study Tracker API running on http://localhost:${port}`);
+    console.log(`VCE Forge API running on http://localhost:${port}`);
   });
 };
 
 start().catch((error) => {
-  console.error("Failed to start VCE Study Tracker API", error);
+  console.error("Failed to start VCE Forge API", error);
   process.exit(1);
 });

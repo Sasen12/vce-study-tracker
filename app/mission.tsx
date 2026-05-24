@@ -46,7 +46,7 @@ export default function MissionPage() {
                 Make VCE feel controllable.
               </Text>
               <Text style={styles.heroLead}>
-                VCE Pulse exists to help Australian VCE students turn scattered pressure into a clear study plan.
+                VCE Forge exists to help Australian VCE students turn scattered pressure into a clear study plan.
               </Text>
               <Text style={styles.heroBody}>
                 The goal is simple: help students know what is due, what is weak, what to practise, and what to do
@@ -74,7 +74,7 @@ export default function MissionPage() {
               <Text style={styles.statementLabel}>Why it exists</Text>
               <Text style={styles.statementText}>
                 VCE is intense because everything matters at once. SAC dates, revision, notes, teacher resources,
-                subject weaknesses, and motivation all compete for attention. VCE Pulse brings them into one focused
+                subject weaknesses, and motivation all compete for attention. VCE Forge brings them into one focused
                 command centre so students can act before the deadline hits.
               </Text>
             </LinearGradient>
@@ -102,7 +102,7 @@ export default function MissionPage() {
           <View style={styles.finalCard}>
             <Text style={styles.finalTitle}>Built for students who want a plan before the panic.</Text>
             <Text style={styles.finalBody}>
-              Start with your subjects, your SACs, and tonight's study block. VCE Pulse turns the rest into signals.
+              Start with your subjects, your SACs, and tonight's study block. VCE Forge turns the rest into signals.
             </Text>
             <View style={styles.ctaRow}>
               <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.primaryCta}>

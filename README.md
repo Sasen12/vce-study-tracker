@@ -1,4 +1,4 @@
-# VCE Study Tracker
+# VCE Forge
 
 A full-stack Expo + Node.js study app for Australian VCE Year 12 students. It includes dark-mode mobile screens, JWT auth, study timers, SAC/exam tracking, OpenAI-powered practice questions, adaptive study plans, notes, textbook/Obsidian context upload, goals, XP, streaks, badges, and a chess break mode.
 

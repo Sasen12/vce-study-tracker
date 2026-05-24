@@ -98,7 +98,7 @@ export function BuildUpdateNotice() {
       <Dialog visible={Boolean(update)} onDismiss={() => setUpdate(null)} style={styles.dialog}>
         <Dialog.Title style={styles.dialogTitle}>Update available</Dialog.Title>
         <Dialog.Content style={styles.dialogContent}>
-          <Text style={styles.body}>A newer Study Tracker build is live. Reload to use the latest version.</Text>
+          <Text style={styles.body}>A newer VCE Forge build is live. Reload to use the latest version.</Text>
           <Text style={styles.label}>What changed</Text>
           {changes.map((change) => (
             <Text key={change} style={styles.changeText}>

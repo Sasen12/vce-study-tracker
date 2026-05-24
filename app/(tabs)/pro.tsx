@@ -107,7 +107,7 @@ export default function ProScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Coming soon</Text>
         <Text variant="headlineLarge" style={styles.title}>
-          VCE Study Tracker Pro
+          VCE Forge Pro
         </Text>
         <Text style={styles.lede}>
           The free app stays alive. Pro is for the students, parents and tutors who want deeper planning without surprise charges.

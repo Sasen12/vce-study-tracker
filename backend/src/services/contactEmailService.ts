@@ -69,7 +69,7 @@ export const sendContactEmail = async (message: ContactMessage): Promise<EmailRe
     to;
 
   const text = [
-    "A student sent a pre-account question from the VCE Pulse contact page.",
+    "A student sent a pre-account question from the VCE Forge contact page.",
     "",
     field("Name", message.name),
     field("Email", message.email),
@@ -83,8 +83,8 @@ export const sendContactEmail = async (message: ContactMessage): Promise<EmailRe
 
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-      <h2>VCE Pulse contact question</h2>
-      <p>A student sent a pre-account question from the VCE Pulse contact page.</p>
+      <h2>VCE Forge contact question</h2>
+      <p>A student sent a pre-account question from the VCE Forge contact page.</p>
       <ul>
         <li><strong>Name:</strong> ${escapeHtml(message.name)}</li>
         <li><strong>Email:</strong> ${escapeHtml(message.email)}</li>
@@ -101,7 +101,7 @@ export const sendContactEmail = async (message: ContactMessage): Promise<EmailRe
     to,
     from,
     replyTo: message.email,
-    subject: `VCE Pulse question from ${message.name}`,
+    subject: `VCE Forge question from ${message.name}`,
     text,
     html
   });

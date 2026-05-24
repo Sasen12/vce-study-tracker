@@ -27,7 +27,7 @@ export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
             <View style={styles.logoCore} />
           </LinearGradient>
           <View>
-            <Text style={styles.brandName}>VCE Pulse</Text>
+            <Text style={styles.brandName}>VCE Forge</Text>
             <Text style={styles.brandMeta}>Study command centre</Text>
           </View>
         </Pressable>

@@ -85,7 +85,7 @@ export default function ContactPage() {
             </View>
 
             <View style={styles.directCard}>
-              <Text style={styles.cardLabel}>VCE Pulse inbox</Text>
+              <Text style={styles.cardLabel}>VCE Forge inbox</Text>
               <Text style={styles.emailText}>Private by default</Text>
               <Text style={styles.cardBody}>
                 Send the form below and it lands inside the app admin inbox. No public address, no mail app jump.
@@ -99,7 +99,7 @@ export default function ContactPage() {
                 <Text style={styles.sectionLabel}>Student details</Text>
                 <Text style={styles.sectionTitle}>Send the context in one clean message.</Text>
                 <Text style={styles.sectionBody}>
-                  The form sends your details to the VCE Pulse inbox with everything needed to reply properly.
+                  The form sends your details to the VCE Forge inbox with everything needed to reply properly.
                 </Text>
                 <View style={styles.contactSignal}>
                   <MaterialCommunityIcons name="email-fast-outline" color={palette.success} size={22} />

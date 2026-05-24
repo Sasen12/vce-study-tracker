@@ -151,7 +151,7 @@ export default function ShopScreen() {
               <MaterialCommunityIcons name="star-four-points-outline" color={palette.warning} size={24} />
             </View>
             <View style={styles.flexText}>
-              <Text style={styles.cardTitle}>VCE Study Tracker Pro</Text>
+              <Text style={styles.cardTitle}>VCE Forge Pro</Text>
               <Text style={styles.muted}>Coming soon. Join the waitlist to test interest before payments exist.</Text>
             </View>
           </View>
