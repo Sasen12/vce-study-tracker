@@ -88,32 +88,70 @@ const fallbackDailyInspiration: DailyInspiration = {
 
 const themeRequestThankYouEmail = "lakeeshahaffi@yahoo.com";
 const themeRequestThankYouThemeId = "cherry_blossom";
-const appGuideKeyFor = (userId?: string) => `vce_app_guide_seen_${userId ?? "guest"}`;
+const appGuideKeyFor = (userId?: string) => `vce_app_guide_seen_v2_${userId ?? "guest"}`;
 
-const guideSteps = [
+type GuideAction = "profile" | "calendar" | "study" | "questions" | "close";
+
+const guidePages = [
   {
-    title: "Home chooses the next move",
-    body: "Start here when you feel overloaded. Today Command picks one useful block from deadlines, weak areas and saved evidence.",
+    kicker: "First five minutes",
+    title: "Set up the map before you study",
+    body: "VCE Forge works best after it knows your subjects, your next deadline and one piece of study evidence.",
     icon: "view-dashboard-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
-    color: palette.info
+    color: palette.info,
+    action: "profile" as GuideAction,
+    actionLabel: "Add subjects",
+    actionIcon: "book-plus-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    points: [
+      "Add your active Unit 1/2 or Unit 3/4 subjects.",
+      "Put your next SAC, SAT or exam into Calendar.",
+      "Finish one timer block so the coach has a real signal."
+    ]
   },
   {
-    title: "Study is the workbench",
-    body: "Timer, coach, notes and files live together. Start a block, ask for help, then save evidence.",
+    kicker: "Home",
+    title: "Do not read everything. Find tonight.",
+    body: "Home is the command centre. The top job is to decide what needs attention now, then move you into study.",
+    icon: "compass-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.primary,
+    action: "study" as GuideAction,
+    actionLabel: "Start a block",
+    actionIcon: "timer-play-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    points: [
+      "Today Command is the main recommendation.",
+      "Upcoming shows what is coming, not every calendar detail.",
+      "Use Rescue or Panic plan when a deadline is close."
+    ]
+  },
+  {
+    kicker: "Tabs",
+    title: "Each tab has one job",
+    body: "When the app feels big, use the tab names as decisions. Pick the job, ignore the rest.",
     icon: "timer-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
-    color: palette.success
+    color: palette.success,
+    action: "questions" as GuideAction,
+    actionLabel: "Make a drill",
+    actionIcon: "cards-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    points: [
+      "Study: timer, coach, notes and files.",
+      "Calendar: SACs, exams and protected deadlines.",
+      "Questions: VCE-style drills, battles and saved corrections."
+    ]
   },
   {
-    title: "Questions turns gaps into drills",
-    body: "Generate VCE-style practice, battle mode, exam mode and saved corrections when a topic needs pressure.",
-    icon: "cards-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
-    color: palette.primary
-  },
-  {
-    title: "Calendar protects deadlines",
-    body: "Add SACs, SATs and exams so the app can count down, plan backwards and stop surprise panic.",
-    icon: "calendar-alert" as keyof typeof MaterialCommunityIcons.glyphMap,
-    color: palette.warning
+    kicker: "Personalisation",
+    title: "The app changes when you leave evidence",
+    body: "It becomes more useful when you log sessions, save weak answers and upload the material you are actually using.",
+    icon: "fingerprint" as keyof typeof MaterialCommunityIcons.glyphMap,
+    color: palette.warning,
+    action: "close" as GuideAction,
+    actionLabel: "Use the app",
+    actionIcon: "check-circle-outline" as keyof typeof MaterialCommunityIcons.glyphMap,
+    points: [
+      "Weak topics become drills and repair plans.",
+      "Notes and files give the coach better context.",
+      "XP, streaks and themes reward study without taking over."
+    ]
   }
 ];
 
@@ -475,6 +513,7 @@ export default function DashboardScreen() {
   const [autopsySaving, setAutopsySaving] = useState(false);
   const [autopsyMessage, setAutopsyMessage] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [guidePage, setGuidePage] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -517,7 +556,10 @@ export default function DashboardScreen() {
         });
       AsyncStorage.getItem(appGuideKeyFor(user?.id))
         .then((value) => {
-          if (active && value !== "seen") setGuideOpen(true);
+          if (active && value !== "seen") {
+            setGuidePage(0);
+            setGuideOpen(true);
+          }
         })
         .catch(() => undefined);
       studyApi
@@ -541,7 +583,32 @@ export default function DashboardScreen() {
 
   const closeGuide = async () => {
     setGuideOpen(false);
+    setGuidePage(0);
     await AsyncStorage.setItem(appGuideKeyFor(user?.id), "seen").catch(() => undefined);
+  };
+
+  const openGuide = () => {
+    setGuidePage(0);
+    setGuideOpen(true);
+  };
+
+  const runGuideAction = async (action: GuideAction) => {
+    await closeGuide();
+    if (action === "profile") {
+      router.push("/(tabs)/profile");
+      return;
+    }
+    if (action === "calendar") {
+      router.push("/(tabs)/calendar");
+      return;
+    }
+    if (action === "study") {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "timer" } });
+      return;
+    }
+    if (action === "questions") {
+      router.push({ pathname: "/(tabs)/questions", params: { mode: "generate" } });
+    }
   };
 
   const todayLabel = useMemo(
@@ -562,6 +629,38 @@ export default function DashboardScreen() {
         .slice(0, 3),
     [events]
   );
+  const hasFutureAssessment = useMemo(
+    () => events.some((event) => !event.completed && !isStudyTimeEvent(event) && daysUntil(event.eventDate) >= 0),
+    [events]
+  );
+  const guideChecklist = useMemo(
+    () => [
+      {
+        title: "Subjects added",
+        done: subjects.length > 0,
+        detail: subjects.length ? `${subjects.length} active` : "Profile"
+      },
+      {
+        title: "Next deadline entered",
+        done: hasFutureAssessment,
+        detail: hasFutureAssessment ? "Calendar ready" : "Calendar"
+      },
+      {
+        title: "First study block logged",
+        done: sessions.length > 0,
+        detail: sessions.length ? "Evidence started" : "Study"
+      },
+      {
+        title: "One useful note or correction saved",
+        done: notes.length > 0 || savedQuestions.length > 0,
+        detail: notes.length || savedQuestions.length ? "Memory started" : "Questions or notes"
+      }
+    ],
+    [hasFutureAssessment, notes.length, savedQuestions.length, sessions.length, subjects.length]
+  );
+  const guideProgress = guideChecklist.filter((item) => item.done).length;
+  const currentGuidePage = guidePages[guidePage] ?? guidePages[0];
+  const isLastGuidePage = guidePage >= guidePages.length - 1;
 
   const defaultSubject = subjects[0] ?? null;
   const panicSubject = subjects.find((subject) => subject.id === panicSubjectId) ?? defaultSubject;
@@ -1082,7 +1181,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable accessibilityRole="button" style={styles.guideButton} onPress={() => setGuideOpen(true)}>
+          <Pressable accessibilityRole="button" style={styles.guideButton} onPress={openGuide}>
             <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
             <Text style={styles.guideButtonText}>Guide</Text>
           </Pressable>
@@ -1988,34 +2087,84 @@ export default function DashboardScreen() {
         <Dialog visible={guideOpen && !leaderboardPromptVisible} onDismiss={closeGuide} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>Start here</Dialog.Title>
           <Dialog.Content style={styles.dialogContent}>
-            <Text style={styles.dialogBody}>VCE Forge has a lot inside it. You only need four moves to get oriented.</Text>
-            <View style={styles.guideStepList}>
-              {guideSteps.map((step, index) => (
-                <View key={step.title} style={styles.guideStep}>
-                  <View style={[styles.guideStepIcon, { backgroundColor: `${step.color}18` }]}>
-                    <MaterialCommunityIcons name={step.icon} color={step.color} size={20} />
-                  </View>
-                  <View style={styles.flexText}>
-                    <Text style={styles.guideStepTitle}>
-                      {index + 1}. {step.title}
-                    </Text>
-                    <Text style={styles.guideStepBody}>{step.body}</Text>
-                  </View>
+            <View style={styles.guideHero}>
+              <View style={[styles.guideHeroIcon, { backgroundColor: `${currentGuidePage.color}18` }]}>
+                <MaterialCommunityIcons name={currentGuidePage.icon} color={currentGuidePage.color} size={24} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.guideKicker}>{currentGuidePage.kicker}</Text>
+                <Text style={styles.guideHeroTitle}>{currentGuidePage.title}</Text>
+              </View>
+            </View>
+            <Text style={styles.dialogBody}>{currentGuidePage.body}</Text>
+
+            {guidePage === 0 ? (
+              <View style={styles.guideChecklist}>
+                <View style={styles.guideProgressHeader}>
+                  <Text style={styles.guideProgressTitle}>Setup progress</Text>
+                  <Text style={styles.guideProgressCount}>
+                    {guideProgress}/{guideChecklist.length}
+                  </Text>
                 </View>
+                {guideChecklist.map((item) => (
+                  <View key={item.title} style={styles.guideChecklistItem}>
+                    <MaterialCommunityIcons
+                      name={item.done ? "check-circle" : "circle-outline"}
+                      color={item.done ? palette.success : palette.muted}
+                      size={18}
+                    />
+                    <View style={styles.flexText}>
+                      <Text style={[styles.guideChecklistTitle, item.done ? styles.guideChecklistTitleDone : null]}>{item.title}</Text>
+                      <Text style={styles.guideChecklistDetail}>{item.detail}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.guidePointList}>
+              {currentGuidePage.points.map((point) => (
+                <View key={point} style={styles.guidePoint}>
+                  <View style={[styles.guidePointDot, { backgroundColor: currentGuidePage.color }]} />
+                  <Text style={styles.guidePointText}>{point}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Button
+              mode="contained-tonal"
+              icon={currentGuidePage.actionIcon}
+              onPress={() => {
+                void runGuideAction(currentGuidePage.action);
+              }}
+            >
+              {currentGuidePage.actionLabel}
+            </Button>
+
+            <View style={styles.guidePager}>
+              {guidePages.map((page, index) => (
+                <View
+                  key={page.title}
+                  style={[styles.guidePagerDot, index === guidePage && { backgroundColor: currentGuidePage.color }]}
+                />
               ))}
             </View>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={closeGuide}>Got it</Button>
+            {guidePage > 0 ? <Button onPress={() => setGuidePage((page) => Math.max(0, page - 1))}>Back</Button> : null}
+            <Button onPress={closeGuide}>{isLastGuidePage ? "Done" : "Skip"}</Button>
             <Button
               mode="contained"
-              icon="timer-play-outline"
+              icon={isLastGuidePage ? "check" : "arrow-right"}
               onPress={() => {
-                void closeGuide();
-                router.push({ pathname: "/(tabs)/study", params: { mode: "timer" } });
+                if (isLastGuidePage) {
+                  void closeGuide();
+                  return;
+                }
+                setGuidePage((page) => Math.min(guidePages.length - 1, page + 1));
               }}
             >
-              Start studying
+              {isLastGuidePage ? "Finish" : "Next"}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -2976,6 +3125,101 @@ const styles = StyleSheet.create({
   dialogBody: {
     color: palette.muted,
     lineHeight: 21
+  },
+  guideHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  guideHeroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  guideKicker: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  guideHeroTitle: {
+    color: palette.text,
+    fontSize: 20,
+    lineHeight: 25,
+    fontFamily: "Outfit_700Bold"
+  },
+  guideChecklist: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10,
+    gap: 8
+  },
+  guideProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10
+  },
+  guideProgressTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  guideProgressCount: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold"
+  },
+  guideChecklistItem: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9
+  },
+  guideChecklistTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  guideChecklistTitleDone: {
+    color: palette.success
+  },
+  guideChecklistDetail: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
+  },
+  guidePointList: {
+    gap: 8
+  },
+  guidePoint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9
+  },
+  guidePointDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginTop: 7
+  },
+  guidePointText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    lineHeight: 20
+  },
+  guidePager: {
+    flexDirection: "row",
+    alignSelf: "center",
+    gap: 7
+  },
+  guidePagerDot: {
+    width: 20,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.16)"
   },
   guideStepList: {
     gap: 10
