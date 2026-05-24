@@ -36,6 +36,7 @@ import {
   globalStudySearch,
   sacPanicTag
 } from "@/utils/vceCoach";
+import { buildUserStudySignature } from "@/utils/personalization";
 import { getActiveStreak } from "@/utils/streaks";
 
 const daysUntil = (eventDate: string) => {
@@ -415,6 +416,10 @@ export default function DashboardScreen() {
     () => Math.round(evidenceItems.reduce((sum, item) => sum + item.score, 0) / Math.max(evidenceItems.length, 1)),
     [evidenceItems]
   );
+  const studySignature = useMemo(
+    () => buildUserStudySignature({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
+    [events, goals, notes, resources, savedQuestions, sessions, subjects]
+  );
   const tonightPlan = useMemo(() => {
     const items: TonightPlanItem[] = [];
     const addItem = (item: TonightPlanItem) => {
@@ -661,6 +666,18 @@ export default function DashboardScreen() {
     });
   };
 
+  const openPersonalizedMove = () => {
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: String(clampStudyMinutes(studySignature.nextMove.minutes)),
+        ...(studySignature.nextMove.subjectId ? { subjectId: studySignature.nextMove.subjectId } : {}),
+        ...(studySignature.nextMove.topic ? { rescueTopic: studySignature.nextMove.topic } : {})
+      }
+    });
+  };
+
   const startRescueMode = (minutes = 12) => {
     if (!rescueSubject) return;
     router.push({
@@ -814,6 +831,22 @@ export default function DashboardScreen() {
             </View>
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
+
+          <Pressable accessibilityRole="button" style={styles.personalSignal} onPress={openPersonalizedMove}>
+            <View style={[styles.personalSignalIcon, { backgroundColor: `${studySignature.nextMove.accent}18` }]}>
+              <MaterialCommunityIcons name={studySignature.nextMove.icon} color={studySignature.nextMove.accent} size={20} />
+            </View>
+            <View style={styles.flexText}>
+              <Text style={styles.personalSignalLabel}>{studySignature.profileName}</Text>
+              <Text style={styles.personalSignalTitle} numberOfLines={1}>
+                {studySignature.nextMove.title}
+              </Text>
+              <Text style={styles.muted} numberOfLines={1}>
+                {studySignature.nextMove.body}
+              </Text>
+            </View>
+            <Text style={styles.personalSignalDepth}>{studySignature.depthLabel}</Text>
+          </Pressable>
 
           {primaryPlan ? (
             <Pressable accessibilityRole="button" style={styles.planRow} onPress={() => openTimerForPlan(primaryPlan)}>
@@ -1780,6 +1813,50 @@ const styles = StyleSheet.create({
     gap: 14,
     borderColor: "rgba(56,189,248,0.22)",
     backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  personalSignal: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  personalSignalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  personalSignalLabel: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textTransform: "uppercase"
+  },
+  personalSignalTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  personalSignalDepth: {
+    overflow: "hidden",
+    maxWidth: 94,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.24)",
+    backgroundColor: "rgba(56,189,248,0.08)",
+    color: palette.info,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textAlign: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 6
   },
   nextUpRow: {
     minHeight: 34,

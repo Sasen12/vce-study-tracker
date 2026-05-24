@@ -25,6 +25,7 @@ import {
   saveDefaultTab,
   type DefaultTabId
 } from "@/utils/defaultTab";
+import { buildUserStudySignature } from "@/utils/personalization";
 import {
   DEFAULT_STUDY_PREFERENCES,
   loadStudyPreferences,
@@ -390,10 +391,12 @@ export default function ProfileScreen() {
   const {
     subjects,
     sessions,
+    events,
     goals,
     savedQuestions,
     reflections,
     notes,
+    resources,
     gamification,
     loading,
     fetchAll,
@@ -556,6 +559,11 @@ export default function ProfileScreen() {
       message
     };
   }, [adaptiveSubjects, sessions, weekEnd, weekStart]);
+
+  const studySignature = useMemo(
+    () => buildUserStudySignature({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
+    [events, goals, notes, resources, savedQuestions, sessions, subjects]
+  );
 
   const signOut = async () => {
     await logout();
@@ -725,6 +733,52 @@ export default function ProfileScreen() {
           </Button>
         </View>
         {studyPreferenceMessage ? <Text style={styles.preferenceMessage}>{studyPreferenceMessage}</Text> : null}
+      </AppCard>
+
+      <AppCard style={styles.signatureCard}>
+        <View style={styles.signatureTop}>
+          <View style={styles.signatureMark}>
+            <MaterialCommunityIcons name="fingerprint" color={palette.info} size={24} />
+          </View>
+          <View style={styles.flexText}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Study DNA
+            </Text>
+            <Text style={styles.signatureName}>{studySignature.profileName}</Text>
+            <Text style={styles.muted}>{studySignature.depthLabel} - {studySignature.depth}% mapped</Text>
+          </View>
+        </View>
+        <View style={styles.signatureTraitGrid}>
+          {studySignature.traits.map((trait) => (
+            <View key={trait.label} style={styles.signatureTrait}>
+              <MaterialCommunityIcons name={trait.icon} color={trait.accent} size={19} />
+              <View style={styles.defaultTabTextWrap}>
+                <Text style={styles.signatureTraitLabel}>{trait.label}</Text>
+                <Text style={styles.signatureTraitValue} numberOfLines={1}>
+                  {trait.value}
+                </Text>
+                <Text style={styles.defaultTabDescription} numberOfLines={2}>
+                  {trait.detail}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={styles.signatureNextMove}>
+          <View style={[styles.signatureMoveIcon, { backgroundColor: `${studySignature.nextMove.accent}18` }]}>
+            <MaterialCommunityIcons name={studySignature.nextMove.icon} color={studySignature.nextMove.accent} size={20} />
+          </View>
+          <View style={styles.flexText}>
+            <Text style={styles.signatureTraitLabel}>Personal next move</Text>
+            <Text style={styles.signatureTraitValue} numberOfLines={1}>
+              {studySignature.nextMove.title}
+            </Text>
+            <Text style={styles.defaultTabDescription} numberOfLines={2}>
+              {studySignature.nextMove.body}
+            </Text>
+          </View>
+          <Text style={styles.signatureMinutes}>{studySignature.nextMove.minutes}m</Text>
+        </View>
       </AppCard>
 
       <AppCard style={styles.atarCard}>
@@ -900,6 +954,10 @@ const styles = StyleSheet.create({
     color: palette.muted,
     lineHeight: 20
   },
+  flexText: {
+    flex: 1,
+    minWidth: 0
+  },
   preferenceCard: {
     gap: 14
   },
@@ -984,6 +1042,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Outfit_700Bold",
     textTransform: "uppercase"
+  },
+  signatureCard: {
+    gap: 14,
+    borderColor: "rgba(56,189,248,0.24)",
+    backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  signatureTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  signatureMark: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(56,189,248,0.14)"
+  },
+  signatureName: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18
+  },
+  signatureTraitGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  signatureTrait: {
+    flex: 1,
+    minWidth: 180,
+    minHeight: 98,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9
+  },
+  signatureTraitLabel: {
+    color: palette.muted,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  signatureTraitValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  signatureNextMove: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  signatureMoveIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  signatureMinutes: {
+    minWidth: 42,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "right"
   },
   atarCard: {
     gap: 10
