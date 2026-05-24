@@ -64,8 +64,28 @@ const parseResponse = async <T>(response: Response): Promise<T> => {
     return undefined as T;
   }
 
+  const contentType = response.headers.get("content-type") ?? "";
   const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
+  const isJson = contentType.includes("application/json");
+  const fallbackMessage =
+    response.status === 404
+      ? "API route not found. The backend may need to be updated or restarted."
+      : "The server returned something the app could not read. Try again after the backend is restarted.";
+
+  if (!isJson) {
+    if (!response.ok) {
+      throw new ApiRequestError(response.status, fallbackMessage);
+    }
+    throw new ApiRequestError(response.status, fallbackMessage);
+  }
+
+  let data: { message?: string } & Record<string, unknown>;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new ApiRequestError(response.status, fallbackMessage);
+  }
+
   if (!response.ok) {
     throw new ApiRequestError(response.status, data.message ?? "Request failed");
   }

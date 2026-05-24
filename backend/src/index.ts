@@ -65,6 +65,10 @@ app.use("/api/community", communityRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/memory", memoryRouter);
 
+app.use("/api", (_req, res) => {
+  res.status(404).json({ message: "API route not found. The backend may need to be updated or restarted." });
+});
+
 app.use(errorHandler);
 
 cron.schedule(

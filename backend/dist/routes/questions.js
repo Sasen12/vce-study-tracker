@@ -110,7 +110,7 @@ questionsRouter.post("/generate", limitAiUsage({ cost: (req) => Number(req.body?
     const authReq = req;
     const payload = generateSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-        where: { id: payload.subjectId, userId: authReq.user.id }
+        where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject)
         throw new HttpError(404, "Subject not found");
@@ -162,7 +162,7 @@ questionsRouter.post("/timer-check", limitAiUsage(), asyncHandler(async (req, re
     const authReq = req;
     const payload = timerCheckSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-        where: { id: payload.subjectId, userId: authReq.user.id }
+        where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject)
         throw new HttpError(404, "Subject not found");
@@ -212,7 +212,7 @@ questionsRouter.post("/save", asyncHandler(async (req, res) => {
     let subject = null;
     if (payload.subjectId) {
         subject = await prisma.userSubject.findFirst({
-            where: { id: payload.subjectId, userId: authReq.user.id }
+            where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
         });
         if (!subject)
             throw new HttpError(404, "Subject not found");
@@ -270,7 +270,7 @@ questionsRouter.post("/check-answer", limitAiUsage(), asyncHandler(async (req, r
     const payload = checkAnswerSchema.parse(req.body);
     const subject = payload.subjectId
         ? await prisma.userSubject.findFirst({
-            where: { id: payload.subjectId, userId: authReq.user.id }
+            where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
         })
         : null;
     if (payload.subjectId && !subject)

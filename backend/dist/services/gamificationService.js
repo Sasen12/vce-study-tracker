@@ -242,6 +242,43 @@ export const BADGE_SHOP_ITEMS = [
         description: "A collectible badge for turning the term around."
     }
 ];
+export const PERK_SHOP_ITEMS = [
+    {
+        id: "rescue_plus",
+        label: "Rescue Plus",
+        price: 120,
+        icon: "lifebuoy",
+        description: "Unlock 8, 12 and 18 minute rescue presets on Home."
+    },
+    {
+        id: "focus_aura",
+        label: "Focus Aura",
+        price: 180,
+        icon: "radar",
+        description: "Give the study timer a subtle unlocked focus-state glow."
+    },
+    {
+        id: "streak_shield",
+        label: "Streak Shield",
+        price: 240,
+        icon: "shield-check-outline",
+        description: "Adds a quiet 8 minute save-the-streak launcher when today is empty."
+    },
+    {
+        id: "victory_vault",
+        label: "Victory Vault",
+        price: 300,
+        icon: "archive-star-outline",
+        description: "Unlocks a recent wins vault from your logged study evidence."
+    },
+    {
+        id: "boss_battle",
+        label: "Boss Battle Deck",
+        price: 420,
+        icon: "sword-cross",
+        description: "Jump straight into a hard battle drill from Home."
+    }
+];
 export const calculateSessionXp = (durationSeconds) => {
     const base = Math.floor(durationSeconds / 600) * 10;
     const bonus = durationSeconds > 3600 ? 25 : 0;
@@ -268,8 +305,8 @@ export const inferStarterTitleFromSubjectCounts = (counts) => {
 };
 const inferStarterTitleForUser = async (userId) => {
     const [unit12Count, unit34Count] = await Promise.all([
-        prisma.userSubject.count({ where: { userId, unit: "1/2" } }),
-        prisma.userSubject.count({ where: { userId, unit: "3/4" } })
+        prisma.userSubject.count({ where: { userId, unit: "1/2", archivedAt: null } }),
+        prisma.userSubject.count({ where: { userId, unit: "3/4", archivedAt: null } })
     ]);
     return inferStarterTitleFromSubjectCounts({ unit12Count, unit34Count });
 };
@@ -370,7 +407,9 @@ export const recordStudySessionEffects = async (input) => {
 const themeById = (themeId) => THEME_SHOP_ITEMS.find((item) => item.id === themeId);
 const titleById = (titleId) => TITLE_SHOP_ITEMS.find((item) => item.id === titleId);
 const badgeById = (badgeId) => BADGE_SHOP_ITEMS.find((item) => item.id === badgeId);
+const perkById = (perkId) => PERK_SHOP_ITEMS.find((item) => item.id === perkId);
 const titleCosmeticId = (titleId) => `title:${titleId}`;
+const perkCosmeticId = (perkId) => `perk:${perkId}`;
 export const unlockTheme = async (userId, themeId) => {
     const theme = themeById(themeId);
     if (!theme)
@@ -489,9 +528,33 @@ export const unlockBadge = async (userId, badgeId) => {
         }
     });
 };
+export const unlockPerk = async (userId, perkId) => {
+    const perk = perkById(perkId);
+    if (!perk)
+        throw new Error("Perk not found");
+    const gamification = await ensureGamification(userId);
+    const unlocked = mergeCosmetics(gamification.unlockedCosmetics, []);
+    const cosmeticId = perkCosmeticId(perk.id);
+    if (unlocked.includes(cosmeticId)) {
+        return prisma.userGamification.update({
+            where: { userId },
+            data: { unlockedCosmetics: unlocked }
+        });
+    }
+    if (gamification.xpBalance < perk.price) {
+        throw new Error("Not enough XP coins");
+    }
+    return prisma.userGamification.update({
+        where: { userId },
+        data: {
+            xpBalance: { decrement: perk.price },
+            unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [cosmeticId])
+        }
+    });
+};
 export const awardGoalBadges = async (userId) => {
     const [subjectsCount, goalsCount, gamification] = await Promise.all([
-        prisma.userSubject.count({ where: { userId } }),
+        prisma.userSubject.count({ where: { userId, archivedAt: null } }),
         prisma.goal.count({ where: { userId } }),
         ensureGamification(userId)
     ]);
@@ -505,7 +568,7 @@ export const awardGoalBadges = async (userId) => {
 };
 export const awardEventBadges = async (userId) => {
     const [subjectsCount, sacSubjectCount, gamification] = await Promise.all([
-        prisma.userSubject.count({ where: { userId } }),
+        prisma.userSubject.count({ where: { userId, archivedAt: null } }),
         prisma.event.groupBy({
             by: ["subjectId"],
             where: {

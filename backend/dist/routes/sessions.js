@@ -37,7 +37,7 @@ sessionsRouter.post("/", asyncHandler(async (req, res) => {
     const authReq = req;
     const payload = createSessionSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-        where: { id: payload.subjectId, userId: authReq.user.id }
+        where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject) {
         throw new HttpError(404, "Subject not found");

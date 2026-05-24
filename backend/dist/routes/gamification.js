@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
-import { applyTheme, applyTitle, BADGE_SHOP_ITEMS, DEFAULT_TITLE_ID, ensureGamification, syncAllBadges, THEME_SHOP_ITEMS, TITLE_SHOP_ITEMS, unlockBadge, unlockTheme, unlockTitle } from "../services/gamificationService.js";
+import { applyTheme, applyTitle, BADGE_SHOP_ITEMS, DEFAULT_TITLE_ID, ensureGamification, PERK_SHOP_ITEMS, syncAllBadges, THEME_SHOP_ITEMS, TITLE_SHOP_ITEMS, unlockBadge, unlockPerk, unlockTheme, unlockTitle } from "../services/gamificationService.js";
 export const gamificationRouter = Router();
 gamificationRouter.use(requireAuth);
 const leaderboardPreferenceSchema = z.object({
@@ -109,7 +109,13 @@ gamificationRouter.post("/check", asyncHandler(async (req, res) => {
     res.json({ gamification, totals });
 }));
 gamificationRouter.get("/shop", asyncHandler(async (_req, res) => {
-    res.json({ items: THEME_SHOP_ITEMS, themes: THEME_SHOP_ITEMS, titles: TITLE_SHOP_ITEMS, badges: BADGE_SHOP_ITEMS });
+    res.json({
+        items: THEME_SHOP_ITEMS,
+        themes: THEME_SHOP_ITEMS,
+        titles: TITLE_SHOP_ITEMS,
+        badges: BADGE_SHOP_ITEMS,
+        perks: PERK_SHOP_ITEMS
+    });
 }));
 gamificationRouter.post("/themes/:themeId/unlock", asyncHandler(async (req, res) => {
     const authReq = req;
@@ -159,5 +165,15 @@ gamificationRouter.post("/badges/:badgeId/unlock", asyncHandler(async (req, res)
     }
     catch (error) {
         throw new HttpError(error instanceof Error && error.message === "Badge not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock badge");
+    }
+}));
+gamificationRouter.post("/perks/:perkId/unlock", asyncHandler(async (req, res) => {
+    const authReq = req;
+    try {
+        const gamification = await unlockPerk(authReq.user.id, req.params.perkId);
+        res.json({ gamification });
+    }
+    catch (error) {
+        throw new HttpError(error instanceof Error && error.message === "Perk not found" ? 404 : 400, error instanceof Error ? error.message : "Could not unlock perk");
     }
 }));

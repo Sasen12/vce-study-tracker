@@ -111,7 +111,7 @@ const notetakerChunkSchema = z.object({
 const ensureSubject = async (userId, subjectId) => {
     if (!subjectId)
         return null;
-    const subject = await prisma.userSubject.findFirst({ where: { id: subjectId, userId } });
+    const subject = await prisma.userSubject.findFirst({ where: { id: subjectId, userId, archivedAt: null } });
     if (!subject)
         throw new HttpError(404, "Subject not found");
     return subject;
@@ -272,7 +272,7 @@ coachRouter.get("/daily-inspiration", asyncHandler(async (req, res) => {
             select: { displayName: true }
         }),
         prisma.userSubject.findMany({
-            where: { userId: authReq.user.id },
+            where: { userId: authReq.user.id, archivedAt: null },
             orderBy: { subjectName: "asc" }
         }),
         prisma.event.findMany({
@@ -920,7 +920,7 @@ coachRouter.post("/plans/generate", limitAiUsage({ cost: 4 }), asyncHandler(asyn
     const horizonDays = payload.horizonDays;
     const horizonEnd = addDays(today, horizonDays);
     const [subjects, reflections, events, sessions, notes, resources, subjectMemories] = await Promise.all([
-        prisma.userSubject.findMany({ where: { userId: authReq.user.id }, orderBy: { subjectName: "asc" } }),
+        prisma.userSubject.findMany({ where: { userId: authReq.user.id, archivedAt: null }, orderBy: { subjectName: "asc" } }),
         prisma.studyReflection.findMany({
             where: { userId: authReq.user.id },
             include: { subject: true },
@@ -963,7 +963,10 @@ coachRouter.post("/plans/generate", limitAiUsage({ cost: 4 }), asyncHandler(asyn
             take: 12
         }),
         prisma.studentSubjectMemory.findMany({
-            where: { userId: authReq.user.id },
+            where: {
+                userId: authReq.user.id,
+                OR: [{ subjectId: null }, { subject: { archivedAt: null } }]
+            },
             orderBy: [{ riskLevel: "desc" }, { updatedAt: "desc" }],
             take: 12
         })

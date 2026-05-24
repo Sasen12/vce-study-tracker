@@ -20,7 +20,11 @@ const generatedQuestionVisualSchema = z.object({
         label: z.string(),
         value: z.coerce.number()
     })),
-    labels: z.array(z.string())
+    labels: z.array(z.string()),
+    image_data: z.string().default(""),
+    image_mime_type: z.string().default(""),
+    image_alt: z.string().default(""),
+    image_model: z.string().default("")
 });
 const generatedQuestionSchema = z.object({
     question: z.string(),
@@ -139,7 +143,8 @@ const studyAnswerSchema = z.object({
     sources_used: z.array(studyAnswerSourceSchema),
     follow_up_questions: z.array(z.string()),
     tutor_plan: tutorPlanSchema,
-    confidence: z.enum(["low", "medium", "high"])
+    confidence: z.enum(["low", "medium", "high"]),
+    visuals: z.array(generatedQuestionVisualSchema).max(2).default([])
 });
 const dailyInspirationSchema = z.object({
     quote: z.string().min(4).max(220),
@@ -197,6 +202,7 @@ ${forceLine}
 - If a visual is included, the question text must explicitly refer to "the visual shown" or "the graph/chart/diagram shown".
 - Use renderable numbers: line_graph and scatter_plot need 3-8 points sorted by x; bar_chart needs 3-6 bars; diagram/image_prompt should use labels and a concise description.
 - Keep every visual self-contained. Do not rely on external images or links.
+- Leave image_data, image_mime_type, image_alt and image_model as empty strings. The backend may render graph images after your structured data is checked.
 - If no visual is useful, set visual to null.`;
 };
 const questionQualityContract = ({ subject, studyDesign, personalContext, sourceMode }) => {
@@ -276,7 +282,7 @@ Return a JSON object with a "questions" array. Each question must include:
 - model_answer
 - marking_criteria: string[]
 - answer_options: exactly 4 short multiple-choice answers for a fast quiz mode. Exactly one option must have correct true. Distractors should reflect common VCE mistakes, not joke answers.
-- visual: either null or an object with type, title, description, x_label, y_label, points, bars and labels. Use empty strings or empty arrays for visual fields that do not apply.
+- visual: either null or an object with type, title, description, x_label, y_label, points, bars, labels, image_data, image_mime_type, image_alt and image_model. Use empty strings or empty arrays for fields that do not apply.
 
 Only return valid JSON that matches the requested schema. No preamble, no markdown.`;
 };
@@ -305,7 +311,11 @@ const mockVisualFor = (input, index) => {
                 { label: "B", value: 6 + offset },
                 { label: "C", value: 4 + offset }
             ],
-            labels: []
+            labels: [],
+            image_data: "",
+            image_mime_type: "",
+            image_alt: "",
+            image_model: ""
         };
     }
     return {
@@ -316,7 +326,11 @@ const mockVisualFor = (input, index) => {
         y_label: "",
         points: [],
         bars: [],
-        labels: ["input", "process", "output", "evaluation"]
+        labels: ["input", "process", "output", "evaluation"],
+        image_data: "",
+        image_mime_type: "",
+        image_alt: "",
+        image_model: ""
     };
 };
 const mockQuestions = (input) => Array.from({ length: input.count }, (_, index) => {
@@ -437,7 +451,11 @@ const sanitiseQuestionVisual = (visual) => {
             .filter((bar) => Number.isFinite(bar.value))
             .slice(0, 7)
             .map((bar) => ({ label: bar.label.slice(0, 24), value: bar.value })),
-        labels: visual.labels.slice(0, 8).map((label) => label.slice(0, 40))
+        labels: visual.labels.slice(0, 8).map((label) => label.slice(0, 40)),
+        image_data: (visual.image_data ?? "").trim(),
+        image_mime_type: (visual.image_mime_type ?? "").slice(0, 40),
+        image_alt: (visual.image_alt ?? "").slice(0, 180),
+        image_model: (visual.image_model ?? "").slice(0, 80)
     };
 };
 const sanitiseGeneratedQuestions = (input, questions) => questions.map((question) => {
@@ -453,6 +471,104 @@ const sanitiseGeneratedQuestions = (input, questions) => questions.map((question
         visual: sanitiseQuestionVisual(question.visual)
     };
 });
+const graphVisualTypes = new Set(["line_graph", "scatter_plot", "bar_chart"]);
+const graphImagesEnabled = () => process.env.OPENAI_GRAPH_IMAGES_ENABLED?.trim().toLowerCase() !== "false";
+const graphImageModel = () => process.env.OPENAI_GRAPH_IMAGE_MODEL?.trim() || process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-2";
+const graphImageLimit = (fallback) => {
+    const raw = process.env.OPENAI_GRAPH_IMAGE_LIMIT?.trim();
+    if (!raw)
+        return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(5, Math.floor(parsed))) : fallback;
+};
+const visualDataSummary = (visual) => {
+    if (visual.type === "bar_chart") {
+        return visual.bars.map((bar) => `${bar.label}: ${bar.value}`).join(", ");
+    }
+    if (visual.type === "line_graph" || visual.type === "scatter_plot") {
+        return visual.points.map((point) => `${point.label ? `${point.label} ` : ""}(${point.x}, ${point.y})`).join(", ");
+    }
+    return visual.labels.join(", ");
+};
+const graphVisualHasData = (visual) => graphVisualTypes.has(visual.type) &&
+    ((visual.type === "bar_chart" && visual.bars.length >= 2) ||
+        ((visual.type === "line_graph" || visual.type === "scatter_plot") && visual.points.length >= 2));
+const buildGraphImagePrompt = (visual, contextLabel) => `Create a clean educational VCE graph image for ${contextLabel}.
+
+Graph title: ${visual.title}
+Graph type: ${visual.type.replace("_", " ")}
+X axis: ${visual.x_label || "x"}
+Y axis: ${visual.y_label || "y"}
+Exact data: ${visualDataSummary(visual)}
+Short context: ${visual.description}
+
+Style: dark premium study dashboard, navy background, crisp cyan/mint/violet accents, thin grid lines, readable axis labels, no decorative clutter.
+Accuracy rules: use only the exact supplied data, keep the labels legible, do not add extra data points, do not change numbers, and do not include branding or explanatory paragraphs.`;
+const addImageToGraphVisual = async (openai, visual, contextLabel) => {
+    if (!graphVisualHasData(visual))
+        return visual;
+    const model = graphImageModel();
+    try {
+        const response = await openai.images.generate({
+            model,
+            prompt: buildGraphImagePrompt(visual, contextLabel),
+            n: 1,
+            size: "1536x1024",
+            quality: "low",
+            output_format: "png"
+        });
+        const imageData = response.data?.[0]?.b64_json;
+        if (!imageData)
+            return visual;
+        return {
+            ...visual,
+            image_data: imageData,
+            image_mime_type: "image/png",
+            image_alt: `${visual.title || "VCE graph"} rendered as a ${visual.type.replace("_", " ")}.`,
+            image_model: model
+        };
+    }
+    catch (error) {
+        console.warn("Graph image generation failed; using structured visual fallback", error);
+        return visual;
+    }
+};
+const addImagesToVisuals = async (openai, visuals, contextLabel, limit) => {
+    if (!graphImagesEnabled() || limit <= 0)
+        return visuals;
+    let remaining = limit;
+    const enhanced = [];
+    for (const visual of visuals) {
+        if (remaining > 0 && graphVisualHasData(visual) && !visual.image_data) {
+            enhanced.push(await addImageToGraphVisual(openai, visual, contextLabel));
+            remaining -= 1;
+        }
+        else {
+            enhanced.push(visual);
+        }
+    }
+    return enhanced;
+};
+const addImagesToGeneratedQuestions = async (openai, input, questions) => {
+    const shouldRenderImages = input.visualMode === "visual" || visualTopicLooksRelevant(input.topic);
+    if (!shouldRenderImages)
+        return questions;
+    let remaining = graphImageLimit(input.visualMode === "visual" ? 2 : 1);
+    if (!graphImagesEnabled() || remaining <= 0)
+        return questions;
+    const enhanced = [];
+    for (const question of questions) {
+        if (question.visual && graphVisualHasData(question.visual) && !question.visual.image_data && remaining > 0) {
+            const visual = await addImageToGraphVisual(openai, question.visual, `${input.subject} ${input.topic} practice`);
+            enhanced.push({ ...question, visual });
+            remaining -= 1;
+        }
+        else {
+            enhanced.push(question);
+        }
+    }
+    return enhanced;
+};
 const normaliseWords = (text) => text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -1322,7 +1438,8 @@ export const generatePracticeQuestions = async (input) => {
     if (!parsed) {
         throw new Error("OpenAI returned an empty or unparseable question payload");
     }
-    return sanitiseGeneratedQuestions(input, parsed.questions);
+    const questions = sanitiseGeneratedQuestions(input, parsed.questions);
+    return addImagesToGeneratedQuestions(openai, input, questions);
 };
 const buildAnswerFeedbackPrompt = (input) => `You are a strict but encouraging VCE marker.
 
@@ -1802,6 +1919,30 @@ const mockStudyAnswer = (input) => {
     const subject = input.subject ?? inferSubjectFromQuestion(input.question) ?? "your selected subject";
     const hasAttachments = Boolean(input.screenshots?.length || input.attachedDocumentLabels?.length);
     const isTutorMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor";
+    const wantsVisual = /\b(graph|chart|plot|diagram|visual|sketch)\b/i.test(input.question);
+    const visuals = wantsVisual
+        ? [
+            {
+                type: "line_graph",
+                title: `${subject} visual sketch`,
+                description: "A quick structured graph sketch for the coach answer.",
+                x_label: "x",
+                y_label: "value",
+                points: [
+                    { x: 0, y: 2, label: "A" },
+                    { x: 1, y: 4, label: "B" },
+                    { x: 2, y: 3, label: "C" },
+                    { x: 3, y: 6, label: "D" }
+                ],
+                bars: [],
+                labels: [],
+                image_data: "",
+                image_mime_type: "",
+                image_alt: "",
+                image_model: ""
+            }
+        ]
+        : [];
     if (!isTutorMode) {
         return {
             answer: `## Direct answer
@@ -1836,7 +1977,8 @@ Turn "this strategy improves performance" into "this strategy improves performan
                 check_question: "Which phrase in the question tells you what the answer must do?",
                 next_revision: "Try one similar question or ask for marking on your attempt."
             },
-            confidence: input.context || hasAttachments ? "medium" : "low"
+            confidence: input.context || hasAttachments ? "medium" : "low",
+            visuals
         };
     }
     return {
@@ -1871,7 +2013,8 @@ Write one sentence that uses a subject term and one sentence that applies it to 
             check_question: "Which word or piece of data in the question tells you what method to use?",
             next_revision: "Save the check question as a flashcard or redo one similar question tomorrow."
         },
-        confidence: input.context || hasAttachments ? "medium" : "low"
+        confidence: input.context || hasAttachments ? "medium" : "low",
+        visuals
     };
 };
 const buildStudyAnswerPrompt = (input) => {
@@ -1880,6 +2023,8 @@ const buildStudyAnswerPrompt = (input) => {
     const studyDesignBlock = buildStudyDesignBlock(studyDesign);
     const subjectLabel = `${subject ?? "General VCE study"}${input.subjectUnit ? ` Unit ${input.subjectUnit}` : ""}`;
     const responseMode = input.sessionMode === "tutor_session" || input.responseMode === "tutor" ? "tutor" : "direct";
+    const visualProfile = subject ? subjectToolProfile(subject) : null;
+    const visualPromptUseful = Boolean(visualProfile?.visual) || /\b(graph|chart|plot|diagram|visual|sketch|map|data|function|relationship)\b/i.test(input.question);
     const wordCountRequest = requestedWordCount(input.question);
     const markCount = requestedMarkCount(input.question);
     const screenshotBlock = input.screenshots?.length
@@ -1965,6 +2110,15 @@ Session rules:
 - If the question is vague, ask one clarifying question but still give a useful provisional tutoring path.
 - Do not say "as an AI", "I can help with that", or generic encouragement without teaching value.
 - Keep the answer compact enough to study from, but include enough scaffolding that the student can attempt the next step alone.`;
+    const coachVisualBlock = visualPromptUseful
+        ? `\nCoach visual rules:
+- If a graph, chart or diagram would make the explanation easier to study, include up to 1 visual object in visuals.
+- Prefer a visual when the student explicitly asks to graph, sketch, plot, compare data, explain a function, interpret a diagram, or understand a visual relationship.
+- For graphs and charts, provide exact structured data: line_graph and scatter_plot need 3-8 points sorted by x; bar_chart needs 3-6 bars.
+- The answer text must briefly refer to the visual if visuals is not empty.
+- Leave image_data, image_mime_type, image_alt and image_model as empty strings. The backend may render a graph image after your structured data is checked.
+- If a visual is not genuinely useful, return visuals as an empty array.\n`
+        : "\nCoach visual rules: Return visuals as an empty array unless the student explicitly asks for a graph, chart, plot, diagram or visual sketch.\n";
     const answerFormattingRule = wordCountRequest
         ? `answer must contain only the final student-ready answer text that obeys the word-count request. Do not include markdown headings, labels such as "Direct answer" or "${wordCountRequest.count}-word version", explanatory comments, multiple versions, word-count notes, sources, or coach commentary inside answer.`
         : responseMode === "direct"
@@ -1989,6 +2143,7 @@ ${coachChatBlock}
 ${directModeBlock}
 ${assessmentConstraintBlock}
 ${tutorSessionBlock}
+${coachVisualBlock}
 
 ${modeBehaviourBlock}
 
@@ -2028,12 +2183,24 @@ Return only valid JSON with:
 - sources_used: objects with title, source_type and detail
 - follow_up_questions: short suggested follow-up questions the student could ask
 - tutor_plan: diagnosis, teaching_move, guided_steps, your_turn, check_question and next_revision
-- confidence: low, medium or high`;
+- confidence: low, medium or high
+- visuals: an array of visual objects with type, title, description, x_label, y_label, points, bars, labels, image_data, image_mime_type, image_alt and image_model`;
+};
+const sanitiseStudyAnswer = (answer) => ({
+    ...answer,
+    visuals: (answer.visuals ?? [])
+        .map((visual) => sanitiseQuestionVisual(visual))
+        .filter((visual) => Boolean(visual))
+        .slice(0, 2)
+});
+const addImagesToStudyAnswer = async (openai, input, answer) => {
+    const visuals = await addImagesToVisuals(openai, answer.visuals ?? [], `${input.subject ?? "VCE"} coach answer`, graphImageLimit(1));
+    return { ...answer, visuals };
 };
 export const answerStudyQuestion = async (input) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!hasOpenAIKey(apiKey)) {
-        return mockStudyAnswer(input);
+        return sanitiseStudyAnswer(mockStudyAnswer(input));
     }
     const model = process.env.OPENAI_MODEL ?? defaultModel;
     const openai = new OpenAI({ apiKey });
@@ -2070,7 +2237,8 @@ export const answerStudyQuestion = async (input) => {
         throw new Error("OpenAI returned an empty or unparseable study answer");
     }
     const wordCountRequest = requestedWordCount(input.question);
-    return wordCountRequest
+    const answer = wordCountRequest
         ? { ...parsed, answer: normaliseWordCountAnswer(parsed.answer, wordCountRequest) }
         : parsed;
+    return addImagesToStudyAnswer(openai, input, sanitiseStudyAnswer(answer));
 };

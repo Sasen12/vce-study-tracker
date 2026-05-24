@@ -11,6 +11,7 @@ import { questionsRouter } from "./routes/questions.js";
 import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
+import { contactRouter } from "./routes/contact.js";
 import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
 import { errorHandler } from "./utils/http.js";
@@ -20,6 +21,8 @@ const app = express();
 const port = Number(process.env.PORT ?? 3000);
 const allowedOrigins = [
     "https://vce-study-tracker-sasen.netlify.app",
+    "https://vceforge.space",
+    "https://www.vceforge.space",
     "http://localhost:3000",
     "http://localhost:8081",
     "http://localhost:19006"
@@ -51,7 +54,11 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
 app.use("/api/community", communityRouter);
+app.use("/api/contact", contactRouter);
 app.use("/api/memory", memoryRouter);
+app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "API route not found. The backend may need to be updated or restarted." });
+});
 app.use(errorHandler);
 cron.schedule("59 23 * * *", async () => {
     try {
@@ -67,10 +74,10 @@ cron.schedule("59 23 * * *", async () => {
 const start = async () => {
     await ensureDatabaseSchema();
     app.listen(port, () => {
-        console.log(`VCE Study Tracker API running on http://localhost:${port}`);
+        console.log(`VCE Forge API running on http://localhost:${port}`);
     });
 };
 start().catch((error) => {
-    console.error("Failed to start VCE Study Tracker API", error);
+    console.error("Failed to start VCE Forge API", error);
     process.exit(1);
 });

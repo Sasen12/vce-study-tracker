@@ -301,9 +301,12 @@ export const refreshSubjectMemoryMap = async (userId, target) => {
 };
 export const rebuildStudentMemoryMaps = async (userId) => {
     const [subjects, signals] = await Promise.all([
-        prisma.userSubject.findMany({ where: { userId }, select: { id: true, subjectName: true } }),
+        prisma.userSubject.findMany({ where: { userId, archivedAt: null }, select: { id: true, subjectName: true } }),
         prisma.learningSignal.findMany({
-            where: { userId },
+            where: {
+                userId,
+                OR: [{ subjectId: null }, { subject: { archivedAt: null } }]
+            },
             distinct: ["subjectKey"],
             select: { subjectId: true, subjectKey: true, subjectName: true }
         })

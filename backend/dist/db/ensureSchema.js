@@ -69,9 +69,39 @@ const ensureStudentMemorySchema = async () => {
     await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS student_subject_memory_user_risk_idx ON student_subject_memory(user_id, risk_level)");
     await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS student_subject_memory_subject_idx ON student_subject_memory(subject_id)");
 };
+const ensurePublicContactSchema = async () => {
+    await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+    await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS public_contact_submissions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      year_level TEXT,
+      school TEXT,
+      subject TEXT,
+      question TEXT NOT NULL,
+      delivery_status TEXT NOT NULL DEFAULT 'pending',
+      delivery_error TEXT,
+      admin_status TEXT NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+    await prisma.$executeRawUnsafe("ALTER TABLE public_contact_submissions ADD COLUMN IF NOT EXISTS admin_status TEXT NOT NULL DEFAULT 'new'");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS public_contact_submissions_created_idx ON public_contact_submissions(created_at DESC)");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS public_contact_submissions_email_idx ON public_contact_submissions(email)");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS public_contact_submissions_admin_status_idx ON public_contact_submissions(admin_status)");
+};
+const ensureSubjectLifecycleSchema = async () => {
+    await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ");
+    await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS archived_reason TEXT");
+    await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS superseded_by_subject_id UUID");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS user_subjects_user_archived_idx ON user_subjects(user_id, archived_at)");
+};
 export const ensureDatabaseSchema = async () => {
     await prisma.$executeRaw `ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
+    await ensureSubjectLifecycleSchema();
     await ensureStudentMemorySchema();
+    await ensurePublicContactSchema();
     const usersMissingSchool = await prisma.user.findMany({
         where: {
             OR: [{ schoolName: null }, { schoolName: "" }]

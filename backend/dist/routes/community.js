@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
-import { DEFAULT_TITLE_ID, grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
+import { DEFAULT_TITLE_ID, ensureGamification, grantThemeToUser, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 export const communityRouter = Router();
 communityRouter.use(requireAuth);
@@ -18,6 +18,10 @@ const subjectRoomIdSchema = z.string().trim().min(1).max(80).regex(/^[a-z0-9-]+$
 const giftThemeSchema = z.object({
     themeId: z.string().trim().min(1),
     equip: z.boolean().default(true)
+});
+const giftCoinsSchema = z.object({
+    amount: z.coerce.number().int().min(1).max(5000),
+    message: z.string().trim().min(3).max(180).optional().nullable()
 });
 const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "pro", "profile"];
 const usageEventSchema = z.object({
@@ -59,6 +63,42 @@ const serialiseFeedback = (item, isAdmin) => ({
         }
         : {})
 });
+const serialisePublicContact = (row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    yearLevel: row.yearLevel,
+    school: row.school,
+    subject: row.subject,
+    question: row.question,
+    deliveryStatus: row.deliveryStatus,
+    deliveryError: row.deliveryError,
+    adminStatus: row.adminStatus,
+    createdAt: row.createdAt
+});
+const publicContactsForAdmin = async () => prisma.$queryRaw `
+    SELECT
+      id,
+      name,
+      email,
+      year_level AS "yearLevel",
+      school,
+      subject,
+      question,
+      delivery_status AS "deliveryStatus",
+      delivery_error AS "deliveryError",
+      admin_status AS "adminStatus",
+      created_at AS "createdAt"
+    FROM public_contact_submissions
+    ORDER BY
+      CASE admin_status
+        WHEN 'new' THEN 0
+        WHEN 'replied' THEN 1
+        ELSE 2
+      END,
+      created_at DESC
+    LIMIT 100
+  `;
 const todayRange = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -99,7 +139,7 @@ const serialiseChatMessage = (item, viewerUserId) => {
 };
 const subjectRoomsForUser = async (userId) => {
     const subjects = await prisma.userSubject.findMany({
-        where: { userId },
+        where: { userId, archivedAt: null },
         orderBy: [{ subjectName: "asc" }, { unit: "asc" }],
         select: {
             id: true,
@@ -270,7 +310,7 @@ const chatAllowanceFor = async (userId) => {
 };
 const communityPayload = async (user) => {
     const isAdmin = isAdminEmail(user.email);
-    const [feedback, chatDesc, allowance, users] = await Promise.all([
+    const [feedback, chatDesc, allowance, users, landingContacts] = await Promise.all([
         prisma.userFeedback.findMany({
             where: isAdmin ? {} : { userId: user.id },
             orderBy: { createdAt: "desc" },
@@ -294,14 +334,22 @@ const communityPayload = async (user) => {
             }
         }),
         chatAllowanceFor(user.id),
-        isAdmin ? adminUsers() : Promise.resolve([])
+        isAdmin ? adminUsers() : Promise.resolve([]),
+        isAdmin ? publicContactsForAdmin() : Promise.resolve([])
     ]);
     const chat = chatDesc
         .filter((message) => !parseSubjectRoomMessage(message.message))
         .slice(0, 80)
         .reverse()
         .map((message) => serialiseChatMessage(message, user.id));
-    return { isAdmin, feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)), chat, allowance, users };
+    return {
+        isAdmin,
+        feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)),
+        landingContacts: landingContacts.map(serialisePublicContact),
+        chat,
+        allowance,
+        users
+    };
 };
 const serialiseGiftMessage = (gift) => ({
     id: gift.id,
@@ -675,6 +723,37 @@ communityRouter.post("/users/:id/gifts/theme", asyncHandler(async (req, res) => 
             giftId: payload.themeId
         }
     });
+    const user = await adminUserById(userId);
+    res.json({ user });
+}));
+communityRouter.post("/users/:id/gifts/coins", asyncHandler(async (req, res) => {
+    const authReq = req;
+    requireAdmin(authReq.user);
+    const userId = z.string().uuid().parse(req.params.id);
+    const payload = giftCoinsSchema.parse(req.body);
+    const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!existing) {
+        throw new HttpError(404, "User not found");
+    }
+    await ensureGamification(userId);
+    const giftMessage = payload.message?.trim() || `Sasen gifted you ${payload.amount} coins. Spend them in the Shop when you are ready.`;
+    await prisma.$transaction([
+        prisma.userGamification.update({
+            where: { userId },
+            data: {
+                xpBalance: { increment: payload.amount }
+            }
+        }),
+        prisma.userGiftMessage.create({
+            data: {
+                userId,
+                title: `${payload.amount} coin gift`,
+                message: giftMessage,
+                giftType: "coins",
+                giftId: `coins:${payload.amount}:${Date.now()}`
+            }
+        })
+    ]);
     const user = await adminUserById(userId);
     res.json({ user });
 }));

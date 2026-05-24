@@ -72,7 +72,7 @@ eventsRouter.post("/", asyncHandler(async (req, res) => {
     validateEventPayload(payload);
     const subject = payload.subjectId
         ? await prisma.userSubject.findFirst({
-            where: { id: payload.subjectId, userId: authReq.user.id }
+            where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
         })
         : null;
     if (payload.subjectId && !subject)
@@ -170,7 +170,7 @@ eventsRouter.patch("/:id", asyncHandler(async (req, res) => {
     });
     if (payload.subjectId) {
         const subject = await prisma.userSubject.findFirst({
-            where: { id: payload.subjectId, userId: authReq.user.id }
+            where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
         });
         if (!subject)
             throw new HttpError(404, "Subject not found");
