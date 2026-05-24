@@ -110,8 +110,16 @@ const ensurePublicContactSchema = async () => {
   );
 };
 
+const ensureSubjectLifecycleSchema = async () => {
+  await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ");
+  await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS archived_reason TEXT");
+  await prisma.$executeRawUnsafe("ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS superseded_by_subject_id UUID");
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS user_subjects_user_archived_idx ON user_subjects(user_id, archived_at)");
+};
+
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
+  await ensureSubjectLifecycleSchema();
   await ensureStudentMemorySchema();
   await ensurePublicContactSchema();
 

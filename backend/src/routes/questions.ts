@@ -165,7 +165,7 @@ questionsRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = generateSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-      where: { id: payload.subjectId, userId: authReq.user.id }
+      where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject) throw new HttpError(404, "Subject not found");
 
@@ -233,7 +233,7 @@ questionsRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = timerCheckSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-      where: { id: payload.subjectId, userId: authReq.user.id }
+      where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject) throw new HttpError(404, "Subject not found");
 
@@ -291,7 +291,7 @@ questionsRouter.post(
     let subject: { id: string; subjectName: string } | null = null;
     if (payload.subjectId) {
       subject = await prisma.userSubject.findFirst({
-        where: { id: payload.subjectId, userId: authReq.user.id }
+        where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
       });
       if (!subject) throw new HttpError(404, "Subject not found");
     }
@@ -358,7 +358,7 @@ questionsRouter.post(
     const payload = checkAnswerSchema.parse(req.body);
     const subject = payload.subjectId
       ? await prisma.userSubject.findFirst({
-          where: { id: payload.subjectId, userId: authReq.user.id }
+          where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
         })
       : null;
     if (payload.subjectId && !subject) throw new HttpError(404, "Subject not found");

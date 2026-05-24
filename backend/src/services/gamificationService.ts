@@ -331,8 +331,8 @@ export const inferStarterTitleFromSubjectCounts = (counts: {
 
 const inferStarterTitleForUser = async (userId: string) => {
   const [unit12Count, unit34Count] = await Promise.all([
-    prisma.userSubject.count({ where: { userId, unit: "1/2" } }),
-    prisma.userSubject.count({ where: { userId, unit: "3/4" } })
+    prisma.userSubject.count({ where: { userId, unit: "1/2", archivedAt: null } }),
+    prisma.userSubject.count({ where: { userId, unit: "3/4", archivedAt: null } })
   ]);
 
   return inferStarterTitleFromSubjectCounts({ unit12Count, unit34Count });
@@ -619,7 +619,7 @@ export const unlockPerk = async (userId: string, perkId: string) => {
 
 export const awardGoalBadges = async (userId: string) => {
   const [subjectsCount, goalsCount, gamification] = await Promise.all([
-    prisma.userSubject.count({ where: { userId } }),
+    prisma.userSubject.count({ where: { userId, archivedAt: null } }),
     prisma.goal.count({ where: { userId } }),
     ensureGamification(userId)
   ]);
@@ -636,7 +636,7 @@ export const awardGoalBadges = async (userId: string) => {
 
 export const awardEventBadges = async (userId: string) => {
   const [subjectsCount, sacSubjectCount, gamification] = await Promise.all([
-    prisma.userSubject.count({ where: { userId } }),
+    prisma.userSubject.count({ where: { userId, archivedAt: null } }),
     prisma.event.groupBy({
       by: ["subjectId"],
       where: {

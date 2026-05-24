@@ -153,13 +153,17 @@ function GoalCard({
   subject,
   goal,
   weekSeconds,
+  rolling,
   onDelete,
+  onRollover,
   onSave
 }: {
   subject: UserSubject;
   goal?: Goal;
   weekSeconds: number;
+  rolling?: boolean;
   onDelete: (subject: UserSubject) => void;
+  onRollover: (subject: UserSubject) => void;
   onSave: (input: { subjectId: string; targetStudyScore?: number | null; weeklyHoursTarget?: number | null }) => Promise<void>;
 }) {
   const [targetScore, setTargetScore] = useState(String(goal?.targetStudyScore ?? subject.targetScore ?? ""));
@@ -199,11 +203,11 @@ function GoalCard({
             sublabel={`${weeklyHours}h`}
           />
           <IconButton
-            icon="delete-outline"
+            icon="archive-outline"
             mode="outlined"
             size={18}
             iconColor={palette.secondary}
-            accessibilityLabel={`Remove ${subject.subjectName}`}
+            accessibilityLabel={`Archive ${subject.subjectName}`}
             onPress={() => onDelete(subject)}
           />
         </View>
@@ -235,9 +239,23 @@ function GoalCard({
           />
         </View>
       </View>
-      <Button mode="contained" icon="content-save" disabled={saving} onPress={save}>
-        {saving ? "Saving" : "Save goal"}
-      </Button>
+      <View style={styles.goalActions}>
+        <Button mode="contained" icon="content-save" disabled={saving} onPress={save} style={styles.goalActionButton}>
+          {saving ? "Saving" : "Save goal"}
+        </Button>
+        {subject.unit === "1/2" ? (
+          <Button
+            mode="outlined"
+            icon="arrow-up-bold-box-outline"
+            loading={rolling}
+            disabled={rolling}
+            onPress={() => onRollover(subject)}
+            style={styles.goalActionButton}
+          >
+            Move to 3/4
+          </Button>
+        ) : null}
+      </View>
     </AppCard>
   );
 }
@@ -312,7 +330,7 @@ function AddSubjectDialog({
         <Dialog.Title style={styles.dialogTitle}>Add subject</Dialog.Title>
         <Dialog.Content style={styles.dialogContent}>
           <Text style={styles.muted}>
-            {existingSubjects.length}/{maxSubjects} subjects. Remove a dropped subject if you need to make room.
+            {existingSubjects.length}/{maxSubjects} active subjects. Archive dropped subjects to make room without losing history.
           </Text>
           <SegmentedButtons
             value={selectedUnit}
@@ -403,13 +421,15 @@ export default function ProfileScreen() {
     fetchAll,
     saveGoal,
     createSubject,
-    deleteSubject
+    archiveSubject,
+    rolloverSubject
   } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
-  const [deletingSubject, setDeletingSubject] = useState<UserSubject | null>(null);
-  const [deletingSubjectSaving, setDeletingSubjectSaving] = useState(false);
+  const [archivingSubject, setArchivingSubject] = useState<UserSubject | null>(null);
+  const [archivingSubjectSaving, setArchivingSubjectSaving] = useState(false);
+  const [rollingSubjectId, setRollingSubjectId] = useState<string | null>(null);
   const [defaultTab, setDefaultTab] = useState<DefaultTabId>("home");
   const [defaultTabMessage, setDefaultTabMessage] = useState<string | null>(null);
   const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
@@ -607,14 +627,23 @@ export default function ProfileScreen() {
     router.replace("/(auth)/login");
   };
 
-  const confirmDeleteSubject = async () => {
-    if (!deletingSubject) return;
-    setDeletingSubjectSaving(true);
+  const confirmArchiveSubject = async () => {
+    if (!archivingSubject) return;
+    setArchivingSubjectSaving(true);
     try {
-      await deleteSubject(deletingSubject.id);
-      setDeletingSubject(null);
+      await archiveSubject(archivingSubject.id, "dropped_or_changed");
+      setArchivingSubject(null);
     } finally {
-      setDeletingSubjectSaving(false);
+      setArchivingSubjectSaving(false);
+    }
+  };
+
+  const moveSubjectToUnit34 = async (subject: UserSubject) => {
+    setRollingSubjectId(subject.id);
+    try {
+      await rolloverSubject(subject.id);
+    } finally {
+      setRollingSubjectId(null);
     }
   };
 
@@ -980,9 +1009,14 @@ export default function ProfileScreen() {
 
       <View>
         <View style={styles.sectionHeader}>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            Subjects and goals ({subjects.length}/{subjectLimit})
-          </Text>
+          <View style={styles.flexText}>
+            <Text variant="titleLarge" style={styles.sectionTitle}>
+              Subjects and goals ({subjects.length}/{subjectLimit})
+            </Text>
+            <Text style={styles.subjectLifecycleNote}>
+              Archive dropped subjects or move Unit 1/2 into Unit 3/4. Notes, sessions and questions stay attached to the old record.
+            </Text>
+          </View>
           <Button
             mode="outlined"
             icon="plus"
@@ -993,7 +1027,7 @@ export default function ProfileScreen() {
           </Button>
         </View>
         {subjects.length >= subjectLimit ? (
-          <Text style={styles.subjectLimitText}>You are at your {subjectLimit}-subject limit. Remove a dropped subject.</Text>
+          <Text style={styles.subjectLimitText}>You are at your {subjectLimit}-subject limit. Archive a dropped subject to add another.</Text>
         ) : null}
       </View>
       {subjects.length ? (
@@ -1003,7 +1037,9 @@ export default function ProfileScreen() {
             subject={subject}
             goal={goals.find((goal) => goal.subjectId === subject.id)}
             weekSeconds={weeklySecondsBySubject[subject.id] ?? 0}
-            onDelete={setDeletingSubject}
+            rolling={rollingSubjectId === subject.id}
+            onDelete={setArchivingSubject}
+            onRollover={moveSubjectToUnit34}
             onSave={saveGoal}
           />
         ))
@@ -1025,24 +1061,24 @@ export default function ProfileScreen() {
         onCreate={createSubject}
       />
       <Portal>
-        <Dialog visible={Boolean(deletingSubject)} onDismiss={() => setDeletingSubject(null)} style={styles.dialog}>
-          <Dialog.Title style={styles.dialogTitle}>Remove subject</Dialog.Title>
+        <Dialog visible={Boolean(archivingSubject)} onDismiss={() => setArchivingSubject(null)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Archive subject</Dialog.Title>
           <Dialog.Content style={styles.dialogContent}>
             <Text style={styles.muted}>
-              Remove {deletingSubject?.subjectName}? Past sessions, notes, calendar events and saved questions stay in the app,
-              but they will no longer be attached to this subject.
+              Archive {archivingSubject?.subjectName}? It disappears from active study, but past sessions, notes, questions and results
+              stay attached to this subject record.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeletingSubject(null)}>Cancel</Button>
+            <Button onPress={() => setArchivingSubject(null)}>Cancel</Button>
             <Button
               mode="contained"
               buttonColor={palette.secondary}
-              loading={deletingSubjectSaving}
-              disabled={deletingSubjectSaving}
-              onPress={confirmDeleteSubject}
+              loading={archivingSubjectSaving}
+              disabled={archivingSubjectSaving}
+              onPress={confirmArchiveSubject}
             >
-              Remove
+              Archive
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -1469,6 +1505,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20
   },
+  subjectLifecycleNote: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4
+  },
   goalCard: {
     gap: 14
   },
@@ -1521,6 +1563,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  goalActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  goalActionButton: {
+    flexGrow: 1
   },
   badgesCard: {
     gap: 14

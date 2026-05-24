@@ -54,6 +54,8 @@ type AppState = {
     targetScore?: number | null;
     color: string;
   }) => Promise<void>;
+  archiveSubject: (id: string, reason?: string | null) => Promise<void>;
+  rolloverSubject: (id: string) => Promise<void>;
   deleteSubject: (id: string) => Promise<void>;
   saveSession: (input: { subjectId: string; durationSeconds: number; notes?: string | null; bonusXp?: number }) => Promise<void>;
   createEvent: (input: {
@@ -239,8 +241,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       gamification: data.gamification
     });
   },
+  archiveSubject: async (id, reason) => {
+    await studyApi.archiveSubject(id, { reason: reason ?? "dropped_or_changed", completeFutureEvents: true });
+    await get().fetchAll();
+  },
+  rolloverSubject: async (id) => {
+    const data = await studyApi.rolloverSubject(id, { unit: "3/4", completeFutureEvents: true });
+    set({
+      subjects: [...get().subjects.filter((subject) => subject.id !== id), data.subject].sort((a, b) =>
+        a.subjectName.localeCompare(b.subjectName)
+      ),
+      gamification: data.gamification
+    });
+    await get().fetchAll();
+  },
   deleteSubject: async (id) => {
-    await studyApi.deleteSubject(id);
+    await studyApi.archiveSubject(id, { reason: "dropped_or_changed", completeFutureEvents: true });
     await get().fetchAll();
   },
   saveSession: async (input) => {

@@ -55,7 +55,10 @@ memoryRouter.get(
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const subjectMemories = await prisma.studentSubjectMemory.findMany({
-      where: { userId: authReq.user.id },
+      where: {
+        userId: authReq.user.id,
+        OR: [{ subjectId: null }, { subject: { archivedAt: null } }]
+      },
       include: { subject: true },
       orderBy: { updatedAt: "desc" }
     });

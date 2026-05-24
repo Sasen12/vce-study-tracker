@@ -33,7 +33,7 @@ goalsRouter.post(
     const authReq = req as AuthenticatedRequest;
     const payload = goalSchema.parse(req.body);
     const subject = await prisma.userSubject.findFirst({
-      where: { id: payload.subjectId, userId: authReq.user.id }
+      where: { id: payload.subjectId, userId: authReq.user.id, archivedAt: null }
     });
     if (!subject) throw new HttpError(404, "Subject not found");
 
@@ -78,4 +78,3 @@ goalsRouter.put(
     res.json({ goal, gamification });
   })
 );
-

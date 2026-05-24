@@ -41,7 +41,23 @@ export const studyApi = {
   subjects: () => apiFetch<{ subjects: UserSubject[] }>("/subjects"),
   createSubject: (body: Partial<UserSubject>) =>
     apiFetch<{ subject: UserSubject; gamification: Gamification }>("/subjects", { method: "POST", body }),
+  archiveSubject: (id: string, body?: { reason?: string | null; completeFutureEvents?: boolean }) =>
+    apiFetch<{ subject: UserSubject }>(`/subjects/${id}/archive`, { method: "PATCH", body: body ?? {} }),
   deleteSubject: (id: string) => apiFetch<void>(`/subjects/${id}`, { method: "DELETE" }),
+  rolloverSubject: (
+    id: string,
+    body?: {
+      subjectName?: string;
+      unit?: "1/2" | "3/4";
+      targetScore?: number | null;
+      color?: string;
+      completeFutureEvents?: boolean;
+    }
+  ) =>
+    apiFetch<{ subject: UserSubject; archivedSubject: UserSubject; gamification: Gamification }>(`/subjects/${id}/rollover`, {
+      method: "POST",
+      body: body ?? {}
+    }),
   sessions: () => apiFetch<{ sessions: StudySession[] }>("/sessions"),
   sessionStats: () =>
     apiFetch<{

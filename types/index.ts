@@ -14,6 +14,9 @@ export type UserSubject = {
   unit: string;
   targetScore?: number | null;
   color: string;
+  archivedAt?: string | null;
+  archivedReason?: string | null;
+  supersededBySubjectId?: string | null;
 };
 
 export type StudySession = {

@@ -194,7 +194,7 @@ const serialiseChatMessage = (
 
 const subjectRoomsForUser = async (userId: string) => {
   const subjects = await prisma.userSubject.findMany({
-    where: { userId },
+    where: { userId, archivedAt: null },
     orderBy: [{ subjectName: "asc" }, { unit: "asc" }],
     select: {
       id: true,
