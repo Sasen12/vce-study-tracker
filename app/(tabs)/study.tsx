@@ -403,6 +403,14 @@ export default function StudyScreen() {
     elapsed >= targetSeconds && elapsed > 0 ? `+${formatElapsed(overtimeSeconds)} over target` : formatElapsed(remainingSeconds);
   const breakPlan = useMemo(() => breakPlanFor(elapsed, targetSeconds), [elapsed, targetSeconds]);
   const breakReady = elapsed >= targetSeconds && elapsed > 0;
+  const showTimerSetup = !running;
+  const sessionBrief = trimmedStudyTopic || sessionGoal.trim() || "Pick one thing. Start the block. Save the evidence.";
+  const timerStateText = running ? "Locked in" : elapsed > 0 ? "Paused block" : "Ready";
+  const checkInSummary = checkInsActive
+    ? `Check-ins every ${checkInIntervalMinutes}m`
+    : checkInsEnabled
+      ? "Add a topic to arm check-ins"
+      : "Check-ins off";
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
@@ -410,6 +418,16 @@ export default function StudyScreen() {
     if (elapsed > 0) return "Paused";
     return "Ready when you are";
   }, [elapsed, running, selectedSubject, trimmedStudyTopic]);
+  const modeHeader = useMemo(() => {
+    if (mode === "timer") {
+      return { eyebrow: "Study timer", title: running ? "Focus block" : "Deep work" };
+    }
+    if (mode === "coach") return { eyebrow: "Study coach", title: "Coach" };
+    if (mode === "notes") return { eyebrow: "Study notes", title: "Notes" };
+    if (mode === "resources") return { eyebrow: "Study files", title: "Files" };
+    if (mode === "calculator") return { eyebrow: "Study tools", title: "Calculator" };
+    return { eyebrow: "Study break", title: "Chess" };
+  }, [mode, running]);
 
   const checkpointOptions = useMemo(
     () => (checkpointQuestion ? optionsFor(checkpointQuestion) : []),
@@ -728,9 +746,9 @@ export default function StudyScreen() {
   return (
     <Screen>
       <View>
-        <Text style={styles.eyebrow}>Study timer</Text>
+        <Text style={styles.eyebrow}>{modeHeader.eyebrow}</Text>
         <Text variant="headlineLarge" style={styles.title}>
-          Deep work mode
+          {modeHeader.title}
         </Text>
       </View>
 
@@ -873,200 +891,227 @@ export default function StudyScreen() {
           ) : null}
 
           <AppCard style={[styles.timerCard, focusAuraUnlocked && styles.timerCardAura]}>
-            <Text style={styles.status}>{statusLabel}</Text>
-            <View style={styles.presetBlock}>
-              <View style={styles.presetHeader}>
-                <Text style={styles.targetLabel}>Quick start</Text>
-                <Text style={styles.presetHint}>Sprint, repair, drill, deep work, restart.</Text>
-              </View>
-              <View style={styles.presetGrid}>
-                {STUDY_SESSION_PRESETS.map((preset) => {
-                  const activePreset = targetMinutes === String(preset.minutes) && sessionGoal === preset.goal;
-                  return (
-                    <Pressable
-                      key={preset.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: activePreset, disabled: running }}
-                      disabled={running}
-                      onPress={() => applySessionPreset(preset)}
-                      style={[
-                        styles.presetChip,
-                        { borderColor: `${preset.accent}55`, backgroundColor: `${preset.accent}10` },
-                        activePreset && { borderColor: preset.accent }
-                      ]}
-                    >
-                      <MaterialCommunityIcons name={preset.icon} color={preset.accent} size={18} />
-                      <View style={styles.presetTextWrap}>
-                        <Text style={styles.presetTitle} numberOfLines={1}>
-                          {preset.label}
-                        </Text>
-                        <Text style={styles.presetMeta} numberOfLines={1}>
-                          {preset.minutes}m {preset.focus ? "- focus" : "- flexible"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <TextInput
-              mode="outlined"
-              label="Topic for this session (optional)"
-              value={studyTopic}
-              onChangeText={setStudyTopic}
-              disabled={running}
-              style={styles.topicInput}
-              textColor={palette.text}
-            />
-            <TextInput
-              mode="outlined"
-              label="Aim for this block"
-              value={sessionGoal}
-              onChangeText={setSessionGoal}
-              disabled={running}
-              style={styles.topicInput}
-              textColor={palette.text}
-            />
-            <View style={styles.checkInRow}>
-              <View style={styles.checkInText}>
-                <Text style={styles.checkInTitle}>Check-in questions</Text>
-                <Text style={styles.checkInStatus}>
-                  {checkInsActive ? `On - ${trimmedStudyTopic}` : checkInsEnabled ? "Waiting for a topic" : "Off for this session"}
+            <View style={styles.timerCommandHeader}>
+              <View style={styles.timerCommandCopy}>
+                <Text style={styles.status}>{timerStateText}</Text>
+                <Text style={styles.timerSessionTitle}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
+                <Text style={styles.timerSessionMeta} numberOfLines={2}>
+                  {sessionBrief}
                 </Text>
               </View>
-              <Switch
-                value={checkInsEnabled}
-                disabled={running}
-                onValueChange={setCheckInsEnabled}
-                color={palette.primary}
-              />
-            </View>
-            {checkInsEnabled ? (
-              <View style={styles.targetBlock}>
-                <Text style={styles.targetLabel}>Check-in rhythm</Text>
-                <SegmentedButtons
-                  value={checkInIntervalMinutes}
-                  onValueChange={setCheckInIntervalMinutes}
-                  buttons={checkInRhythmButtons}
-                />
-              </View>
-            ) : null}
-            <View style={styles.targetBlock}>
-              <Text style={styles.targetLabel}>Target length</Text>
-              <SegmentedButtons
-                value={targetMinutes}
-                onValueChange={setTargetMinutes}
-                buttons={targetLengthButtons}
-              />
-            </View>
-            <Animated.View style={timerStyle}>
-              <Text style={styles.timer}>{formatElapsed(elapsed)}</Text>
-            </Animated.View>
-            <View style={styles.targetTrack}>
-              <View style={[styles.targetFill, { width: `${targetProgress}%` }]} />
-            </View>
-            <View style={styles.countdownRow}>
-              <Text style={styles.countdownLabel}>{elapsed >= targetSeconds && elapsed > 0 ? "Over target" : "Time remaining"}</Text>
-              <Text style={styles.countdownValue}>{countdownLabel}</Text>
-            </View>
-            <View style={styles.timerMetaRow}>
-              <Text style={styles.xp}>{xp} XP estimated</Text>
-              <Text style={styles.progressPill}>{targetProgress}% target</Text>
-              {focusAuraUnlocked ? <Text style={styles.auraPill}>Aura active</Text> : null}
-              {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} bonus XP</Text> : null}
-            </View>
-            <Button
-              mode={focusMode ? "contained-tonal" : "outlined"}
-              compact
-              icon={focusMode ? "eye-off-outline" : "eye-outline"}
-              onPress={() => void toggleFocusMode()}
-            >
-              {focusMode ? "Focus filter on" : "Focus filter"}
-            </Button>
-            {elapsed >= targetSeconds && elapsed > 0 ? <Text style={styles.targetReached}>Target reached. Save now or keep going.</Text> : null}
-            {running ? (
-              <Text style={styles.checkInMeta}>
-                {checkInsActive
-                  ? checkpointGenerating
-                    ? "Building check-in..."
-                    : `Next check-in in ${minutesUntilCheckpoint} min`
-                  : "Check-ins off for this session"}
-              </Text>
-            ) : null}
-
-            <View style={styles.controls}>
-              {!running ? (
-                <Button mode="contained" icon="play" loading={starting} disabled={!selectedSubject || starting} onPress={start}>
-                  Start
-                </Button>
-              ) : (
-                <Button mode="contained-tonal" icon="pause" onPress={pause}>
-                  Pause
-                </Button>
-              )}
-              <Button
-                mode="outlined"
-                icon="help-circle"
-                loading={checkpointGenerating}
-                disabled={!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen}
-                onPress={askCheckpoint}
-              >
-                Ask now
-              </Button>
-              <Button mode="outlined" icon="stop" disabled={elapsed === 0} onPress={stop}>
-                Stop
-              </Button>
-            </View>
-          </AppCard>
-
-          {selectedSubjectContext ? (
-            <AppCard style={styles.contextCard}>
-              <View style={styles.contextHeader}>
-                <View>
-                  <Text style={styles.cardTitle}>Session context</Text>
-                  <Text style={styles.muted}>For {selectedSubject?.subjectName ?? "this subject"}</Text>
-                </View>
-                <Text style={styles.contextBadge}>{formatStudyDuration(stats?.todaySeconds ?? 0)} today</Text>
-              </View>
-              <View style={styles.contextGrid}>
-                <View style={styles.contextTile}>
-                  <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.weekSeconds)}</Text>
-                  <Text style={styles.contextLabel}>this subject this week</Text>
-                </View>
-                <View style={styles.contextTile}>
-                  <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.bestSeconds)}</Text>
-                  <Text style={styles.contextLabel}>personal best</Text>
-                </View>
-                <View style={styles.contextTile}>
-                  <Text style={styles.contextValue}>
-                    {selectedSubjectContext.lastSession ? formatStudyDuration(selectedSubjectContext.lastSession.durationSeconds) : "0m"}
+              <View style={styles.timerHeaderChips}>
+                <Text style={styles.progressPill}>{targetMinutes}m target</Text>
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: focusMode }}
+                  disabled={starting}
+                  onPress={() => void toggleFocusMode()}
+                  style={[styles.focusToggle, focusMode && styles.focusToggleActive]}
+                >
+                  <MaterialCommunityIcons
+                    name={focusMode ? "eye-off-outline" : "eye-outline"}
+                    color={focusMode ? palette.success : palette.info}
+                    size={17}
+                  />
+                  <Text style={[styles.focusToggleText, focusMode && styles.focusToggleTextActive]}>
+                    {focusMode ? "Focus on" : "Focus filter"}
                   </Text>
-                  <Text style={styles.contextLabel}>last saved block</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.timerCommandLayout}>
+              <View style={[styles.timerPrimaryPane, !showTimerSetup && styles.timerPrimaryPaneSolo]}>
+                <Text style={styles.status}>{statusLabel}</Text>
+                <Animated.View style={timerStyle}>
+                  <Text style={styles.timer}>{formatElapsed(elapsed)}</Text>
+                </Animated.View>
+                <View style={styles.targetTrack}>
+                  <View style={[styles.targetFill, { width: `${targetProgress}%` }]} />
+                </View>
+                <View style={styles.countdownRow}>
+                  <Text style={styles.countdownLabel}>{elapsed >= targetSeconds && elapsed > 0 ? "Over target" : "Time remaining"}</Text>
+                  <Text style={styles.countdownValue}>{countdownLabel}</Text>
+                </View>
+                <View style={styles.timerMetaRow}>
+                  <Text style={styles.xp}>{xp} XP estimated</Text>
+                  <Text style={styles.checkInPill}>{checkInSummary}</Text>
+                  {focusAuraUnlocked ? <Text style={styles.auraPill}>Aura active</Text> : null}
+                  {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} bonus XP</Text> : null}
+                </View>
+                <Text style={styles.xpRule}>10 XP per 10 minutes, plus check-in and evidence bonuses.</Text>
+                {elapsed >= targetSeconds && elapsed > 0 ? <Text style={styles.targetReached}>Target reached. Save now or keep going.</Text> : null}
+                {running ? (
+                  <Text style={styles.checkInMeta}>
+                    {checkInsActive
+                      ? checkpointGenerating
+                        ? "Building check-in..."
+                        : `Next check-in in ${minutesUntilCheckpoint} min`
+                      : "Check-ins off for this session"}
+                  </Text>
+                ) : null}
+
+                <View style={styles.controls}>
+                  {!running ? (
+                    <Button mode="contained" icon="play" loading={starting} disabled={!selectedSubject || starting} onPress={start}>
+                      {elapsed > 0 ? "Resume" : "Start"}
+                    </Button>
+                  ) : (
+                    <Button mode="contained-tonal" icon="pause" onPress={pause}>
+                      Pause
+                    </Button>
+                  )}
+                  {checkInsEnabled ? (
+                    <Button
+                      mode="outlined"
+                      icon="help-circle"
+                      loading={checkpointGenerating}
+                      disabled={!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen}
+                      onPress={askCheckpoint}
+                    >
+                      Check now
+                    </Button>
+                  ) : null}
+                  <Button mode="outlined" icon="stop" disabled={elapsed === 0} onPress={stop}>
+                    Stop
+                  </Button>
                 </View>
               </View>
-            </AppCard>
-          ) : null}
 
-          <StudyMusicPanel />
-
-          <AppCard style={[styles.breakCard, breakReady && styles.breakCardReady]}>
-            <View style={styles.breakHeader}>
-              <View style={styles.breakHeaderText}>
-                <Text style={styles.breakTitle}>{breakReady ? breakPlan.title : "Planned reset"}</Text>
-                <Text style={styles.muted}>{breakPlan.tone}</Text>
-              </View>
-              <Text style={styles.breakDuration}>{breakPlan.duration}</Text>
+              {showTimerSetup ? (
+                <View style={styles.timerSetupPane}>
+                  <View style={styles.setupHeader}>
+                    <Text style={styles.targetLabel}>Session setup</Text>
+                    <Text style={styles.setupHint}>Keep it light. The timer should do the work.</Text>
+                  </View>
+                  <View style={styles.presetGrid}>
+                    {STUDY_SESSION_PRESETS.map((preset) => {
+                      const activePreset = targetMinutes === String(preset.minutes) && sessionGoal === preset.goal;
+                      return (
+                        <Pressable
+                          key={preset.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: activePreset }}
+                          onPress={() => applySessionPreset(preset)}
+                          style={[
+                            styles.presetChip,
+                            { borderColor: `${preset.accent}55`, backgroundColor: `${preset.accent}10` },
+                            activePreset && { borderColor: preset.accent }
+                          ]}
+                        >
+                          <MaterialCommunityIcons name={preset.icon} color={preset.accent} size={18} />
+                          <View style={styles.presetTextWrap}>
+                            <Text style={styles.presetTitle} numberOfLines={1}>
+                              {preset.label}
+                            </Text>
+                            <Text style={styles.presetMeta} numberOfLines={1}>
+                              {preset.minutes}m {preset.focus ? "- focus" : "- flexible"}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.setupInputs}>
+                    <TextInput
+                      mode="outlined"
+                      label="Topic"
+                      value={studyTopic}
+                      onChangeText={setStudyTopic}
+                      style={styles.topicInput}
+                      textColor={palette.text}
+                    />
+                    <TextInput
+                      mode="outlined"
+                      label="Aim"
+                      value={sessionGoal}
+                      onChangeText={setSessionGoal}
+                      style={styles.topicInput}
+                      textColor={palette.text}
+                    />
+                  </View>
+                  <View style={styles.targetBlock}>
+                    <Text style={styles.targetLabel}>Target length</Text>
+                    <SegmentedButtons value={targetMinutes} onValueChange={setTargetMinutes} buttons={targetLengthButtons} />
+                  </View>
+                  <View style={styles.checkInRow}>
+                    <View style={styles.checkInText}>
+                      <Text style={styles.checkInTitle}>Check-in questions</Text>
+                      <Text style={styles.checkInStatus}>
+                        {checkInsActive ? `On - ${trimmedStudyTopic}` : checkInsEnabled ? "Waiting for a topic" : "Off for this session"}
+                      </Text>
+                    </View>
+                    <Switch value={checkInsEnabled} onValueChange={setCheckInsEnabled} color={palette.primary} />
+                  </View>
+                  {checkInsEnabled ? (
+                    <View style={styles.targetBlock}>
+                      <Text style={styles.targetLabel}>Check-in rhythm</Text>
+                      <SegmentedButtons
+                        value={checkInIntervalMinutes}
+                        onValueChange={setCheckInIntervalMinutes}
+                        buttons={checkInRhythmButtons}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.breakAction}>{breakPlan.action}</Text>
-            <Button
-              mode={breakReady ? "contained" : "outlined"}
-              compact
-              icon="meditation"
-              onPress={() => setMessage(`Reset done: ${breakPlan.action}`)}
-            >
-              Mark reset
-            </Button>
           </AppCard>
+
+          {!running || !focusMode ? (
+            <>
+              <View style={styles.supportGrid}>
+                {selectedSubjectContext ? (
+                  <AppCard style={[styles.contextCard, styles.supportCard]}>
+                    <View style={styles.contextHeader}>
+                      <View>
+                        <Text style={styles.cardTitle}>Session context</Text>
+                        <Text style={styles.muted}>For {selectedSubject?.subjectName ?? "this subject"}</Text>
+                      </View>
+                      <Text style={styles.contextBadge}>{formatStudyDuration(stats?.todaySeconds ?? 0)} today</Text>
+                    </View>
+                    <View style={styles.contextGrid}>
+                      <View style={styles.contextTile}>
+                        <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.weekSeconds)}</Text>
+                        <Text style={styles.contextLabel}>this subject this week</Text>
+                      </View>
+                      <View style={styles.contextTile}>
+                        <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.bestSeconds)}</Text>
+                        <Text style={styles.contextLabel}>personal best</Text>
+                      </View>
+                      <View style={styles.contextTile}>
+                        <Text style={styles.contextValue}>
+                          {selectedSubjectContext.lastSession ? formatStudyDuration(selectedSubjectContext.lastSession.durationSeconds) : "0m"}
+                        </Text>
+                        <Text style={styles.contextLabel}>last saved block</Text>
+                      </View>
+                    </View>
+                  </AppCard>
+                ) : null}
+
+                <AppCard style={[styles.breakCard, breakReady && styles.breakCardReady, styles.supportCard]}>
+                  <View style={styles.breakHeader}>
+                    <View style={styles.breakHeaderText}>
+                      <Text style={styles.breakTitle}>{breakReady ? breakPlan.title : "Planned reset"}</Text>
+                      <Text style={styles.muted}>{breakPlan.tone}</Text>
+                    </View>
+                    <Text style={styles.breakDuration}>{breakPlan.duration}</Text>
+                  </View>
+                  <Text style={styles.breakAction}>{breakPlan.action}</Text>
+                  <Button
+                    mode={breakReady ? "contained" : "outlined"}
+                    compact
+                    icon="meditation"
+                    onPress={() => setMessage(`Reset done: ${breakPlan.action}`)}
+                  >
+                    Mark reset
+                  </Button>
+                </AppCard>
+              </View>
+
+              <StudyMusicPanel />
+            </>
+          ) : null}
 
           {message ? (
             <AppCard style={styles.messageCard}>
@@ -1074,12 +1119,6 @@ export default function StudyScreen() {
             </AppCard>
           ) : null}
 
-          <AppCard>
-            <Text variant="titleMedium" style={styles.cardTitle}>
-              XP rules
-            </Text>
-            <Text style={styles.muted}>10 XP per 10 minutes, plus bonuses for check-ins, ritual steps and saved evidence.</Text>
-          </AppCard>
         </>
       ) : null}
 
@@ -1322,13 +1361,104 @@ const styles = StyleSheet.create({
     textAlign: "right"
   },
   timerCard: {
-    alignItems: "center",
     gap: 18,
-    paddingVertical: 32
+    padding: 18
   },
   timerCardAura: {
     borderColor: "rgba(56,189,248,0.34)",
     backgroundColor: "rgba(56,189,248,0.08)"
+  },
+  timerCommandHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14
+  },
+  timerCommandCopy: {
+    flex: 1,
+    minWidth: 240,
+    gap: 4
+  },
+  timerSessionTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 24,
+    lineHeight: 30
+  },
+  timerSessionMeta: {
+    color: palette.muted,
+    lineHeight: 20
+  },
+  timerHeaderChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8
+  },
+  focusToggle: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}10`,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  focusToggleActive: {
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}12`
+  },
+  focusToggleText: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  focusToggleTextActive: {
+    color: palette.success
+  },
+  timerCommandLayout: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: 16
+  },
+  timerPrimaryPane: {
+    flex: 1.2,
+    minWidth: 280,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    paddingVertical: 8
+  },
+  timerPrimaryPaneSolo: {
+    minHeight: 420
+  },
+  timerSetupPane: {
+    flex: 1,
+    minWidth: 280,
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.028)",
+    padding: 12
+  },
+  setupHeader: {
+    gap: 4
+  },
+  setupHint: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
+  },
+  setupInputs: {
+    gap: 10
   },
   presetBlock: {
     width: "100%",
@@ -1350,12 +1480,12 @@ const styles = StyleSheet.create({
   presetGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 8
   },
   presetChip: {
-    width: 132,
-    minHeight: 58,
+    width: 128,
+    minHeight: 54,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -1379,12 +1509,10 @@ const styles = StyleSheet.create({
   },
   topicInput: {
     width: "100%",
-    maxWidth: 520,
     backgroundColor: palette.surface
   },
   checkInRow: {
     width: "100%",
-    maxWidth: 520,
     minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
@@ -1411,7 +1539,6 @@ const styles = StyleSheet.create({
   },
   targetBlock: {
     width: "100%",
-    maxWidth: 520,
     gap: 8
   },
   targetLabel: {
@@ -1425,8 +1552,8 @@ const styles = StyleSheet.create({
   },
   timer: {
     color: palette.text,
-    fontSize: 72,
-    lineHeight: 82,
+    fontSize: 76,
+    lineHeight: 84,
     fontFamily: "Outfit_700Bold"
   },
   targetTrack: {
@@ -1487,6 +1614,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5
   },
+  checkInPill: {
+    color: palette.info,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.info}44`,
+    backgroundColor: `${palette.info}12`,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
   auraPill: {
     color: palette.info,
     fontSize: 12,
@@ -1517,11 +1655,25 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12
   },
+  xpRule: {
+    color: palette.muted,
+    fontSize: 12,
+    textAlign: "center"
+  },
   controls: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 12
+  },
+  supportGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12
+  },
+  supportCard: {
+    flex: 1,
+    minWidth: 280
   },
   contextCard: {
     gap: 12,
