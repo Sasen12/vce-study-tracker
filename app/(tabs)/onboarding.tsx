@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Text } from "react-native-paper";
@@ -100,11 +100,13 @@ const guidePages = [
 ];
 
 export default function OnboardingScreen() {
+  const { width } = useWindowDimensions();
   const user = useAuthStore((state) => state.user);
   const { subjects, events, sessions, notes, savedQuestions, fetchAll } = useAppStore();
   const [page, setPage] = useState(0);
   const currentPage = guidePages[page] ?? guidePages[0];
   const isLastPage = page >= guidePages.length - 1;
+  const isWide = width >= 900;
 
   useFocusEffect(
     useCallback(() => {
@@ -163,100 +165,143 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>Guided start</Text>
-          <Text variant="headlineLarge" style={styles.title}>
-            Learn the app by using it.
-          </Text>
-          <Text style={styles.subtitle}>Five quick stops. Skip anytime if you want to explore on your own.</Text>
+      <View style={styles.shell}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrow}>Guided start</Text>
+            <Text variant="headlineLarge" style={styles.title}>
+              Get your command centre online.
+            </Text>
+            <Text style={styles.subtitle}>A short setup path for VCE Forge. Skip it anytime.</Text>
+          </View>
+          <Button mode="outlined" icon="close" onPress={enterApp}>
+            Skip tutorial
+          </Button>
         </View>
-        <Button mode="outlined" icon="close" onPress={enterApp}>
-          Skip tutorial
-        </Button>
-      </View>
 
-      <AppCard style={styles.progressCard}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Setup progress</Text>
-          <Text style={styles.progressCount}>
-            {completedItems}/{checklist.length}
-          </Text>
-        </View>
-        <View style={styles.checkGrid}>
-          {checklist.map((item) => (
-            <View key={item.title} style={styles.checkItem}>
-              <MaterialCommunityIcons
-                name={item.done ? "check-circle" : "circle-outline"}
-                color={item.done ? palette.success : palette.muted}
-                size={20}
-              />
-              <View style={styles.flexText}>
-                <Text style={[styles.checkTitle, item.done ? styles.checkTitleDone : null]}>{item.title}</Text>
-                <Text style={styles.checkDetail}>{item.detail}</Text>
+        <View style={[styles.guideLayout, !isWide && styles.guideLayoutStacked]}>
+          <View style={[styles.sideRail, !isWide && styles.sideRailMobile]}>
+            <AppCard style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <View>
+                  <Text style={styles.progressTitle}>Setup pulse</Text>
+                  <Text style={styles.progressCaption}>What the app already knows</Text>
+                </View>
+                <Text style={styles.progressCount}>
+                  {completedItems}/{checklist.length}
+                </Text>
+              </View>
+              <View style={styles.checkList}>
+                {checklist.map((item) => (
+                  <View key={item.title} style={styles.checkItem}>
+                    <MaterialCommunityIcons
+                      name={item.done ? "check-circle" : "circle-outline"}
+                      color={item.done ? palette.success : palette.muted}
+                      size={18}
+                    />
+                    <View style={styles.flexText}>
+                      <Text style={[styles.checkTitle, item.done ? styles.checkTitleDone : null]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.checkDetail} numberOfLines={1}>
+                        {item.detail}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </AppCard>
+
+            <AppCard style={styles.stepRail}>
+              <Text style={styles.progressTitle}>Tutorial route</Text>
+              {guidePages.map((item, index) => {
+                const active = index === page;
+                return (
+                  <Pressable
+                    key={item.title}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setPage(index)}
+                    style={[styles.stepRailItem, active && { borderColor: item.color, backgroundColor: `${item.color}12` }]}
+                  >
+                    <View style={[styles.stepRailIcon, { backgroundColor: active ? `${item.color}22` : "rgba(255,255,255,0.05)" }]}>
+                      <MaterialCommunityIcons name={item.icon} color={active ? item.color : palette.muted} size={17} />
+                    </View>
+                    <View style={styles.flexText}>
+                      <Text style={[styles.stepRailTitle, active && { color: palette.text }]} numberOfLines={1}>
+                        {item.kicker}
+                      </Text>
+                      <Text style={styles.stepRailSubtitle} numberOfLines={1}>
+                        Step {index + 1}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </AppCard>
+          </View>
+
+          <AppCard style={styles.pageCard}>
+            <View style={styles.pageChrome}>
+              <View style={styles.pageTop}>
+                <View style={[styles.pageIcon, { backgroundColor: `${currentPage.color}18` }]}>
+                  <MaterialCommunityIcons name={currentPage.icon} color={currentPage.color} size={30} />
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={[styles.pageKicker, { color: currentPage.color }]}>
+                    Step {page + 1} of {guidePages.length}
+                  </Text>
+                  <Text style={styles.pageTitle}>{currentPage.title}</Text>
+                </View>
+              </View>
+              <Text style={styles.pageBody}>{currentPage.body}</Text>
+            </View>
+
+            <View style={styles.pointPanel}>
+              {currentPage.points.map((point) => (
+                <View key={point} style={styles.pointRow}>
+                  <View style={[styles.pointDot, { backgroundColor: currentPage.color }]} />
+                  <Text style={styles.pointText}>{point}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.actionStrip}>
+              <Button mode="contained" icon={currentPage.actionIcon} onPress={() => openAction(currentPage.action)}>
+                {currentPage.actionLabel}
+              </Button>
+              <View style={styles.navActions}>
+                <Button mode="outlined" disabled={page === 0} onPress={() => setPage((value) => Math.max(0, value - 1))}>
+                  Back
+                </Button>
+                <Button
+                  mode="contained-tonal"
+                  icon={isLastPage ? "check" : "arrow-right"}
+                  onPress={() => {
+                    if (isLastPage) {
+                      void enterApp();
+                      return;
+                    }
+                    setPage((value) => Math.min(guidePages.length - 1, value + 1));
+                  }}
+                >
+                  {isLastPage ? "Finish" : "Next"}
+                </Button>
               </View>
             </View>
-          ))}
-        </View>
-      </AppCard>
 
-      <AppCard style={styles.pageCard}>
-        <View style={styles.pageTop}>
-          <View style={[styles.pageIcon, { backgroundColor: `${currentPage.color}18` }]}>
-            <MaterialCommunityIcons name={currentPage.icon} color={currentPage.color} size={28} />
-          </View>
-          <View style={styles.flexText}>
-            <Text style={[styles.pageKicker, { color: currentPage.color }]}>
-              Step {page + 1} of {guidePages.length} - {currentPage.kicker}
-            </Text>
-            <Text style={styles.pageTitle}>{currentPage.title}</Text>
-          </View>
-        </View>
-        <Text style={styles.pageBody}>{currentPage.body}</Text>
-        <View style={styles.pointList}>
-          {currentPage.points.map((point) => (
-            <View key={point} style={styles.pointRow}>
-              <View style={[styles.pointDot, { backgroundColor: currentPage.color }]} />
-              <Text style={styles.pointText}>{point}</Text>
+            <View style={styles.pager}>
+              {guidePages.map((item, index) => (
+                <Pressable
+                  key={item.title}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: index === page }}
+                  onPress={() => setPage(index)}
+                  style={[styles.pagerDot, index === page && { backgroundColor: currentPage.color }]}
+                />
+              ))}
             </View>
-          ))}
-        </View>
-        <View style={styles.pageActions}>
-          <Button mode="contained-tonal" icon={currentPage.actionIcon} onPress={() => openAction(currentPage.action)}>
-            {currentPage.actionLabel}
-          </Button>
-        </View>
-      </AppCard>
-
-      <View style={styles.bottomBar}>
-        <View style={styles.pager}>
-          {guidePages.map((item, index) => (
-            <Pressable
-              key={item.title}
-              accessibilityRole="button"
-              accessibilityState={{ selected: index === page }}
-              onPress={() => setPage(index)}
-              style={[styles.pagerDot, index === page && { backgroundColor: currentPage.color }]}
-            />
-          ))}
-        </View>
-        <View style={styles.navActions}>
-          <Button mode="outlined" disabled={page === 0} onPress={() => setPage((value) => Math.max(0, value - 1))}>
-            Back
-          </Button>
-          <Button
-            mode="contained"
-            icon={isLastPage ? "check" : "arrow-right"}
-            onPress={() => {
-              if (isLastPage) {
-                void enterApp();
-                return;
-              }
-              setPage((value) => Math.min(guidePages.length - 1, value + 1));
-            }}
-          >
-            {isLastPage ? "Finish" : "Next"}
-          </Button>
+          </AppCard>
         </View>
       </View>
     </Screen>
@@ -264,8 +309,15 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
+  shell: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    gap: 16
+  },
   header: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 14
@@ -281,7 +333,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.text,
-    fontFamily: "Outfit_700Bold"
+    fontFamily: "Outfit_700Bold",
+    maxWidth: 720
   },
   subtitle: {
     color: palette.muted,
@@ -291,6 +344,21 @@ const styles = StyleSheet.create({
   flexText: {
     flex: 1,
     minWidth: 0
+  },
+  guideLayout: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 14
+  },
+  guideLayoutStacked: {
+    flexDirection: "column"
+  },
+  sideRail: {
+    width: 310,
+    gap: 12
+  },
+  sideRailMobile: {
+    width: "100%"
   },
   progressCard: {
     gap: 12
@@ -305,30 +373,35 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
+  progressCaption: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2
+  },
   progressCount: {
     color: palette.info,
+    fontSize: 22,
     fontFamily: "Outfit_700Bold"
   },
-  checkGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
+  checkList: {
+    gap: 7
   },
   checkItem: {
-    flexGrow: 1,
-    flexBasis: 220,
-    minHeight: 58,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    gap: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.035)",
-    padding: 10
+    paddingHorizontal: 9,
+    paddingVertical: 8
   },
   checkTitle: {
     color: palette.text,
+    fontSize: 13,
     fontFamily: "Outfit_700Bold"
   },
   checkTitleDone: {
@@ -339,8 +412,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16
   },
+  stepRail: {
+    gap: 9
+  },
+  stepRailItem: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    paddingHorizontal: 9,
+    paddingVertical: 8
+  },
+  stepRailIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  stepRailTitle: {
+    color: palette.muted,
+    fontSize: 13,
+    fontFamily: "Outfit_700Bold"
+  },
+  stepRailSubtitle: {
+    color: palette.muted,
+    fontSize: 11,
+    lineHeight: 14
+  },
   pageCard: {
-    gap: 16
+    flex: 1,
+    minHeight: 430,
+    justifyContent: "space-between",
+    gap: 18,
+    padding: 22
+  },
+  pageChrome: {
+    gap: 14
   },
   pageTop: {
     flexDirection: "row",
@@ -348,8 +460,8 @@ const styles = StyleSheet.create({
     gap: 12
   },
   pageIcon: {
-    width: 54,
-    height: 54,
+    width: 58,
+    height: 58,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center"
@@ -361,17 +473,23 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     color: palette.text,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 32,
+    lineHeight: 37,
     fontFamily: "Outfit_700Bold"
   },
   pageBody: {
     color: palette.muted,
-    fontSize: 16,
-    lineHeight: 23
+    fontSize: 17,
+    lineHeight: 25,
+    maxWidth: 720
   },
-  pointList: {
-    gap: 10
+  pointPanel: {
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 14
   },
   pointRow: {
     flexDirection: "row",
@@ -388,12 +506,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: palette.text,
-    lineHeight: 21
+    fontSize: 15,
+    lineHeight: 22
   },
-  pageActions: {
-    alignItems: "flex-start"
-  },
-  bottomBar: {
+  actionStrip: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
@@ -412,6 +528,7 @@ const styles = StyleSheet.create({
   },
   navActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8
   }
 });
