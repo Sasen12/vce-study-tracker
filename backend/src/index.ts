@@ -23,6 +23,8 @@ const port = Number(process.env.PORT ?? 3000);
 
 const allowedOrigins = [
   "https://vce-study-tracker-sasen.netlify.app",
+  "https://vceforge.space",
+  "https://www.vceforge.space",
   "http://localhost:3000",
   "http://localhost:8081",
   "http://localhost:19006"
