@@ -414,6 +414,7 @@ export default function ProfileScreen() {
   const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
   const [studyPreferenceMessage, setStudyPreferenceMessage] = useState<string | null>(null);
   const [defaultAimDraft, setDefaultAimDraft] = useState("");
+  const [ritualsExpanded, setRitualsExpanded] = useState(false);
   const subjectLimit = maxSubjects;
 
   useFocusEffect(
@@ -568,6 +569,7 @@ export default function ProfileScreen() {
     () => buildPersonalRituals({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
     [events, goals, notes, resources, savedQuestions, sessions, subjects]
   );
+  const visibleRituals = ritualsExpanded ? personalRituals : personalRituals.slice(0, 1);
 
   const openRitual = (ritual: PersonalRitual) => {
     router.push({
@@ -578,8 +580,23 @@ export default function ProfileScreen() {
         ritualTitle: ritual.title,
         ritualReason: ritual.reason,
         ritualSteps: JSON.stringify(ritual.steps),
+        ...(ritual.priority >= 90 ? { ritualFocus: "1" } : {}),
         ...(ritual.subjectId ? { subjectId: ritual.subjectId } : {}),
         ...(ritual.topic ? { rescueTopic: ritual.topic } : {})
+      }
+    });
+  };
+
+  const openRitualDrill = (ritual: PersonalRitual) => {
+    if (!ritual.subjectId) return;
+    router.push({
+      pathname: "/(tabs)/questions",
+      params: {
+        mode: "generate",
+        subjectId: ritual.subjectId,
+        topic: ritual.topic ?? ritual.title,
+        difficulty: ritual.priority >= 90 ? "hard" : "medium",
+        count: "3"
       }
     });
   };
@@ -801,19 +818,29 @@ export default function ProfileScreen() {
       </AppCard>
 
       <AppCard style={styles.ritualsCard}>
-        <View style={styles.signatureTop}>
-          <View style={styles.ritualMark}>
-            <MaterialCommunityIcons name="auto-fix" color={palette.primary} size={24} />
+        <View style={styles.ritualsHeader}>
+          <View style={[styles.signatureTop, styles.ritualsHeaderText]}>
+            <View style={styles.ritualMark}>
+              <MaterialCommunityIcons name="auto-fix" color={palette.primary} size={24} />
+            </View>
+            <View style={styles.flexText}>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Forge Rituals
+              </Text>
+              <Text style={styles.muted}>Protocols that change as your deadlines, notes and weak areas change.</Text>
+            </View>
           </View>
-          <View style={styles.flexText}>
-            <Text variant="titleMedium" style={styles.cardTitle}>
-              Forge Rituals
-            </Text>
-            <Text style={styles.muted}>Protocols that change as your deadlines, notes and weak areas change.</Text>
-          </View>
+          <Button
+            compact
+            mode="text"
+            icon={ritualsExpanded ? "chevron-up" : "chevron-down"}
+            onPress={() => setRitualsExpanded((value) => !value)}
+          >
+            {ritualsExpanded ? "Less" : "All"}
+          </Button>
         </View>
         <View style={styles.ritualGrid}>
-          {personalRituals.map((ritual) => (
+          {visibleRituals.map((ritual) => (
             <View key={ritual.id} style={styles.ritualItem}>
               <View style={styles.ritualItemTop}>
                 <View style={[styles.ritualIcon, { backgroundColor: `${ritual.accent}18` }]}>
@@ -839,9 +866,14 @@ export default function ProfileScreen() {
                   </View>
                 ))}
               </View>
-              <Button mode="outlined" icon="timer-play-outline" onPress={() => openRitual(ritual)}>
-                Start ritual
-              </Button>
+              <View style={styles.ritualActions}>
+                <Button compact mode="contained-tonal" icon="timer-play-outline" onPress={() => openRitual(ritual)}>
+                  Start
+                </Button>
+                <Button compact mode="outlined" icon="cards-outline" disabled={!ritual.subjectId} onPress={() => openRitualDrill(ritual)}>
+                  Drill
+                </Button>
+              </View>
             </View>
           ))}
         </View>
@@ -1190,6 +1222,16 @@ const styles = StyleSheet.create({
     borderColor: "rgba(168,85,247,0.28)",
     backgroundColor: "rgba(168,85,247,0.07)"
   },
+  ritualsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  ritualsHeaderText: {
+    flex: 1,
+    minWidth: 0
+  },
   ritualMark: {
     width: 46,
     height: 46,
@@ -1268,6 +1310,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: palette.text,
     lineHeight: 18
+  },
+  ritualActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   atarCard: {
     gap: 10

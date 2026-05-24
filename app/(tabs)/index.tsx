@@ -692,6 +692,7 @@ export default function DashboardScreen() {
         ritualTitle: ritual.title,
         ritualReason: ritual.reason,
         ritualSteps: JSON.stringify(ritual.steps),
+        ...(ritual.priority >= 90 ? { ritualFocus: "1" } : {}),
         ...(ritual.subjectId ? { subjectId: ritual.subjectId } : {}),
         ...(ritual.topic ? { rescueTopic: ritual.topic } : {})
       }

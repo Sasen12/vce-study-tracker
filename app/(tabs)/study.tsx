@@ -142,6 +142,7 @@ export default function StudyScreen() {
     ritualTitle?: string;
     ritualReason?: string;
     ritualSteps?: string;
+    ritualFocus?: string;
   }>();
   const { subjects, sessions, stats, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
@@ -171,6 +172,8 @@ export default function StudyScreen() {
   const [confettiKey, setConfettiKey] = useState(0);
   const [mode, setMode] = useState("coach");
   const [focusMode, setFocusMode] = useState(false);
+  const [completedRitualSteps, setCompletedRitualSteps] = useState<Record<number, boolean>>({});
+  const [ritualBonusAwarded, setRitualBonusAwarded] = useState(false);
   const scale = useSharedValue(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intentionalFullscreenExitRef = useRef(false);
@@ -251,6 +254,17 @@ export default function StudyScreen() {
     setCheckInsEnabled(true);
     setMessage(`${ritualTitle} loaded.`);
   }, [ritualTitle, running]);
+
+  useEffect(() => {
+    setCompletedRitualSteps({});
+    setRitualBonusAwarded(false);
+  }, [ritualTitle, params.ritualSteps]);
+
+  useEffect(() => {
+    if (params.ritualFocus === "1" && ritualTitle && !running) {
+      setFocusMode(true);
+    }
+  }, [params.ritualFocus, ritualTitle, running]);
 
   useEffect(() => {
     let active = true;
@@ -390,6 +404,11 @@ export default function StudyScreen() {
     () => (checkpointQuestion ? optionsFor(checkpointQuestion) : []),
     [checkpointQuestion]
   );
+  const completedRitualCount = useMemo(
+    () => ritualSteps.filter((_, index) => completedRitualSteps[index]).length,
+    [completedRitualSteps, ritualSteps]
+  );
+  const ritualComplete = ritualSteps.length > 0 && completedRitualCount === ritualSteps.length;
   const minutesUntilCheckpoint = Math.max(0, Math.ceil((nextCheckpointAt - elapsed) / 60));
   const targetLengthButtons = useMemo(() => {
     const base = [
@@ -445,6 +464,18 @@ export default function StudyScreen() {
     setStudyTopic((current) => current.trim() || preset.topicHint);
     setMessage(`${preset.label} loaded.`);
   };
+
+  const toggleRitualStep = (index: number) => {
+    if (!ritualSteps[index]) return;
+    setCompletedRitualSteps((current) => ({ ...current, [index]: !current[index] }));
+  };
+
+  useEffect(() => {
+    if (!ritualComplete || ritualBonusAwarded) return;
+    setRitualBonusAwarded(true);
+    setTimerBonusXp((value) => value + 6);
+    setMessage("Ritual complete. +6 bonus XP added to this block.");
+  }, [ritualBonusAwarded, ritualComplete]);
 
   const askCheckpoint = useCallback(async () => {
     if (!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen) return;
@@ -563,14 +594,17 @@ export default function StudyScreen() {
     const goal = sessionGoal.trim();
     const typedNotes = notes.trim();
     const nextStep = nextAction.trim();
+    const completedSteps = ritualSteps.filter((_, index) => completedRitualSteps[index]);
     const sessionNotes = [
       topic ? `Topic: ${topic}` : "",
       goal ? `Aim: ${goal}` : "",
+      ritualTitle ? `Ritual: ${ritualTitle}` : "",
+      completedSteps.length ? `Ritual steps completed: ${completedSteps.join(" / ")}` : "",
       typedNotes,
       `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`,
       nextStep ? `Next action: ${nextStep}` : "",
       checkInsActive ? `Check-in rhythm: every ${checkInIntervalMinutes} minutes` : "Check-ins: off",
-      timerBonusXp ? `Timer check bonus: ${timerBonusXp} XP` : ""
+      timerBonusXp ? `Timer bonus: ${timerBonusXp} XP` : ""
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -620,6 +654,8 @@ export default function StudyScreen() {
       setConfidenceAfter("3");
       setNextAction("");
       setTimerBonusXp(0);
+      setCompletedRitualSteps({});
+      setRitualBonusAwarded(false);
       setNextCheckpointAt(checkpointIntervalSeconds);
       setCheckpointQuestion(null);
       setCheckpointOpen(false);
@@ -799,11 +835,26 @@ export default function StudyScreen() {
               {ritualSteps.length ? (
                 <View style={styles.ritualSteps}>
                   {ritualSteps.map((step, index) => (
-                    <View key={`${step}-${index}`} style={styles.ritualStep}>
-                      <Text style={styles.ritualStepIndex}>{index + 1}</Text>
-                      <Text style={styles.ritualStepText}>{step}</Text>
-                    </View>
+                    <Pressable
+                      key={`${step}-${index}`}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: Boolean(completedRitualSteps[index]) }}
+                      onPress={() => toggleRitualStep(index)}
+                      style={[styles.ritualStep, completedRitualSteps[index] && styles.ritualStepDone]}
+                    >
+                      <MaterialCommunityIcons
+                        name={completedRitualSteps[index] ? "checkbox-marked-circle-outline" : "checkbox-blank-circle-outline"}
+                        color={completedRitualSteps[index] ? palette.success : palette.primary}
+                        size={20}
+                      />
+                      <Text style={[styles.ritualStepText, completedRitualSteps[index] && styles.ritualStepTextDone]}>
+                        {step}
+                      </Text>
+                    </Pressable>
                   ))}
+                  <Text style={ritualComplete ? styles.ritualCompleteText : styles.ritualProgressText}>
+                    {ritualComplete ? "Ritual locked in. Save the session to keep the evidence." : `${completedRitualCount}/${ritualSteps.length} steps`}
+                  </Text>
                 </View>
               ) : null}
             </AppCard>
@@ -910,7 +961,7 @@ export default function StudyScreen() {
               <Text style={styles.xp}>{xp} XP estimated</Text>
               <Text style={styles.progressPill}>{targetProgress}% target</Text>
               {focusAuraUnlocked ? <Text style={styles.auraPill}>Aura active</Text> : null}
-              {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} check-in XP</Text> : null}
+              {timerBonusXp ? <Text style={styles.bonusPill}>+{timerBonusXp} bonus XP</Text> : null}
             </View>
             <Button
               mode={focusMode ? "contained-tonal" : "outlined"}
@@ -1028,7 +1079,7 @@ export default function StudyScreen() {
           <Dialog.Content style={styles.dialogContent}>
             <Text style={styles.summaryLine}>{formatElapsed(elapsed)} focused</Text>
             <Text style={styles.summaryLine}>{xp} XP earned</Text>
-            {timerBonusXp ? <Text style={styles.summaryBonus}>Includes {timerBonusXp} XP from timer check-ins</Text> : null}
+            {timerBonusXp ? <Text style={styles.summaryBonus}>Includes {timerBonusXp} XP from timer bonuses</Text> : null}
             <View style={styles.confidenceGrid}>
               <View style={styles.confidenceBlock}>
                 <Text style={styles.confidenceLabel}>Before</Text>
@@ -1232,21 +1283,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8
   },
-  ritualStepIndex: {
-    overflow: "hidden",
-    width: 22,
-    borderRadius: 8,
-    backgroundColor: "rgba(168,85,247,0.16)",
-    color: palette.primary,
-    fontFamily: "Outfit_700Bold",
-    textAlign: "center",
-    paddingVertical: 3
+  ritualStepDone: {
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}10`
   },
   ritualStepText: {
     flex: 1,
     minWidth: 0,
     color: palette.text,
     lineHeight: 20
+  },
+  ritualStepTextDone: {
+    color: palette.muted
+  },
+  ritualProgressText: {
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "right"
+  },
+  ritualCompleteText: {
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "right"
   },
   timerCard: {
     alignItems: "center",
