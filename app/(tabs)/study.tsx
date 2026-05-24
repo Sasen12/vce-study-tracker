@@ -139,6 +139,9 @@ export default function StudyScreen() {
     tutorGoal?: string;
     tutorEventId?: string;
     tutorEventTitle?: string;
+    ritualTitle?: string;
+    ritualReason?: string;
+    ritualSteps?: string;
   }>();
   const { subjects, sessions, stats, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
@@ -173,6 +176,7 @@ export default function StudyScreen() {
   const intentionalFullscreenExitRef = useRef(false);
   const fullscreenLockActiveRef = useRef(false);
   const preferencesAppliedRef = useRef(false);
+  const appliedRitualRef = useRef<string | null>(null);
 
   const releaseFocusLock = useCallback(() => {
     fullscreenLockActiveRef.current = false;
@@ -222,9 +226,35 @@ export default function StudyScreen() {
     }
   }, [params.rescue, params.rescueTopic, running]);
 
+  const ritualTitle = params.ritualTitle?.trim() ?? "";
+  const ritualReason = params.ritualReason?.trim() ?? "";
+  const ritualSteps = useMemo(() => {
+    if (!params.ritualSteps) return [];
+    try {
+      const parsed = JSON.parse(params.ritualSteps);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((step): step is string => typeof step === "string" && Boolean(step.trim())).map((step) => step.trim());
+      }
+    } catch {
+      return params.ritualSteps
+        .split("|")
+        .map((step) => step.trim())
+        .filter(Boolean);
+    }
+    return [];
+  }, [params.ritualSteps]);
+
+  useEffect(() => {
+    if (!ritualTitle || running || appliedRitualRef.current === ritualTitle) return;
+    appliedRitualRef.current = ritualTitle;
+    setSessionGoal(ritualTitle);
+    setCheckInsEnabled(true);
+    setMessage(`${ritualTitle} loaded.`);
+  }, [ritualTitle, running]);
+
   useEffect(() => {
     let active = true;
-    const hasRouteSession = Boolean(params.targetMinutes || params.rescueTopic || params.tutorTopic);
+    const hasRouteSession = Boolean(params.targetMinutes || params.rescueTopic || params.tutorTopic || ritualTitle);
     if (preferencesAppliedRef.current || running || elapsed > 0 || hasRouteSession) return undefined;
 
     loadStudyPreferences(userId).then((preferences) => {
@@ -243,7 +273,7 @@ export default function StudyScreen() {
     return () => {
       active = false;
     };
-  }, [elapsed, params.rescueTopic, params.targetMinutes, params.tutorTopic, running, userId]);
+  }, [elapsed, params.rescueTopic, params.targetMinutes, params.tutorTopic, ritualTitle, running, userId]);
 
   useEffect(() => {
     if (running) {
@@ -753,6 +783,32 @@ export default function StudyScreen() {
             <EmptyState title="No subjects found" body="Add a subject from Profile, then your sessions can earn XP." />
           )}
 
+          {ritualTitle ? (
+            <AppCard style={styles.ritualCard}>
+              <View style={styles.ritualHeader}>
+                <View style={styles.ritualMark}>
+                  <MaterialCommunityIcons name="auto-fix" color={palette.primary} size={22} />
+                </View>
+                <View style={styles.ritualText}>
+                  <Text style={styles.ritualLabel}>Forge ritual</Text>
+                  <Text style={styles.ritualTitle}>{ritualTitle}</Text>
+                  {ritualReason ? <Text style={styles.ritualReason}>{ritualReason}</Text> : null}
+                </View>
+                <Text style={styles.ritualMinutes}>{targetMinutes}m</Text>
+              </View>
+              {ritualSteps.length ? (
+                <View style={styles.ritualSteps}>
+                  {ritualSteps.map((step, index) => (
+                    <View key={`${step}-${index}`} style={styles.ritualStep}>
+                      <Text style={styles.ritualStepIndex}>{index + 1}</Text>
+                      <Text style={styles.ritualStepText}>{step}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </AppCard>
+          ) : null}
+
           <AppCard style={[styles.timerCard, focusAuraUnlocked && styles.timerCardAura]}>
             <Text style={styles.status}>{statusLabel}</Text>
             <View style={styles.presetBlock}>
@@ -1111,6 +1167,86 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "flex-end",
     gap: 8
+  },
+  ritualCard: {
+    gap: 12,
+    borderColor: "rgba(168,85,247,0.34)",
+    backgroundColor: "rgba(168,85,247,0.09)"
+  },
+  ritualHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12
+  },
+  ritualMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(168,85,247,0.16)"
+  },
+  ritualText: {
+    flex: 1,
+    minWidth: 0
+  },
+  ritualLabel: {
+    color: palette.primary,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  ritualTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18,
+    lineHeight: 24
+  },
+  ritualReason: {
+    color: palette.muted,
+    lineHeight: 20
+  },
+  ritualMinutes: {
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.36)",
+    backgroundColor: "rgba(168,85,247,0.14)",
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  ritualSteps: {
+    gap: 8
+  },
+  ritualStep: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  ritualStepIndex: {
+    overflow: "hidden",
+    width: 22,
+    borderRadius: 8,
+    backgroundColor: "rgba(168,85,247,0.16)",
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "center",
+    paddingVertical: 3
+  },
+  ritualStepText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    lineHeight: 20
   },
   timerCard: {
     alignItems: "center",

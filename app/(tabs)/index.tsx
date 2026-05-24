@@ -36,7 +36,7 @@ import {
   globalStudySearch,
   sacPanicTag
 } from "@/utils/vceCoach";
-import { buildUserStudySignature } from "@/utils/personalization";
+import { buildPersonalRituals, buildUserStudySignature, type PersonalRitual } from "@/utils/personalization";
 import { getActiveStreak } from "@/utils/streaks";
 
 const daysUntil = (eventDate: string) => {
@@ -420,6 +420,11 @@ export default function DashboardScreen() {
     () => buildUserStudySignature({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
     [events, goals, notes, resources, savedQuestions, sessions, subjects]
   );
+  const personalRituals = useMemo(
+    () => buildPersonalRituals({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
+    [events, goals, notes, resources, savedQuestions, sessions, subjects]
+  );
+  const primaryRitual = personalRituals[0] ?? null;
   const tonightPlan = useMemo(() => {
     const items: TonightPlanItem[] = [];
     const addItem = (item: TonightPlanItem) => {
@@ -678,6 +683,21 @@ export default function DashboardScreen() {
     });
   };
 
+  const openRitual = (ritual: PersonalRitual) => {
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: String(clampStudyMinutes(ritual.minutes)),
+        ritualTitle: ritual.title,
+        ritualReason: ritual.reason,
+        ritualSteps: JSON.stringify(ritual.steps),
+        ...(ritual.subjectId ? { subjectId: ritual.subjectId } : {}),
+        ...(ritual.topic ? { rescueTopic: ritual.topic } : {})
+      }
+    });
+  };
+
   const startRescueMode = (minutes = 12) => {
     if (!rescueSubject) return;
     router.push({
@@ -832,20 +852,35 @@ export default function DashboardScreen() {
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
 
-          <Pressable accessibilityRole="button" style={styles.personalSignal} onPress={openPersonalizedMove}>
-            <View style={[styles.personalSignalIcon, { backgroundColor: `${studySignature.nextMove.accent}18` }]}>
-              <MaterialCommunityIcons name={studySignature.nextMove.icon} color={studySignature.nextMove.accent} size={20} />
+          <Pressable
+            accessibilityRole="button"
+            style={styles.personalSignal}
+            onPress={primaryRitual ? () => openRitual(primaryRitual) : openPersonalizedMove}
+          >
+            <View
+              style={[
+                styles.personalSignalIcon,
+                { backgroundColor: `${primaryRitual?.accent ?? studySignature.nextMove.accent}18` }
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={primaryRitual?.icon ?? studySignature.nextMove.icon}
+                color={primaryRitual?.accent ?? studySignature.nextMove.accent}
+                size={20}
+              />
             </View>
             <View style={styles.flexText}>
-              <Text style={styles.personalSignalLabel}>{studySignature.profileName}</Text>
+              <Text style={styles.personalSignalLabel}>{primaryRitual ? "Forge ritual" : studySignature.profileName}</Text>
               <Text style={styles.personalSignalTitle} numberOfLines={1}>
-                {studySignature.nextMove.title}
+                {primaryRitual?.title ?? studySignature.nextMove.title}
               </Text>
               <Text style={styles.muted} numberOfLines={1}>
-                {studySignature.nextMove.body}
+                {primaryRitual?.reason ?? studySignature.nextMove.body}
               </Text>
             </View>
-            <Text style={styles.personalSignalDepth}>{studySignature.depthLabel}</Text>
+            <Text style={styles.personalSignalDepth}>
+              {primaryRitual ? formatMinutes(clampStudyMinutes(primaryRitual.minutes)) : studySignature.depthLabel}
+            </Text>
           </Pressable>
 
           {primaryPlan ? (

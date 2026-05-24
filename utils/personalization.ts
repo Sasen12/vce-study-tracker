@@ -51,6 +51,19 @@ export type UserStudySignature = {
   traits: PersonalTrait[];
 };
 
+export type PersonalRitual = {
+  id: string;
+  title: string;
+  reason: string;
+  steps: string[];
+  minutes: number;
+  subjectId?: string | null;
+  topic?: string | null;
+  icon: IconName;
+  accent: string;
+  priority: number;
+};
+
 const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const startOfWeek = () => {
@@ -102,6 +115,18 @@ const subjectForEvent = (event: StudyEvent, subjects: UserSubject[]) => {
       return Boolean(subjectName) && title.includes(subjectName);
     }) ?? null
   );
+};
+
+const eventTopic = (event?: StudyEvent | null) =>
+  event?.description?.trim() || event?.title.replace(/\b(SAC|SAT|exam|task)\b/gi, "").trim() || null;
+
+const dateStamp = (date: Date) => date.toISOString().slice(0, 10);
+
+const hasStudiedOn = (sessions: StudySession[], date: Date) => sessions.some((session) => session.createdAt.slice(0, 10) === dateStamp(date));
+
+const recentStudyDays = (sessions: StudySession[], days: number) => {
+  const today = new Date();
+  return Array.from({ length: days }, (_, index) => addDays(today, -index)).filter((date) => hasStudiedOn(sessions, date)).length;
 };
 
 const rhythmTrait = (sessions: StudySession[]): PersonalTrait => {
@@ -341,4 +366,164 @@ export const buildUserStudySignature = (input: PersonalizationInput): UserStudyS
     nextMove,
     traits: [rhythm, learningStyle, pressureMode, preferredBlock]
   };
+};
+
+export const buildPersonalRituals = (input: PersonalizationInput): PersonalRitual[] => {
+  const { subjects, sessions, events, notes, savedQuestions, resources } = input;
+  const signature = buildUserStudySignature(input);
+  const rituals: PersonalRitual[] = [];
+  const activeEvents = events
+    .filter((event) => !event.completed && !isStudyTimeEvent(event) && daysUntil(event.eventDate) >= 0)
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  const nearestEvent = activeEvents[0] ?? null;
+  const nearestSubject = nearestEvent ? subjectForEvent(nearestEvent, subjects) : null;
+  const nearestDays = nearestEvent ? daysUntil(nearestEvent.eventDate) : null;
+  const focusSubject = signature.focusSubject;
+  const today = new Date();
+  const weekStart = startOfWeek();
+  const staleCutoff = addDays(today, -8);
+  const studyDays = recentStudyDays(sessions, 7);
+  const studiedToday = hasStudiedOn(sessions, today);
+  const mistakeNotes = notes.filter((note) => note.noteType === "mistake_log" || note.tags.includes("timer-check"));
+  const staleQuestions = savedQuestions.filter((question) => new Date(question.createdAt) < staleCutoff);
+  const weekMinutes = Math.round(
+    sessions
+      .filter((session) => new Date(session.createdAt) >= weekStart)
+      .reduce((sum, session) => sum + session.durationSeconds, 0) / 60
+  );
+  const resourceHeavy = resources.length >= Math.max(2, notes.length + savedQuestions.length);
+
+  const addRitual = (ritual: PersonalRitual) => {
+    if (rituals.some((item) => item.id === ritual.id)) return;
+    rituals.push(ritual);
+  };
+
+  if (!studiedToday) {
+    const comebackSubject = focusSubject ?? (subjects[0] ? { id: subjects[0].id, name: subjects[0].subjectName, topic: subjects[0].subjectName } : null);
+    addRitual({
+      id: "first-signal",
+      title: "First signal ritual",
+      reason:
+        studyDays === 0
+          ? "Forge has no study signal from the last week. Start tiny and make the app smarter."
+          : "No block logged today yet. Give Forge one fresh signal before the day gets away.",
+      steps: [
+        "Pick the subject you are avoiding most",
+        "Set one output you can prove",
+        "Stop by saving the correction or next action"
+      ],
+      minutes: signature.preferredBlock.minutes <= 18 ? signature.preferredBlock.minutes : 18,
+      subjectId: comebackSubject?.id ?? null,
+      topic: comebackSubject?.topic ?? comebackSubject?.name ?? "first signal",
+      icon: "radar",
+      accent: palette.info,
+      priority: 86
+    });
+  }
+
+  if (nearestEvent && nearestDays != null && nearestDays <= 10) {
+    const deadlineSubjectName = nearestSubject?.subjectName ?? "Deadline";
+    addRitual({
+      id: `deadline-${nearestEvent.id}`,
+      title: `${deadlineSubjectName} pressure ritual`,
+      reason: `${nearestEvent.title} is ${nearestDays === 0 ? "today" : `in ${nearestDays} days`}. Turn date pressure into a sequence.`,
+      steps: [
+        "Name the exact SAC or exam skill",
+        "Do one timed response without polishing",
+        "Mark it and save the correction"
+      ],
+      minutes: nearestDays <= 2 ? 18 : 35,
+      subjectId: nearestSubject?.id ?? nearestEvent.subjectId ?? null,
+      topic: eventTopic(nearestEvent) ?? deadlineSubjectName,
+      icon: "calendar-alert",
+      accent: palette.warning,
+      priority: 100 - nearestDays
+    });
+  }
+
+  if (mistakeNotes.length || staleQuestions.length) {
+    const mistakeSubjectId = staleQuestions[0]?.subjectId ?? mistakeNotes[0]?.subjectId ?? focusSubject?.id ?? null;
+    const mistakeSubject = subjects.find((subject) => subject.id === mistakeSubjectId) ?? null;
+    const mistakeTopic =
+      staleQuestions[0]?.topic?.trim() ||
+      mistakeNotes[0]?.title?.replace(/\b(timer gap|mistake|log)\b/gi, "").trim() ||
+      mistakeSubject?.subjectName ||
+      "weak topic";
+    addRitual({
+      id: `repair-${mistakeSubjectId ?? "general"}`,
+      title: "Mistake burn-down ritual",
+      reason: `${mistakeNotes.length + staleQuestions.length} repair signal${mistakeNotes.length + staleQuestions.length === 1 ? "" : "s"} can become targeted drills.`,
+      steps: [
+        "Open one saved mistake or old question",
+        "Redo it cold before checking notes",
+        "Write the trap rule in one sentence"
+      ],
+      minutes: 25,
+      subjectId: mistakeSubjectId,
+      topic: mistakeTopic,
+      icon: "backup-restore",
+      accent: palette.secondary,
+      priority: 82
+    });
+  }
+
+  if (resourceHeavy) {
+    const resourceSubject = subjects.find((subject) => resources.some((resource) => resource.subjectId === subject.id)) ?? focusSubject;
+    addRitual({
+      id: "resource-extract",
+      title: "Resource extraction ritual",
+      reason: "Your uploaded files are ahead of your drills. Convert material into something testable.",
+      steps: [
+        "Open one uploaded SAC, exam or teacher file",
+        "Pull five examinable points",
+        "Turn one point into a practice question"
+      ],
+      minutes: 30,
+      subjectId: resourceSubject?.id ?? null,
+      topic: "uploaded resource extraction",
+      icon: "file-search-outline",
+      accent: palette.success,
+      priority: 72
+    });
+  }
+
+  if (focusSubject) {
+    addRitual({
+      id: `focus-${focusSubject.id}`,
+      title: `${focusSubject.name} lock-on ritual`,
+      reason: focusSubject.reason,
+      steps: [
+        `Start with ${focusSubject.topic}`,
+        "Make one answer or summary visible",
+        "End with the next weakest subtopic"
+      ],
+      minutes: signature.preferredBlock.minutes,
+      subjectId: focusSubject.id,
+      topic: focusSubject.topic,
+      icon: "target",
+      accent: focusSubject.color,
+      priority: 70
+    });
+  }
+
+  addRitual({
+    id: "rhythm-lock",
+    title: `${signature.rhythm.value} lock-in ritual`,
+    reason: sessions.length
+      ? `${signature.rhythm.detail} Use your own pattern instead of forcing a random routine.`
+      : "Once you log sessions, Forge will learn when your study actually starts to stick.",
+    steps: [
+      `Set a ${signature.preferredBlock.value} block`,
+      "Choose one output before pressing Start",
+      "Save the next action when the timer stops"
+    ],
+    minutes: signature.preferredBlock.minutes,
+    subjectId: focusSubject?.id ?? subjects[0]?.id ?? null,
+    topic: focusSubject?.topic ?? subjects[0]?.subjectName ?? "rhythm block",
+    icon: signature.rhythm.icon,
+    accent: signature.rhythm.accent,
+    priority: weekMinutes > 0 ? 56 : 45
+  });
+
+  return rituals.sort((a, b) => b.priority - a.priority).slice(0, 3);
 };

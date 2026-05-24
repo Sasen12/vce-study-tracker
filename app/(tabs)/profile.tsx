@@ -25,7 +25,7 @@ import {
   saveDefaultTab,
   type DefaultTabId
 } from "@/utils/defaultTab";
-import { buildUserStudySignature } from "@/utils/personalization";
+import { buildPersonalRituals, buildUserStudySignature, type PersonalRitual } from "@/utils/personalization";
 import {
   DEFAULT_STUDY_PREFERENCES,
   loadStudyPreferences,
@@ -564,6 +564,25 @@ export default function ProfileScreen() {
     () => buildUserStudySignature({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
     [events, goals, notes, resources, savedQuestions, sessions, subjects]
   );
+  const personalRituals = useMemo(
+    () => buildPersonalRituals({ subjects, sessions, events, goals, notes, savedQuestions, resources }),
+    [events, goals, notes, resources, savedQuestions, sessions, subjects]
+  );
+
+  const openRitual = (ritual: PersonalRitual) => {
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: String(clamp(ritual.minutes, 10, 90)),
+        ritualTitle: ritual.title,
+        ritualReason: ritual.reason,
+        ritualSteps: JSON.stringify(ritual.steps),
+        ...(ritual.subjectId ? { subjectId: ritual.subjectId } : {}),
+        ...(ritual.topic ? { rescueTopic: ritual.topic } : {})
+      }
+    });
+  };
 
   const signOut = async () => {
     await logout();
@@ -778,6 +797,53 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <Text style={styles.signatureMinutes}>{studySignature.nextMove.minutes}m</Text>
+        </View>
+      </AppCard>
+
+      <AppCard style={styles.ritualsCard}>
+        <View style={styles.signatureTop}>
+          <View style={styles.ritualMark}>
+            <MaterialCommunityIcons name="auto-fix" color={palette.primary} size={24} />
+          </View>
+          <View style={styles.flexText}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Forge Rituals
+            </Text>
+            <Text style={styles.muted}>Protocols that change as your deadlines, notes and weak areas change.</Text>
+          </View>
+        </View>
+        <View style={styles.ritualGrid}>
+          {personalRituals.map((ritual) => (
+            <View key={ritual.id} style={styles.ritualItem}>
+              <View style={styles.ritualItemTop}>
+                <View style={[styles.ritualIcon, { backgroundColor: `${ritual.accent}18` }]}>
+                  <MaterialCommunityIcons name={ritual.icon} color={ritual.accent} size={20} />
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={styles.ritualItemTitle} numberOfLines={1}>
+                    {ritual.title}
+                  </Text>
+                  <Text style={styles.defaultTabDescription} numberOfLines={2}>
+                    {ritual.reason}
+                  </Text>
+                </View>
+                <Text style={styles.ritualMinutePill}>{ritual.minutes}m</Text>
+              </View>
+              <View style={styles.ritualStepList}>
+                {ritual.steps.map((step, index) => (
+                  <View key={`${ritual.id}-${step}`} style={styles.ritualStepRow}>
+                    <Text style={styles.ritualStepNumber}>{index + 1}</Text>
+                    <Text style={styles.ritualStepCopy} numberOfLines={2}>
+                      {step}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Button mode="outlined" icon="timer-play-outline" onPress={() => openRitual(ritual)}>
+                Start ritual
+              </Button>
+            </View>
+          ))}
         </View>
       </AppCard>
 
@@ -1118,6 +1184,90 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: "Outfit_700Bold",
     textAlign: "right"
+  },
+  ritualsCard: {
+    gap: 14,
+    borderColor: "rgba(168,85,247,0.28)",
+    backgroundColor: "rgba(168,85,247,0.07)"
+  },
+  ritualMark: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(168,85,247,0.14)"
+  },
+  ritualGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  ritualItem: {
+    flex: 1,
+    minWidth: 250,
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12
+  },
+  ritualItemTop: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10
+  },
+  ritualIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  ritualItemTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 20
+  },
+  ritualMinutePill: {
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.34)",
+    backgroundColor: "rgba(168,85,247,0.14)",
+    color: palette.text,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    paddingHorizontal: 8,
+    paddingVertical: 5
+  },
+  ritualStepList: {
+    gap: 7
+  },
+  ritualStepRow: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  ritualStepNumber: {
+    overflow: "hidden",
+    width: 21,
+    borderRadius: 8,
+    backgroundColor: "rgba(168,85,247,0.16)",
+    color: palette.primary,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textAlign: "center",
+    paddingVertical: 3
+  },
+  ritualStepCopy: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    lineHeight: 18
   },
   atarCard: {
     gap: 10
