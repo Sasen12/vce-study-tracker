@@ -1,4 +1,4 @@
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import Svg, { Circle, G, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
@@ -134,20 +134,31 @@ function DiagramVisual({ visual }: { visual: GeneratedQuestionVisual }) {
 export function QuestionVisual({ visual }: QuestionVisualProps) {
   if (!visual) return null;
 
-  const chart =
-    visual.type === "line_graph" || visual.type === "scatter_plot" ? (
-      <PointChart visual={visual} />
-    ) : visual.type === "bar_chart" ? (
-      <BarChart visual={visual} />
-    ) : (
-      <DiagramVisual visual={visual} />
-    );
+  const imageUri = visual.image_data?.trim()
+    ? `data:${visual.image_mime_type || "image/png"};base64,${visual.image_data.trim()}`
+    : null;
+  const chart = imageUri ? (
+    <Image
+      source={{ uri: imageUri }}
+      style={styles.generatedImage}
+      resizeMode="contain"
+      accessibilityLabel={visual.image_alt || visual.description || visual.title}
+    />
+  ) : visual.type === "line_graph" || visual.type === "scatter_plot" ? (
+    <PointChart visual={visual} />
+  ) : visual.type === "bar_chart" ? (
+    <BarChart visual={visual} />
+  ) : (
+    <DiagramVisual visual={visual} />
+  );
+  const visualType =
+    imageUri && visual.image_model ? visual.image_model.replace(/^gpt-/, "GPT ") : visual.type.replace("_", " ");
 
   return (
     <View style={styles.visualBox}>
       <View style={styles.visualHeader}>
         <Text style={styles.visualTitle}>{visual.title}</Text>
-        <Text style={styles.visualType}>{visual.type.replace("_", " ")}</Text>
+        <Text style={styles.visualType}>{visualType}</Text>
       </View>
       {chart}
       {visual.description ? <Text style={styles.visualDescription}>{visual.description}</Text> : null}
@@ -185,6 +196,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     textTransform: "uppercase"
+  },
+  generatedImage: {
+    width: "100%",
+    aspectRatio: 1.5,
+    borderRadius: 8,
+    backgroundColor: "rgba(2,6,23,0.72)"
   },
   visualDescription: {
     color: palette.muted,

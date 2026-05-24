@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { QuestionVisual } from "@/components/questions/QuestionVisual";
 import { FormattedStudyText } from "@/components/session/FormattedStudyText";
 import { AppCard } from "@/components/ui/AppCard";
 import { palette } from "@/constants/theme";
@@ -51,6 +52,11 @@ type CoachChatTurn = {
 const attachmentSummary = (attachmentNames: string[]) =>
   attachmentNames.length ? `Attachments\n${attachmentNames.map((name) => `- ${name}`).join("\n")}` : null;
 
+const answerVisualSummary = (answer: StudyAnswer) =>
+  answer.visuals?.length
+    ? `Visuals\n${answer.visuals.map((visual) => `- ${visual.title}: ${visual.description}`).join("\n")}`
+    : null;
+
 const coachNoteBody = (
   question: string,
   answer: StudyAnswer,
@@ -63,6 +69,7 @@ const coachNoteBody = (
     attachmentSummary(attachmentNames),
     "Answer",
     answer.answer,
+    answerVisualSummary(answer),
     options.includeTutorPlan !== false && answer.tutor_plan
       ? `Tutor plan
 Diagnosis: ${answer.tutor_plan.diagnosis}
@@ -99,6 +106,7 @@ const coachChatTurnBody = (input: CoachChatTurn) =>
     attachmentSummary(input.attachmentNames),
     "Coach",
     input.answer.answer,
+    answerVisualSummary(input.answer),
     input.answer.key_points.length ? `Coach takeaways\n${input.answer.key_points.map((point) => `- ${point}`).join("\n")}` : null,
     input.answer.sources_used.length
       ? `Sources\n${input.answer.sources_used
@@ -779,6 +787,14 @@ export function StudyAskCard({
         <View style={styles.answerStack}>
           <FormattedStudyText value={answer.answer} />
 
+          {answer.visuals?.length ? (
+            <View style={styles.answerVisuals}>
+              {answer.visuals.slice(0, 2).map((visual, index) => (
+                <QuestionVisual key={`${visual.title}-${index}`} visual={visual} />
+              ))}
+            </View>
+          ) : null}
+
           {answerMode === "tutor" && answer.tutor_plan ? (
             <View style={styles.tutorPlan}>
               <View style={styles.tutorPlanHeader}>
@@ -1066,6 +1082,9 @@ const styles = StyleSheet.create({
   answer: {
     color: palette.text,
     lineHeight: 21
+  },
+  answerVisuals: {
+    gap: 10
   },
   block: {
     gap: 8

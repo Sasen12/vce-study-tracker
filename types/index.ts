@@ -304,6 +304,10 @@ export type GeneratedQuestionVisual = {
   points: { x: number; y: number; label: string }[];
   bars: { label: string; value: number }[];
   labels: string[];
+  image_data?: string;
+  image_mime_type?: string;
+  image_alt?: string;
+  image_model?: string;
 };
 
 export type AnswerFeedback = {
@@ -336,6 +340,7 @@ export type StudyAnswer = {
     next_revision: string;
   };
   confidence: "low" | "medium" | "high";
+  visuals?: GeneratedQuestionVisual[];
 };
 
 export type DailyInspiration = {
