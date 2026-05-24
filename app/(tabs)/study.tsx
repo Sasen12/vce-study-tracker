@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Dialog, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
@@ -33,9 +34,89 @@ const formatElapsed = (seconds: number) => {
   return `${minutes}:${secs}`;
 };
 
+const formatStudyDuration = (seconds: number) => {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+};
+
 const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (seconds > 3600 ? 25 : 0);
-const checkpointIntervalSeconds = 10 * 60;
+const defaultCheckpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
+
+type SessionPreset = {
+  id: string;
+  label: string;
+  minutes: number;
+  topicHint: string;
+  goal: string;
+  checkIns: boolean;
+  focus: boolean;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  accent: string;
+};
+
+const sessionPresets: SessionPreset[] = [
+  {
+    id: "rescue",
+    label: "Rescue sprint",
+    minutes: 12,
+    topicHint: "one weak point",
+    goal: "Make one weak area less annoying.",
+    checkIns: false,
+    focus: true,
+    icon: "lifebuoy",
+    accent: palette.secondary
+  },
+  {
+    id: "mistake",
+    label: "Mistake repair",
+    minutes: 25,
+    topicHint: "mistake log repair",
+    goal: "Redo one mistake and write the rule that fixes it.",
+    checkIns: true,
+    focus: false,
+    icon: "backup-restore",
+    accent: palette.warning
+  },
+  {
+    id: "sac",
+    label: "SAC drill",
+    minutes: 35,
+    topicHint: "SAC-style response",
+    goal: "Attempt, mark, correct, then repeat the weakest bit.",
+    checkIns: true,
+    focus: false,
+    icon: "file-document-edit-outline",
+    accent: palette.info
+  },
+  {
+    id: "deep",
+    label: "Deep work",
+    minutes: 50,
+    topicHint: "deep work block",
+    goal: "Build one complete piece of evidence.",
+    checkIns: true,
+    focus: true,
+    icon: "timer-sand-full",
+    accent: palette.primary
+  },
+  {
+    id: "low-energy",
+    label: "Low energy",
+    minutes: 10,
+    topicHint: "easy restart",
+    goal: "Start gently and protect the streak.",
+    checkIns: false,
+    focus: false,
+    icon: "battery-30",
+    accent: palette.success
+  }
+];
+
+const confidenceButtons = ["1", "2", "3", "4", "5"].map((value) => ({ value, label: value }));
 
 const breakPlanFor = (elapsedSeconds: number, targetSeconds: number) => {
   const plannedMinutes = Math.max(Math.round(Math.max(elapsedSeconds, targetSeconds) / 60), 1);
@@ -125,17 +206,22 @@ export default function StudyScreen() {
     tutorEventId?: string;
     tutorEventTitle?: string;
   }>();
-  const { subjects, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
+  const { subjects, sessions, stats, gamification, loading, fetchAll, saveSession, timerCheckQuestion, createNote } = useAppStore();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [studyTopic, setStudyTopic] = useState("");
+  const [sessionGoal, setSessionGoal] = useState("");
   const [checkInsEnabled, setCheckInsEnabled] = useState(true);
+  const [checkInIntervalMinutes, setCheckInIntervalMinutes] = useState("10");
   const [elapsed, setElapsed] = useState(0);
   const [targetMinutes, setTargetMinutes] = useState("25");
   const [running, setRunning] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [notes, setNotes] = useState("");
+  const [confidenceBefore, setConfidenceBefore] = useState("3");
+  const [confidenceAfter, setConfidenceAfter] = useState("3");
+  const [nextAction, setNextAction] = useState("");
   const [timerBonusXp, setTimerBonusXp] = useState(0);
-  const [nextCheckpointAt, setNextCheckpointAt] = useState(checkpointIntervalSeconds);
+  const [nextCheckpointAt, setNextCheckpointAt] = useState(defaultCheckpointIntervalSeconds);
   const [checkpointQuestion, setCheckpointQuestion] = useState<GeneratedQuestion | null>(null);
   const [checkpointOpen, setCheckpointOpen] = useState(false);
   const [checkpointGenerating, setCheckpointGenerating] = useState(false);
@@ -263,6 +349,7 @@ export default function StudyScreen() {
   }, [releaseFocusLock]);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const checkpointIntervalSeconds = Number(checkInIntervalMinutes) * 60;
   const focusAuraUnlocked = hasUnlockedPerk(gamification?.unlockedCosmetics, "focus_aura");
   const selectedSubjectTools = useMemo(() => subjectToolProfile(selectedSubject?.subjectName), [selectedSubject?.subjectName]);
   const calculatorSubjects = useMemo(
@@ -321,6 +408,51 @@ export default function StudyScreen() {
     if (base.some((button) => button.value === targetMinutes)) return base;
     return [{ value: targetMinutes, label: `${targetMinutes}m` }, ...base].sort((a, b) => Number(a.value) - Number(b.value));
   }, [targetMinutes]);
+  const checkInRhythmButtons = useMemo(
+    () =>
+      [
+        { value: "8", label: "8m" },
+        { value: "10", label: "10m" },
+        { value: "15", label: "15m" }
+      ].map((button) => ({ ...button, disabled: running })),
+    [running]
+  );
+  const selectedSubjectContext = useMemo(() => {
+    if (!selectedSubject) return null;
+    const weekStart = new Date();
+    const dayOffset = (weekStart.getDay() + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - dayOffset);
+    weekStart.setHours(0, 0, 0, 0);
+    const subjectSessions = sessions.filter((session) => session.subjectId === selectedSubject.id);
+    const weekSeconds = subjectSessions
+      .filter((session) => new Date(session.createdAt) >= weekStart)
+      .reduce((sum, session) => sum + session.durationSeconds, 0);
+    const bestSeconds = subjectSessions.reduce((best, session) => Math.max(best, session.durationSeconds), 0);
+    const lastSession = [...subjectSessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+
+    return {
+      weekSeconds,
+      bestSeconds,
+      lastSession
+    };
+  }, [selectedSubject, sessions]);
+
+  useEffect(() => {
+    if (!running) setNextCheckpointAt(checkpointIntervalSeconds);
+  }, [checkpointIntervalSeconds, running]);
+
+  const applySessionPreset = (preset: SessionPreset) => {
+    if (running) return;
+    const presetCheckInMinutes = preset.minutes <= 12 ? "8" : preset.minutes >= 50 ? "15" : "10";
+    setTargetMinutes(String(preset.minutes));
+    setCheckInsEnabled(preset.checkIns);
+    setCheckInIntervalMinutes(presetCheckInMinutes);
+    setNextCheckpointAt(Number(presetCheckInMinutes) * 60);
+    setFocusMode(preset.focus);
+    setSessionGoal(preset.goal);
+    setStudyTopic((current) => current.trim() || preset.topicHint);
+    setMessage(`${preset.label} loaded.`);
+  };
 
   const askCheckpoint = useCallback(async () => {
     if (!selectedSubject || !checkInsActive || checkpointGenerating || checkpointOpen) return;
@@ -341,7 +473,16 @@ export default function StudyScreen() {
     } finally {
       setCheckpointGenerating(false);
     }
-  }, [checkInsActive, checkpointGenerating, checkpointOpen, elapsed, selectedSubject, timerCheckQuestion, trimmedStudyTopic]);
+  }, [
+    checkInsActive,
+    checkpointGenerating,
+    checkpointIntervalSeconds,
+    checkpointOpen,
+    elapsed,
+    selectedSubject,
+    timerCheckQuestion,
+    trimmedStudyTopic
+  ]);
 
   useEffect(() => {
     if (!running || !checkInsActive || checkpointOpen || checkpointGenerating || elapsed < nextCheckpointAt) return;
@@ -427,10 +568,16 @@ export default function StudyScreen() {
     setSummaryError(null);
     const previousLevel = gamification?.level ?? 1;
     const topic = studyTopic.trim();
+    const goal = sessionGoal.trim();
     const typedNotes = notes.trim();
+    const nextStep = nextAction.trim();
     const sessionNotes = [
       topic ? `Topic: ${topic}` : "",
+      goal ? `Aim: ${goal}` : "",
       typedNotes,
+      `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`,
+      nextStep ? `Next action: ${nextStep}` : "",
+      checkInsActive ? `Check-in rhythm: every ${checkInIntervalMinutes} minutes` : "Check-ins: off",
       timerBonusXp ? `Timer check bonus: ${timerBonusXp} XP` : ""
     ]
       .filter(Boolean)
@@ -445,7 +592,7 @@ export default function StudyScreen() {
       });
 
       let noteMirrorError: string | null = null;
-      if (typedNotes) {
+      if (typedNotes || goal || nextStep) {
         try {
           await createNote({
             subjectId: selectedSubject.id,
@@ -455,7 +602,10 @@ export default function StudyScreen() {
             body: [
               `${formatElapsed(elapsed)} focused on ${selectedSubject.subjectName}.`,
               topic ? `Topic: ${topic}` : "",
-              typedNotes
+              goal ? `Aim: ${goal}` : "",
+              typedNotes || "No extra notes written.",
+              nextStep ? `Next action: ${nextStep}` : "",
+              `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`
             ]
               .filter(Boolean)
               .join("\n\n")
@@ -472,7 +622,11 @@ export default function StudyScreen() {
       setSummaryOpen(false);
       setElapsed(0);
       setStudyTopic("");
+      setSessionGoal("");
       setNotes("");
+      setConfidenceBefore("3");
+      setConfidenceAfter("3");
+      setNextAction("");
       setTimerBonusXp(0);
       setNextCheckpointAt(checkpointIntervalSeconds);
       setCheckpointQuestion(null);
@@ -639,11 +793,55 @@ export default function StudyScreen() {
 
           <AppCard style={[styles.timerCard, focusAuraUnlocked && styles.timerCardAura]}>
             <Text style={styles.status}>{statusLabel}</Text>
+            <View style={styles.presetBlock}>
+              <View style={styles.presetHeader}>
+                <Text style={styles.targetLabel}>Quick start</Text>
+                <Text style={styles.presetHint}>Sprint, repair, drill, deep work, restart.</Text>
+              </View>
+              <View style={styles.presetGrid}>
+                {sessionPresets.map((preset) => {
+                  const activePreset = targetMinutes === String(preset.minutes) && sessionGoal === preset.goal;
+                  return (
+                    <Pressable
+                      key={preset.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: activePreset, disabled: running }}
+                      disabled={running}
+                      onPress={() => applySessionPreset(preset)}
+                      style={[
+                        styles.presetChip,
+                        { borderColor: `${preset.accent}55`, backgroundColor: `${preset.accent}10` },
+                        activePreset && { borderColor: preset.accent }
+                      ]}
+                    >
+                      <MaterialCommunityIcons name={preset.icon} color={preset.accent} size={18} />
+                      <View style={styles.presetTextWrap}>
+                        <Text style={styles.presetTitle} numberOfLines={1}>
+                          {preset.label}
+                        </Text>
+                        <Text style={styles.presetMeta} numberOfLines={1}>
+                          {preset.minutes}m {preset.focus ? "- focus" : "- flexible"}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <TextInput
               mode="outlined"
               label="Topic for this session (optional)"
               value={studyTopic}
               onChangeText={setStudyTopic}
+              disabled={running}
+              style={styles.topicInput}
+              textColor={palette.text}
+            />
+            <TextInput
+              mode="outlined"
+              label="Aim for this block"
+              value={sessionGoal}
+              onChangeText={setSessionGoal}
               disabled={running}
               style={styles.topicInput}
               textColor={palette.text}
@@ -662,6 +860,16 @@ export default function StudyScreen() {
                 color={palette.primary}
               />
             </View>
+            {checkInsEnabled ? (
+              <View style={styles.targetBlock}>
+                <Text style={styles.targetLabel}>Check-in rhythm</Text>
+                <SegmentedButtons
+                  value={checkInIntervalMinutes}
+                  onValueChange={setCheckInIntervalMinutes}
+                  buttons={checkInRhythmButtons}
+                />
+              </View>
+            ) : null}
             <View style={styles.targetBlock}>
               <Text style={styles.targetLabel}>Target length</Text>
               <SegmentedButtons
@@ -730,6 +938,34 @@ export default function StudyScreen() {
             </View>
           </AppCard>
 
+          {selectedSubjectContext ? (
+            <AppCard style={styles.contextCard}>
+              <View style={styles.contextHeader}>
+                <View>
+                  <Text style={styles.cardTitle}>Session context</Text>
+                  <Text style={styles.muted}>For {selectedSubject?.subjectName ?? "this subject"}</Text>
+                </View>
+                <Text style={styles.contextBadge}>{formatStudyDuration(stats?.todaySeconds ?? 0)} today</Text>
+              </View>
+              <View style={styles.contextGrid}>
+                <View style={styles.contextTile}>
+                  <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.weekSeconds)}</Text>
+                  <Text style={styles.contextLabel}>this subject this week</Text>
+                </View>
+                <View style={styles.contextTile}>
+                  <Text style={styles.contextValue}>{formatStudyDuration(selectedSubjectContext.bestSeconds)}</Text>
+                  <Text style={styles.contextLabel}>personal best</Text>
+                </View>
+                <View style={styles.contextTile}>
+                  <Text style={styles.contextValue}>
+                    {selectedSubjectContext.lastSession ? formatStudyDuration(selectedSubjectContext.lastSession.durationSeconds) : "0m"}
+                  </Text>
+                  <Text style={styles.contextLabel}>last saved block</Text>
+                </View>
+              </View>
+            </AppCard>
+          ) : null}
+
           <StudyMusicPanel />
 
           <AppCard style={[styles.breakCard, breakReady && styles.breakCardReady]}>
@@ -775,6 +1011,24 @@ export default function StudyScreen() {
             <Text style={styles.summaryLine}>{formatElapsed(elapsed)} focused</Text>
             <Text style={styles.summaryLine}>{xp} XP earned</Text>
             {timerBonusXp ? <Text style={styles.summaryBonus}>Includes {timerBonusXp} XP from timer check-ins</Text> : null}
+            <View style={styles.confidenceGrid}>
+              <View style={styles.confidenceBlock}>
+                <Text style={styles.confidenceLabel}>Before</Text>
+                <SegmentedButtons
+                  value={confidenceBefore}
+                  onValueChange={setConfidenceBefore}
+                  buttons={confidenceButtons}
+                />
+              </View>
+              <View style={styles.confidenceBlock}>
+                <Text style={styles.confidenceLabel}>After</Text>
+                <SegmentedButtons
+                  value={confidenceAfter}
+                  onValueChange={setConfidenceAfter}
+                  buttons={confidenceButtons}
+                />
+              </View>
+            </View>
             <TextInput
               mode="outlined"
               label="Notes"
@@ -782,6 +1036,13 @@ export default function StudyScreen() {
               multiline
               numberOfLines={3}
               onChangeText={setNotes}
+            />
+            <TextInput
+              mode="outlined"
+              label="Next action"
+              value={nextAction}
+              onChangeText={setNextAction}
+              placeholder="Redo one question, make a summary, ask coach..."
             />
             {summaryError ? <Text style={styles.summaryError}>{summaryError}</Text> : null}
           </Dialog.Content>
@@ -897,6 +1158,53 @@ const styles = StyleSheet.create({
   timerCardAura: {
     borderColor: "rgba(56,189,248,0.34)",
     backgroundColor: "rgba(56,189,248,0.08)"
+  },
+  presetBlock: {
+    width: "100%",
+    maxWidth: 720,
+    gap: 10
+  },
+  presetHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  presetHint: {
+    color: palette.muted,
+    fontSize: 12,
+    flexShrink: 1
+  },
+  presetGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8
+  },
+  presetChip: {
+    width: 132,
+    minHeight: 58,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  presetTextWrap: {
+    flex: 1,
+    minWidth: 0
+  },
+  presetTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  presetMeta: {
+    color: palette.muted,
+    fontSize: 11
   },
   topicInput: {
     width: "100%",
@@ -1044,6 +1352,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12
   },
+  contextCard: {
+    gap: 12,
+    borderColor: `${palette.primary}33`,
+    backgroundColor: `${palette.primary}08`
+  },
+  contextHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12
+  },
+  contextBadge: {
+    overflow: "hidden",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}12`,
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  contextGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  contextTile: {
+    minWidth: 126,
+    flex: 1,
+    minHeight: 66,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10
+  },
+  contextValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18
+  },
+  contextLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
+  },
   breakCard: {
     gap: 12,
     borderColor: `${palette.info}44`,
@@ -1119,6 +1476,18 @@ const styles = StyleSheet.create({
   summaryBonus: {
     color: palette.success,
     fontFamily: "Outfit_700Bold"
+  },
+  confidenceGrid: {
+    gap: 10
+  },
+  confidenceBlock: {
+    gap: 6
+  },
+  confidenceLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
   },
   summaryError: {
     color: palette.warning,
