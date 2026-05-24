@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import type nodemailer from "nodemailer";
 
 export type ContactMessage = {
   name: string;
@@ -16,15 +16,36 @@ type EmailResult =
     }
   | {
       sent: false;
-      reason: "smtp_missing";
+      reason: "smtp_missing" | "mailer_unavailable";
     };
+
+type NodemailerApi = Pick<typeof nodemailer, "createTransport">;
+
+let nodemailerApi: NodemailerApi | null | undefined;
+
+const loadNodemailer = async () => {
+  if (nodemailerApi !== undefined) return nodemailerApi;
+
+  try {
+    const module = await import("nodemailer");
+    nodemailerApi = module.default ?? module;
+    return nodemailerApi;
+  } catch (error) {
+    console.warn("Nodemailer is not installed. Contact messages will be saved without email delivery.", error);
+    nodemailerApi = null;
+    return null;
+  }
+};
 
 const recipientEmail = () => process.env.CONTACT_RECIPIENT_EMAIL?.trim() || "techsavvy356@gmail.com";
 
-const smtpTransport = () => {
+const smtpTransport = async () => {
+  const mailer = await loadNodemailer();
+  if (!mailer) return null;
+
   const smtpUrl = process.env.CONTACT_SMTP_URL?.trim() || process.env.SMTP_URL?.trim();
   if (smtpUrl) {
-    return nodemailer.createTransport(smtpUrl);
+    return mailer.createTransport(smtpUrl);
   }
 
   const host = process.env.CONTACT_SMTP_HOST?.trim() || process.env.SMTP_HOST?.trim();
@@ -36,7 +57,7 @@ const smtpTransport = () => {
   const secureSetting = process.env.CONTACT_SMTP_SECURE ?? process.env.SMTP_SECURE;
   const secure = secureSetting ? secureSetting.toLowerCase() === "true" : port === 465;
 
-  return nodemailer.createTransport({
+  return mailer.createTransport({
     host,
     port,
     secure,
@@ -55,9 +76,10 @@ const escapeHtml = (value: string) =>
 const field = (label: string, value?: string | null) => `${label}: ${value?.trim() || "Not provided"}`;
 
 export const sendContactEmail = async (message: ContactMessage): Promise<EmailResult> => {
-  const transport = smtpTransport();
+  const transport = await smtpTransport();
   if (!transport) {
-    return { sent: false, reason: "smtp_missing" };
+    const hasSmtpConfig = Boolean(process.env.CONTACT_SMTP_URL || process.env.SMTP_URL || process.env.CONTACT_SMTP_HOST || process.env.SMTP_HOST);
+    return { sent: false, reason: hasSmtpConfig ? "mailer_unavailable" : "smtp_missing" };
   }
 
   const to = recipientEmail();
