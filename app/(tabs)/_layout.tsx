@@ -40,8 +40,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="insights"
         options={{
-          href: null,
-          title: "Student Map"
+          title: "Insights",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-search-outline" color={color} size={size} />
         }}
       />
       <Tabs.Screen
