@@ -742,6 +742,7 @@ export default function DashboardScreen() {
   const secondaryPlan = tonightPlan.slice(1, 3);
   const commandDoneSet = useMemo(() => new Set(commandDoneIds), [commandDoneIds]);
   const commandDoneCount = tonightPlan.filter((item) => commandDoneSet.has(item.id)).length;
+  const showHomeTools = !focusHome || detailsOpen;
   const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
   const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
   const rescueModeBody = rescueSubject
@@ -1182,7 +1183,7 @@ export default function DashboardScreen() {
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
 
-          {focusHome && !examWeekMode ? (
+          {focusHome && !examWeekMode && !detailsOpen ? (
             <View style={styles.commandSpark}>
               <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={17} />
               <Text style={styles.commandSparkText} numberOfLines={1}>
@@ -1191,70 +1192,90 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            style={styles.personalSignal}
-            onPress={primaryRitual ? () => openRitual(primaryRitual) : openPersonalizedMove}
-          >
-            <View
-              style={[
-                styles.personalSignalIcon,
-                { backgroundColor: `${primaryRitual?.accent ?? studySignature.nextMove.accent}18` }
-              ]}
+          {showHomeTools ? (
+            <Pressable
+              accessibilityRole="button"
+              style={styles.personalSignal}
+              onPress={primaryRitual ? () => openRitual(primaryRitual) : openPersonalizedMove}
             >
-              <MaterialCommunityIcons
-                name={primaryRitual?.icon ?? studySignature.nextMove.icon}
-                color={primaryRitual?.accent ?? studySignature.nextMove.accent}
-                size={20}
-              />
-            </View>
-            <View style={styles.flexText}>
-              <Text style={styles.personalSignalLabel}>{primaryRitual ? "Forge ritual" : studySignature.profileName}</Text>
-              <Text style={styles.personalSignalTitle} numberOfLines={1}>
-                {primaryRitual?.title ?? studySignature.nextMove.title}
-              </Text>
-              <Text style={styles.muted} numberOfLines={1}>
-                {primaryRitual?.reason ?? studySignature.nextMove.body}
-              </Text>
-            </View>
-            <Text style={styles.personalSignalDepth}>
-              {primaryRitual ? formatMinutes(clampStudyMinutes(primaryRitual.minutes)) : studySignature.depthLabel}
-            </Text>
-          </Pressable>
-
-          {primaryPlan ? (
-            <View style={[styles.commandPlanRow, commandDoneSet.has(primaryPlan.id) && styles.commandPlanRowDone]}>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: commandDoneSet.has(primaryPlan.id) }}
-                style={styles.commandCheck}
-                onPress={() => void toggleCommandDone(primaryPlan.id)}
+              <View
+                style={[
+                  styles.personalSignalIcon,
+                  { backgroundColor: `${primaryRitual?.accent ?? studySignature.nextMove.accent}18` }
+                ]}
               >
                 <MaterialCommunityIcons
-                  name={commandDoneSet.has(primaryPlan.id) ? "check-circle" : "checkbox-blank-circle-outline"}
-                  color={commandDoneSet.has(primaryPlan.id) ? palette.success : primaryPlan.accent}
-                  size={22}
+                  name={primaryRitual?.icon ?? studySignature.nextMove.icon}
+                  color={primaryRitual?.accent ?? studySignature.nextMove.accent}
+                  size={20}
                 />
-              </Pressable>
-              <Pressable accessibilityRole="button" style={styles.commandPlanButton} onPress={() => openTimerForPlan(primaryPlan)}>
-                <View style={[styles.planIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
-                  <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={19} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.personalSignalLabel}>{primaryRitual ? "Forge ritual" : studySignature.profileName}</Text>
+                <Text style={styles.personalSignalTitle} numberOfLines={1}>
+                  {primaryRitual?.title ?? studySignature.nextMove.title}
+                </Text>
+                <Text style={styles.muted} numberOfLines={1}>
+                  {primaryRitual?.reason ?? studySignature.nextMove.body}
+                </Text>
+              </View>
+              <Text style={styles.personalSignalDepth}>
+                {primaryRitual ? formatMinutes(clampStudyMinutes(primaryRitual.minutes)) : studySignature.depthLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {primaryPlan ? (
+            focusHome && !detailsOpen ? (
+              <View style={styles.focusCommand}>
+                <View style={[styles.focusCommandIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
+                  <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={24} />
                 </View>
-                <View style={styles.flexText}>
+                <View style={styles.focusCommandText}>
                   <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
-                  <Text style={[styles.planTitle, commandDoneSet.has(primaryPlan.id) && styles.planTitleDone]}>{primaryPlan.title}</Text>
-                  <Text style={styles.muted} numberOfLines={2}>
+                  <Text style={styles.focusCommandTitle}>{primaryPlan.title}</Text>
+                  <Text style={styles.focusCommandBody} numberOfLines={3}>
                     {primaryPlan.body}
                   </Text>
                 </View>
-                <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(primaryPlan.minutes))}</Text>
-              </Pressable>
-            </View>
+                <Button mode="contained" icon="timer-play-outline" disabled={!subjects.length} onPress={() => openTimerForPlan(primaryPlan)}>
+                  Start studying
+                </Button>
+              </View>
+            ) : (
+              <View style={[styles.commandPlanRow, commandDoneSet.has(primaryPlan.id) && styles.commandPlanRowDone]}>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: commandDoneSet.has(primaryPlan.id) }}
+                  style={styles.commandCheck}
+                  onPress={() => void toggleCommandDone(primaryPlan.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={commandDoneSet.has(primaryPlan.id) ? "check-circle" : "checkbox-blank-circle-outline"}
+                    color={commandDoneSet.has(primaryPlan.id) ? palette.success : primaryPlan.accent}
+                    size={22}
+                  />
+                </Pressable>
+                <Pressable accessibilityRole="button" style={styles.commandPlanButton} onPress={() => openTimerForPlan(primaryPlan)}>
+                  <View style={[styles.planIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
+                    <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={19} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
+                    <Text style={[styles.planTitle, commandDoneSet.has(primaryPlan.id) && styles.planTitleDone]}>{primaryPlan.title}</Text>
+                    <Text style={styles.muted} numberOfLines={2}>
+                      {primaryPlan.body}
+                    </Text>
+                  </View>
+                  <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(primaryPlan.minutes))}</Text>
+                </Pressable>
+              </View>
+            )
           ) : (
             <Text style={styles.muted}>Add a subject, deadline, or saved question and Home will choose a cleaner next move.</Text>
           )}
 
-          {secondaryPlan.length ? (
+          {secondaryPlan.length && showHomeTools ? (
             <View style={styles.commandQueue}>
               <View style={styles.queueHeader}>
                 <Text style={styles.nextUpLabel}>Command queue</Text>
@@ -1290,35 +1311,43 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          <View style={styles.commandActions}>
-            <Button
-              mode="contained"
-              compact
-              icon="timer-play-outline"
-              disabled={!subjects.length}
-              onPress={() =>
-                primaryPlan
-                  ? openTimerForPlan(primaryPlan)
-                  : router.push({
-                      pathname: "/(tabs)/study",
-                      params: rescueSubject?.id ? { subjectId: rescueSubject.id } : {}
-                    })
-              }
-            >
-              Start
-            </Button>
-            <Button mode="outlined" compact icon="lifebuoy" disabled={!rescueSubject} onPress={() => startRescueMode(12)}>
-              Rescue
-            </Button>
-            <Button mode="outlined" compact icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
-              Drill
-            </Button>
-            <Button mode="text" compact icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(nextDeadline ?? undefined)}>
-              Panic plan
-            </Button>
-          </View>
+          {showHomeTools ? (
+            <View style={styles.commandActions}>
+              <Button
+                mode="contained"
+                compact
+                icon="timer-play-outline"
+                disabled={!subjects.length}
+                onPress={() =>
+                  primaryPlan
+                    ? openTimerForPlan(primaryPlan)
+                    : router.push({
+                        pathname: "/(tabs)/study",
+                        params: rescueSubject?.id ? { subjectId: rescueSubject.id } : {}
+                      })
+                }
+              >
+                Start
+              </Button>
+              <Button mode="outlined" compact icon="lifebuoy" disabled={!rescueSubject} onPress={() => startRescueMode(12)}>
+                Rescue
+              </Button>
+              <Button mode="outlined" compact icon="cards-outline" onPress={() => router.push("/(tabs)/questions")}>
+                Drill
+              </Button>
+              <Button mode="text" compact icon="alert" disabled={!subjects.length} onPress={() => openPanicForEvent(nextDeadline ?? undefined)}>
+                Panic plan
+              </Button>
+            </View>
+          ) : (
+            <View style={styles.focusMoreRow}>
+              <Button compact mode="text" icon="dots-horizontal" onPress={() => setDetailsOpen(true)}>
+                More
+              </Button>
+            </View>
+          )}
 
-          {streakShieldUnlocked && !studiedToday ? (
+          {streakShieldUnlocked && !studiedToday && showHomeTools ? (
             <View style={styles.commandAlert}>
               <MaterialCommunityIcons name="shield-check-outline" color={palette.warning} size={18} />
               <Text style={styles.commandAlertText}>Streak Shield is ready.</Text>
@@ -1335,60 +1364,62 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          {!examWeekMode ? (
+          {!examWeekMode && showHomeTools ? (
             <View style={styles.commandMetrics}>
-            <View style={styles.commandMetric}>
-              <Text style={styles.commandMetricValue}>{deadlineRadar.urgent + deadlineRadar.week}</Text>
-              <Text style={styles.commandMetricLabel}>deadlines</Text>
-            </View>
-            <View style={styles.commandMetric}>
-              <Text style={styles.commandMetricValue}>{revisionDebt.length}</Text>
-              <Text style={styles.commandMetricLabel}>repairs</Text>
-            </View>
-            <View style={styles.commandMetric}>
-              <Text style={styles.commandMetricValue}>{evidenceAverage}</Text>
-              <Text style={styles.commandMetricLabel}>evidence</Text>
-            </View>
-            <View style={styles.commandMetric}>
-              <Text style={styles.commandMetricValue}>{unlockedPerkCount}</Text>
-              <Text style={styles.commandMetricLabel}>perks</Text>
-            </View>
+              <View style={styles.commandMetric}>
+                <Text style={styles.commandMetricValue}>{deadlineRadar.urgent + deadlineRadar.week}</Text>
+                <Text style={styles.commandMetricLabel}>deadlines</Text>
+              </View>
+              <View style={styles.commandMetric}>
+                <Text style={styles.commandMetricValue}>{revisionDebt.length}</Text>
+                <Text style={styles.commandMetricLabel}>repairs</Text>
+              </View>
+              <View style={styles.commandMetric}>
+                <Text style={styles.commandMetricValue}>{evidenceAverage}</Text>
+                <Text style={styles.commandMetricLabel}>evidence</Text>
+              </View>
+              <View style={styles.commandMetric}>
+                <Text style={styles.commandMetricValue}>{unlockedPerkCount}</Text>
+                <Text style={styles.commandMetricLabel}>perks</Text>
+              </View>
             </View>
           ) : null}
 
-          <View style={styles.commandToggles}>
-            <Button
-              compact
-              mode={examWeekMode ? "contained-tonal" : "outlined"}
-              icon="weather-lightning"
-              onPress={() => void updateHomePreferences({ examWeekMode: !examWeekMode })}
-            >
-              Exam Week
-            </Button>
-            {!examWeekMode ? (
-              <>
-                <Button
-                  compact
-                  mode={focusHome ? "contained-tonal" : "outlined"}
-                  icon={focusHome ? "eye-off-outline" : "view-dashboard-outline"}
-                  onPress={() => void updateHomePreferences({ homeDensity: focusHome ? "full" : "focus" })}
-                >
-                  {focusHome ? "Focus" : "Full"}
-                </Button>
-                <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
-                  Capture
-                </Button>
-                <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
-                  {focusHome ? "More" : "Details"}
-                </Button>
-                <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
-                  Perks
-                </Button>
-              </>
-            ) : null}
-          </View>
+          {showHomeTools ? (
+            <View style={styles.commandToggles}>
+              <Button
+                compact
+                mode={examWeekMode ? "contained-tonal" : "outlined"}
+                icon="weather-lightning"
+                onPress={() => void updateHomePreferences({ examWeekMode: !examWeekMode })}
+              >
+                Exam Week
+              </Button>
+              {!examWeekMode ? (
+                <>
+                  <Button
+                    compact
+                    mode={focusHome ? "contained-tonal" : "outlined"}
+                    icon={focusHome ? "eye-off-outline" : "view-dashboard-outline"}
+                    onPress={() => void updateHomePreferences({ homeDensity: focusHome ? "full" : "focus" })}
+                  >
+                    {focusHome ? "Focus" : "Full"}
+                  </Button>
+                  <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
+                    Capture
+                  </Button>
+                  <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
+                    {focusHome ? "More" : "Details"}
+                  </Button>
+                  <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
+                    Perks
+                  </Button>
+                </>
+              ) : null}
+            </View>
+          ) : null}
 
-          {captureOpen && !examWeekMode ? (
+          {captureOpen && !examWeekMode && showHomeTools ? (
             <View style={styles.parkingBox}>
               <View style={styles.rowBetween}>
                 <Text style={styles.parkingTitle}>Parking lot</Text>
@@ -1468,7 +1499,7 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          {perksOpen && !examWeekMode ? (
+          {perksOpen && !examWeekMode && showHomeTools ? (
             <View style={styles.parkingBox}>
               <View style={styles.perkRail}>
                 {PERK_SHOP_ITEMS.map((perk) => {
@@ -2435,6 +2466,38 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
+  focusCommand: {
+    minHeight: 240,
+    alignItems: "stretch",
+    justifyContent: "center",
+    gap: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.24)",
+    backgroundColor: "rgba(3,7,18,0.18)",
+    padding: 16
+  },
+  focusCommandIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  focusCommandText: {
+    gap: 5
+  },
+  focusCommandTitle: {
+    color: palette.text,
+    fontSize: 25,
+    lineHeight: 31,
+    fontFamily: "Outfit_700Bold"
+  },
+  focusCommandBody: {
+    color: palette.muted,
+    fontSize: 15,
+    lineHeight: 22
+  },
   commandPlanRow: {
     minHeight: 82,
     flexDirection: "row",
@@ -2520,6 +2583,10 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8
+  },
+  focusMoreRow: {
+    minHeight: 32,
+    alignItems: "flex-end"
   },
   commandAlert: {
     minHeight: 44,
