@@ -743,6 +743,7 @@ export default function DashboardScreen() {
   const commandDoneSet = useMemo(() => new Set(commandDoneIds), [commandDoneIds]);
   const commandDoneCount = tonightPlan.filter((item) => commandDoneSet.has(item.id)).length;
   const showHomeTools = !focusHome || detailsOpen;
+  const nowView = focusHome && !detailsOpen;
   const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
   const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
   const rescueModeBody = rescueSubject
@@ -1077,24 +1078,30 @@ export default function DashboardScreen() {
             Hey {user?.displayName ?? "there"}
           </Text>
         </View>
-        <View style={styles.headerActions}>
-          {focusHome ? (
+        {showHomeTools ? (
+          <View style={styles.headerActions}>
+            {focusHome ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: searchOpen }}
+                style={[styles.guideButton, searchOpen && styles.guideButtonActive]}
+                onPress={() => setSearchOpen((value) => !value)}
+              >
+                <MaterialCommunityIcons name="magnify" color={searchOpen ? palette.text : palette.info} size={18} />
+                <Text style={[styles.guideButtonText, searchOpen && styles.guideButtonTextActive]}>Search</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ expanded: searchOpen }}
-              style={[styles.guideButton, searchOpen && styles.guideButtonActive]}
-              onPress={() => setSearchOpen((value) => !value)}
+              style={styles.guideButton}
+              onPress={() => router.push("/(tabs)/onboarding")}
             >
-              <MaterialCommunityIcons name="magnify" color={searchOpen ? palette.text : palette.info} size={18} />
-              <Text style={[styles.guideButtonText, searchOpen && styles.guideButtonTextActive]}>Search</Text>
+              <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
+              <Text style={styles.guideButtonText}>Guide</Text>
             </Pressable>
-          ) : null}
-          <Pressable accessibilityRole="button" style={styles.guideButton} onPress={() => router.push("/(tabs)/onboarding")}>
-            <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
-            <Text style={styles.guideButtonText}>Guide</Text>
-          </Pressable>
-          <StreakWidget streak={activeStreak} />
-        </View>
+            <StreakWidget streak={activeStreak} />
+          </View>
+        ) : null}
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -1171,10 +1178,10 @@ export default function DashboardScreen() {
         <AppCard style={styles.launchpadCard}>
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Today Command
+              <Text variant="titleMedium" style={nowView ? styles.nowTitle : styles.cardTitle}>
+                {nowView ? "Now" : "Today Command"}
               </Text>
-              <Text style={styles.muted}>
+              <Text style={nowView ? styles.nowPressure : styles.muted}>
                 {nextDeadline
                   ? `${nextDeadline.title} is ${countdownLabel(nextDeadline)}.`
                   : weaknessSummary.title}
@@ -1182,15 +1189,6 @@ export default function DashboardScreen() {
             </View>
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
-
-          {focusHome && !examWeekMode && !detailsOpen ? (
-            <View style={styles.commandSpark}>
-              <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={17} />
-              <Text style={styles.commandSparkText} numberOfLines={1}>
-                {dailyInspiration.action}
-              </Text>
-            </View>
-          ) : null}
 
           {showHomeTools ? (
             <Pressable
@@ -1226,7 +1224,7 @@ export default function DashboardScreen() {
           ) : null}
 
           {primaryPlan ? (
-            focusHome && !detailsOpen ? (
+            nowView ? (
               <View style={styles.focusCommand}>
                 <View style={[styles.focusCommandIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
                   <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={24} />
@@ -1342,7 +1340,7 @@ export default function DashboardScreen() {
           ) : (
             <View style={styles.focusMoreRow}>
               <Button compact mode="text" icon="dots-horizontal" onPress={() => setDetailsOpen(true)}>
-                More
+                More tools
               </Button>
             </View>
           )}
@@ -1409,7 +1407,7 @@ export default function DashboardScreen() {
                     Capture
                   </Button>
                   <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
-                    {focusHome ? "More" : "Details"}
+                    {focusHome && detailsOpen ? "Less" : focusHome ? "More" : "Details"}
                   </Button>
                   <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
                     Perks
@@ -1540,7 +1538,7 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
-      {autopsyCandidate ? (
+      {autopsyCandidate && showHomeTools ? (
         <Animated.View entering={motion.card(36)}>
           <AppCard style={styles.autopsyCard}>
             <View style={styles.rowBetween}>
@@ -1934,7 +1932,7 @@ export default function DashboardScreen() {
         </Animated.View>
       ) : null}
 
-      {!examWeekMode ? giftMessages.map((gift) => (
+      {!examWeekMode && showHomeTools ? giftMessages.map((gift) => (
         <Animated.View key={gift.id} entering={motion.card(140)}>
           <AppCard style={styles.giftCard}>
             <View style={styles.giftIcon}>
@@ -1951,7 +1949,7 @@ export default function DashboardScreen() {
         </Animated.View>
       )) : null}
 
-      {showThemeRequestThankYou && !examWeekMode ? (
+      {showThemeRequestThankYou && !examWeekMode && showHomeTools ? (
         <Animated.View entering={motion.card(150)}>
           <AppCard style={styles.thankYouCard}>
             <View style={styles.thankYouIcon}>
@@ -2377,9 +2375,20 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   launchpadCard: {
-    gap: 14,
+    gap: 12,
     borderColor: "rgba(56,189,248,0.22)",
     backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  nowTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    marginBottom: 2
+  },
+  nowPressure: {
+    color: palette.muted,
+    fontSize: 14,
+    lineHeight: 20
   },
   commandSpark: {
     minHeight: 38,
@@ -2467,15 +2476,15 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   focusCommand: {
-    minHeight: 240,
+    minHeight: 270,
     alignItems: "stretch",
     justifyContent: "center",
-    gap: 14,
+    gap: 16,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(56,189,248,0.24)",
     backgroundColor: "rgba(3,7,18,0.18)",
-    padding: 16
+    padding: 18
   },
   focusCommandIcon: {
     width: 50,
@@ -2489,8 +2498,8 @@ const styles = StyleSheet.create({
   },
   focusCommandTitle: {
     color: palette.text,
-    fontSize: 25,
-    lineHeight: 31,
+    fontSize: 28,
+    lineHeight: 34,
     fontFamily: "Outfit_700Bold"
   },
   focusCommandBody: {
