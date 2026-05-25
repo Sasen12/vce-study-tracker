@@ -3,6 +3,7 @@ import { STUDY_SESSION_PRESETS, type StudySessionPresetId } from "@/constants/st
 
 export type CheckInRhythmMinutes = "8" | "10" | "15";
 export type CoachTone = "calm" | "sharp" | "brutal";
+export type HomeDensity = "focus" | "full";
 
 export type StudyPreferences = {
   defaultPresetId: StudySessionPresetId;
@@ -12,6 +13,7 @@ export type StudyPreferences = {
   defaultAim: string;
   coachTone: CoachTone;
   examWeekMode: boolean;
+  homeDensity: HomeDensity;
 };
 
 export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
@@ -21,12 +23,14 @@ export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
   focusFilterByDefault: false,
   defaultAim: "",
   coachTone: "sharp",
-  examWeekMode: false
+  examWeekMode: false,
+  homeDensity: "focus"
 };
 
 const allowedPresetIds = new Set(STUDY_SESSION_PRESETS.map((preset) => preset.id));
 const allowedRhythms = new Set(["8", "10", "15"]);
 const allowedCoachTones = new Set(["calm", "sharp", "brutal"]);
+const allowedHomeDensities = new Set(["focus", "full"]);
 
 const studyPreferencesKeyFor = (userId?: string | null) => `vce_study_preferences_${userId ?? "guest"}`;
 
@@ -52,7 +56,10 @@ export const normalizeStudyPreferences = (input: unknown): StudyPreferences => {
     coachTone: allowedCoachTones.has(value.coachTone ?? "")
       ? (value.coachTone as CoachTone)
       : DEFAULT_STUDY_PREFERENCES.coachTone,
-    examWeekMode: typeof value.examWeekMode === "boolean" ? value.examWeekMode : DEFAULT_STUDY_PREFERENCES.examWeekMode
+    examWeekMode: typeof value.examWeekMode === "boolean" ? value.examWeekMode : DEFAULT_STUDY_PREFERENCES.examWeekMode,
+    homeDensity: allowedHomeDensities.has(value.homeDensity ?? "")
+      ? (value.homeDensity as HomeDensity)
+      : DEFAULT_STUDY_PREFERENCES.homeDensity
   };
 };
 

@@ -148,6 +148,8 @@ type WeakTopicMemory = {
 };
 
 const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
+const commandChecklistKeyFor = (userId?: string, date = new Date()) =>
+  `vce_command_checklist_${userId ?? "guest"}_${date.toISOString().slice(0, 10)}`;
 
 const weekStartDate = () => {
   const date = new Date();
@@ -418,6 +420,8 @@ export default function DashboardScreen() {
   const [giftMessages, setGiftMessages] = useState<UserGiftMessage[]>([]);
   const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [commandDoneIds, setCommandDoneIds] = useState<string[]>([]);
   const [panicOpen, setPanicOpen] = useState(false);
   const [panicSubjectId, setPanicSubjectId] = useState<string | null>(null);
   const [panicTopic, setPanicTopic] = useState("");
@@ -451,6 +455,7 @@ export default function DashboardScreen() {
     useCallback(() => {
       let active = true;
       const parkingKey = parkingLotKeyFor(user?.id);
+      const commandKey = commandChecklistKeyFor(user?.id);
       fetchAll();
       loadStudyPreferences(user?.id)
         .then((preferences) => {
@@ -498,6 +503,19 @@ export default function DashboardScreen() {
           if (active) setGiftMessages(gifts.filter((gift) => !gift.readAt));
         })
         .catch(() => undefined);
+      AsyncStorage.getItem(commandKey)
+        .then((value) => {
+          if (!active) return;
+          if (!value) {
+            setCommandDoneIds([]);
+            return;
+          }
+          const parsed = JSON.parse(value) as unknown;
+          setCommandDoneIds(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+        })
+        .catch(() => {
+          if (active) setCommandDoneIds([]);
+        });
 
       return () => {
         active = false;
@@ -567,6 +585,7 @@ export default function DashboardScreen() {
   const primaryRitual = personalRituals[0] ?? null;
   const coachTone = studyPreferences.coachTone;
   const examWeekMode = studyPreferences.examWeekMode;
+  const focusHome = studyPreferences.homeDensity === "focus";
   const toneCopy = useMemo(() => {
     const copy: Record<CoachTone, { exam: string; weak: string; autopsy: string }> = {
       calm: {
@@ -721,6 +740,8 @@ export default function DashboardScreen() {
   ]);
   const primaryPlan = tonightPlan[0] ?? null;
   const secondaryPlan = tonightPlan.slice(1, 3);
+  const commandDoneSet = useMemo(() => new Set(commandDoneIds), [commandDoneIds]);
+  const commandDoneCount = tonightPlan.filter((item) => commandDoneSet.has(item.id)).length;
   const rescueSubject = weaknessSummary.weakSubject ?? nextDeadlineSubject ?? revisionDebt[0]?.subject ?? defaultSubject;
   const rescueTopic = weaknessSummary.weakTopic ?? topicFromEvent(nextDeadline) ?? revisionDebt[0]?.subject.subjectName ?? rescueSubject?.subjectName ?? "one weak area";
   const rescueModeBody = rescueSubject
@@ -888,6 +909,19 @@ export default function DashboardScreen() {
     await AsyncStorage.setItem(parkingLotKeyFor(user?.id), JSON.stringify(items));
   };
 
+  const persistCommandDoneIds = async (ids: string[]) => {
+    const nextIds = Array.from(new Set(ids));
+    setCommandDoneIds(nextIds);
+    await AsyncStorage.setItem(commandChecklistKeyFor(user?.id), JSON.stringify(nextIds));
+  };
+
+  const toggleCommandDone = async (id: string) => {
+    const nextIds = commandDoneSet.has(id)
+      ? commandDoneIds.filter((currentId) => currentId !== id)
+      : [...commandDoneIds, id];
+    await persistCommandDoneIds(nextIds);
+  };
+
   const addParkingItem = async () => {
     const cleanText = parkingText.trim();
     if (!cleanText) return;
@@ -1043,6 +1077,17 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
+          {focusHome ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: searchOpen }}
+              style={[styles.guideButton, searchOpen && styles.guideButtonActive]}
+              onPress={() => setSearchOpen((value) => !value)}
+            >
+              <MaterialCommunityIcons name="magnify" color={searchOpen ? palette.text : palette.info} size={18} />
+              <Text style={[styles.guideButtonText, searchOpen && styles.guideButtonTextActive]}>Search</Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="button" style={styles.guideButton} onPress={() => router.push("/(tabs)/onboarding")}>
             <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
             <Text style={styles.guideButtonText}>Guide</Text>
@@ -1053,7 +1098,7 @@ export default function DashboardScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {!examWeekMode ? (
+      {!examWeekMode && (!focusHome || searchOpen || searchQuery.trim().length > 0) ? (
         <Animated.View entering={motion.card(14)}>
           <AppCard style={styles.searchCard}>
           <View style={styles.browserSearchRow}>
@@ -1102,7 +1147,7 @@ export default function DashboardScreen() {
         </Animated.View>
       ) : null}
 
-      {!examWeekMode ? (
+      {!examWeekMode && !focusHome ? (
         <Animated.View entering={motion.card(25)}>
           <AppCard style={styles.inspirationCard}>
             <View style={styles.inspirationBadge}>
@@ -1137,6 +1182,15 @@ export default function DashboardScreen() {
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
 
+          {focusHome && !examWeekMode ? (
+            <View style={styles.commandSpark}>
+              <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={17} />
+              <Text style={styles.commandSparkText} numberOfLines={1}>
+                {dailyInspiration.action}
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable
             accessibilityRole="button"
             style={styles.personalSignal}
@@ -1169,29 +1223,70 @@ export default function DashboardScreen() {
           </Pressable>
 
           {primaryPlan ? (
-            <Pressable accessibilityRole="button" style={styles.planRow} onPress={() => openTimerForPlan(primaryPlan)}>
-              <View style={[styles.planIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
-                <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={19} />
-              </View>
-              <View style={styles.flexText}>
-                <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
-                <Text style={styles.planTitle}>{primaryPlan.title}</Text>
-                <Text style={styles.muted} numberOfLines={2}>
-                  {primaryPlan.body}
-                </Text>
-              </View>
-              <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(primaryPlan.minutes))}</Text>
-            </Pressable>
+            <View style={[styles.commandPlanRow, commandDoneSet.has(primaryPlan.id) && styles.commandPlanRowDone]}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: commandDoneSet.has(primaryPlan.id) }}
+                style={styles.commandCheck}
+                onPress={() => void toggleCommandDone(primaryPlan.id)}
+              >
+                <MaterialCommunityIcons
+                  name={commandDoneSet.has(primaryPlan.id) ? "check-circle" : "checkbox-blank-circle-outline"}
+                  color={commandDoneSet.has(primaryPlan.id) ? palette.success : primaryPlan.accent}
+                  size={22}
+                />
+              </Pressable>
+              <Pressable accessibilityRole="button" style={styles.commandPlanButton} onPress={() => openTimerForPlan(primaryPlan)}>
+                <View style={[styles.planIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
+                  <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={19} />
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
+                  <Text style={[styles.planTitle, commandDoneSet.has(primaryPlan.id) && styles.planTitleDone]}>{primaryPlan.title}</Text>
+                  <Text style={styles.muted} numberOfLines={2}>
+                    {primaryPlan.body}
+                  </Text>
+                </View>
+                <Text style={styles.planMinutes}>{formatMinutes(clampStudyMinutes(primaryPlan.minutes))}</Text>
+              </Pressable>
+            </View>
           ) : (
             <Text style={styles.muted}>Add a subject, deadline, or saved question and Home will choose a cleaner next move.</Text>
           )}
 
           {secondaryPlan.length ? (
-            <View style={styles.nextUpRow}>
-              <Text style={styles.nextUpLabel}>Next</Text>
-              <Text style={styles.nextUpText} numberOfLines={1}>
-                {secondaryPlan.map((item) => item.title).join(" / ")}
-              </Text>
+            <View style={styles.commandQueue}>
+              <View style={styles.queueHeader}>
+                <Text style={styles.nextUpLabel}>Command queue</Text>
+                <Text style={styles.queueCount}>{commandDoneCount}/{tonightPlan.length} done</Text>
+              </View>
+              {secondaryPlan.map((item) => {
+                const done = commandDoneSet.has(item.id);
+                return (
+                  <View key={item.id} style={[styles.queueItem, done && styles.queueItemDone]}>
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: done }}
+                      style={styles.queueCheck}
+                      onPress={() => void toggleCommandDone(item.id)}
+                    >
+                      <MaterialCommunityIcons
+                        name={done ? "check-circle" : "checkbox-blank-circle-outline"}
+                        color={done ? palette.success : item.accent}
+                        size={19}
+                      />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" style={styles.queueButton} onPress={() => openTimerForPlan(item)}>
+                      <Text style={[styles.queueTitle, done && styles.planTitleDone]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.queueMeta} numberOfLines={1}>
+                        {item.label} - {formatMinutes(clampStudyMinutes(item.minutes))}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
           ) : null}
 
@@ -1272,11 +1367,19 @@ export default function DashboardScreen() {
             </Button>
             {!examWeekMode ? (
               <>
+                <Button
+                  compact
+                  mode={focusHome ? "contained-tonal" : "outlined"}
+                  icon={focusHome ? "eye-off-outline" : "view-dashboard-outline"}
+                  onPress={() => void updateHomePreferences({ homeDensity: focusHome ? "full" : "focus" })}
+                >
+                  {focusHome ? "Focus" : "Full"}
+                </Button>
                 <Button compact mode={captureOpen ? "contained-tonal" : "outlined"} icon="playlist-edit" onPress={() => setCaptureOpen((value) => !value)}>
                   Capture
                 </Button>
                 <Button compact mode={detailsOpen ? "contained-tonal" : "outlined"} icon="view-dashboard-outline" onPress={() => setDetailsOpen((value) => !value)}>
-                  Details
+                  {focusHome ? "More" : "Details"}
                 </Button>
                 <Button compact mode={perksOpen ? "contained-tonal" : "outlined"} icon="star-four-points-outline" onPress={() => setPerksOpen((value) => !value)}>
                   Perks
@@ -1752,7 +1855,7 @@ export default function DashboardScreen() {
         </>
       ) : null}
 
-      {!examWeekMode ? (
+      {!examWeekMode && (!focusHome || detailsOpen) ? (
         <Animated.View entering={motion.card(118)}>
         <AppCard style={styles.section}>
           <Text variant="titleMedium" style={styles.cardTitle}>
@@ -1977,10 +2080,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6
   },
+  guideButtonActive: {
+    borderColor: `${palette.primary}55`,
+    backgroundColor: `${palette.primary}18`
+  },
   guideButtonText: {
     color: palette.info,
     fontSize: 12,
     fontFamily: "Outfit_700Bold"
+  },
+  guideButtonTextActive: {
+    color: palette.text
   },
   date: {
     color: palette.muted,
@@ -2240,6 +2350,25 @@ const styles = StyleSheet.create({
     borderColor: "rgba(56,189,248,0.22)",
     backgroundColor: "rgba(56,189,248,0.07)"
   },
+  commandSpark: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.24)",
+    backgroundColor: "rgba(245,158,11,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  commandSparkText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 13
+  },
   personalSignal: {
     minHeight: 70,
     flexDirection: "row",
@@ -2305,6 +2434,86 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: palette.text,
     fontFamily: "Outfit_700Bold"
+  },
+  commandPlanRow: {
+    minHeight: 82,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 8
+  },
+  commandPlanRowDone: {
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}10`
+  },
+  commandCheck: {
+    width: 34,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  commandPlanButton: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  planTitleDone: {
+    color: palette.muted,
+    textDecorationLine: "line-through"
+  },
+  commandQueue: {
+    gap: 8
+  },
+  queueHeader: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  queueCount: {
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold"
+  },
+  queueItem: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 9,
+    paddingVertical: 7
+  },
+  queueItemDone: {
+    borderColor: `${palette.success}33`,
+    backgroundColor: `${palette.success}08`
+  },
+  queueCheck: {
+    width: 26,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  queueButton: {
+    flex: 1,
+    minWidth: 0
+  },
+  queueTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    lineHeight: 19
+  },
+  queueMeta: {
+    color: palette.muted,
+    fontSize: 12
   },
   commandActions: {
     flexDirection: "row",

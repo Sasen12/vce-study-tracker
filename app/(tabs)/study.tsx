@@ -414,7 +414,7 @@ export default function StudyScreen() {
     elapsed >= targetSeconds && elapsed > 0 ? `+${formatElapsed(overtimeSeconds)} over target` : formatElapsed(remainingSeconds);
   const breakPlan = useMemo(() => breakPlanFor(elapsed, targetSeconds), [elapsed, targetSeconds]);
   const breakReady = elapsed >= targetSeconds && elapsed > 0;
-  const showTimerSetup = !running;
+  const showTimerSetup = !running && elapsed === 0;
   const sessionBrief = trimmedStudyTopic || sessionGoal.trim() || "Pick one thing. Start the block. Save the evidence.";
   const timerStateText = running ? "Locked in" : elapsed > 0 ? "Paused block" : "Ready";
   const checkInSummary = checkInsActive
@@ -850,15 +850,15 @@ export default function StudyScreen() {
 
       {mode === "timer" ? (
         <>
-          {subjects.length ? (
+          {showTimerSetup && subjects.length ? (
             <SubjectSelector
               subjects={subjects}
               selectedId={selectedSubjectId}
               onSelect={(subject) => setSelectedSubjectId(subject.id)}
             />
-          ) : (
+          ) : !subjects.length ? (
             <EmptyState title="No subjects found" body="Add a subject from Profile, then your sessions can earn XP." />
-          )}
+          ) : null}
 
           {ritualTitle ? (
             <AppCard style={styles.ritualCard}>
@@ -1373,7 +1373,7 @@ const styles = StyleSheet.create({
   },
   timerCard: {
     gap: 18,
-    padding: 18
+    padding: 16
   },
   timerCardAura: {
     borderColor: "rgba(56,189,248,0.34)",
@@ -1448,7 +1448,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   timerPrimaryPaneSolo: {
-    minHeight: 420
+    minHeight: 340
   },
   timerSetupPane: {
     flex: 1,
@@ -1563,8 +1563,8 @@ const styles = StyleSheet.create({
   },
   timer: {
     color: palette.text,
-    fontSize: 76,
-    lineHeight: 84,
+    fontSize: 68,
+    lineHeight: 76,
     fontFamily: "Outfit_700Bold"
   },
   targetTrack: {

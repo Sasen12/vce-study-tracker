@@ -32,6 +32,7 @@ import {
   saveStudyPreferences,
   type CheckInRhythmMinutes,
   type CoachTone,
+  type HomeDensity,
   type StudyPreferences
 } from "@/utils/studyPreferences";
 import type { Goal, SavedQuestion, StudyNote, StudyReflection, StudySession, UserSubject } from "@/types";
@@ -784,6 +785,22 @@ export default function ProfileScreen() {
               color={palette.primary}
             />
           </View>
+        </View>
+        <View style={styles.preferenceInputBlock}>
+          <Text style={styles.preferenceLabel}>Home layout</Text>
+          <SegmentedButtons
+            value={studyPreferences.homeDensity}
+            onValueChange={(value) =>
+              void updateStudyPreferences(
+                { homeDensity: value as HomeDensity },
+                value === "focus" ? "Focus Home saved." : "Full Home saved."
+              )
+            }
+            buttons={[
+              { value: "focus", label: "Focus" },
+              { value: "full", label: "Full" }
+            ]}
+          />
         </View>
         <View style={styles.preferenceInputBlock}>
           <Text style={styles.preferenceLabel}>Forge tone</Text>
