@@ -1,5 +1,7 @@
 import { prisma } from "../db/prismaClient.js";
 import { extractLearningSignalsFromMemoryEvent } from "./aiService.js";
+import { inferVceSubjectFromQuestion } from "../resources/subjectInference.js";
+import { normaliseSubjectName } from "../resources/vceSubjectCatalogue.js";
 import { todayMelbourne, toDateOnly } from "../utils/date.js";
 const assessmentEventTypes = ["SAC", "SAT", "PRACTICE_SAC", "PRACTICE_SAT", "EXAM", "TASK"];
 const weaknessTypes = new Set(["weakness", "mistake", "assessment_risk"]);
@@ -25,6 +27,22 @@ const slug = (value) => value
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 export const subjectKeyFor = (subjectId, subjectName) => subjectId ?? (subjectName?.trim() ? `name:${slug(subjectName)}` : "general");
+const sameSubjectName = (left, right) => {
+    if (!left || !right)
+        return false;
+    return normaliseSubjectName(left) === normaliseSubjectName(right);
+};
+const signalSubjectText = (signal, fallbackSummary) => [
+    signal.subjectName,
+    signal.topic,
+    signal.title,
+    signal.detail,
+    signal.evidence,
+    signal.nextAction,
+    fallbackSummary
+]
+    .filter((value) => Boolean(value && value.trim()))
+    .join("\n");
 const resolveSubjectTarget = async (userId, target) => {
     if (target.subjectId) {
         const subject = await prisma.userSubject.findFirst({
@@ -39,10 +57,24 @@ const resolveSubjectTarget = async (userId, target) => {
             };
         }
     }
+    if (target.subjectName?.trim()) {
+        const subjects = await prisma.userSubject.findMany({
+            where: { userId, archivedAt: null },
+            select: { id: true, subjectName: true }
+        });
+        const matchedSubject = subjects.find((subject) => sameSubjectName(subject.subjectName, target.subjectName));
+        if (matchedSubject) {
+            return {
+                subjectId: matchedSubject.id,
+                subjectName: matchedSubject.subjectName,
+                subjectKey: subjectKeyFor(matchedSubject.id, matchedSubject.subjectName)
+            };
+        }
+    }
     return {
-        subjectId: target.subjectId ?? null,
+        subjectId: null,
         subjectName: target.subjectName?.trim() || "General study",
-        subjectKey: target.subjectKey ?? subjectKeyFor(target.subjectId, target.subjectName)
+        subjectKey: target.subjectKey ?? subjectKeyFor(null, target.subjectName)
     };
 };
 const normalizeSignalType = (value) => signalTypes.has(value) ? value : "topic_interest";
@@ -299,7 +331,64 @@ export const refreshSubjectMemoryMap = async (userId, target) => {
         }
     });
 };
+export const repairLearningSignalSubjects = async (userId) => {
+    const [subjects, signals] = await Promise.all([
+        prisma.userSubject.findMany({ where: { userId, archivedAt: null }, select: { id: true, subjectName: true } }),
+        prisma.learningSignal.findMany({
+            where: { userId },
+            select: {
+                id: true,
+                subjectId: true,
+                subjectKey: true,
+                subjectName: true,
+                topic: true,
+                title: true,
+                detail: true,
+                evidence: true,
+                nextAction: true
+            }
+        })
+    ]);
+    const subjectsByName = new Map(subjects.map((subject) => [normaliseSubjectName(subject.subjectName), subject]));
+    const updates = [];
+    for (const signal of signals) {
+        const inferredSubjectName = inferVceSubjectFromQuestion([
+            signal.subjectName,
+            signal.topic,
+            signal.title,
+            signal.detail,
+            signal.evidence,
+            signal.nextAction
+        ]
+            .filter((value) => Boolean(value && value.trim()))
+            .join("\n"));
+        if (!inferredSubjectName)
+            continue;
+        const subject = subjectsByName.get(normaliseSubjectName(inferredSubjectName));
+        if (!subject)
+            continue;
+        const nextSubjectKey = subjectKeyFor(subject.id, subject.subjectName);
+        if (signal.subjectId === subject.id &&
+            signal.subjectKey === nextSubjectKey &&
+            sameSubjectName(signal.subjectName, subject.subjectName)) {
+            continue;
+        }
+        updates.push(prisma.learningSignal.update({
+            where: { id: signal.id },
+            data: {
+                subjectId: subject.id,
+                subjectKey: nextSubjectKey,
+                subjectName: subject.subjectName
+            }
+        }));
+    }
+    if (!updates.length)
+        return 0;
+    await prisma.$transaction(updates);
+    return updates.length;
+};
 export const rebuildStudentMemoryMaps = async (userId) => {
+    await repairLearningSignalSubjects(userId);
     const [subjects, signals] = await Promise.all([
         prisma.userSubject.findMany({ where: { userId, archivedAt: null }, select: { id: true, subjectName: true } }),
         prisma.learningSignal.findMany({
@@ -326,6 +415,17 @@ export const rebuildStudentMemoryMaps = async (userId) => {
         });
     }
     return Promise.all([...targets.values()].map((target) => refreshSubjectMemoryMap(userId, target)));
+};
+const targetForSignal = (signal, eventTarget, fallbackSummary) => {
+    const currentSubjectId = signal.subjectId === undefined ? eventTarget.subjectId : signal.subjectId;
+    const currentSubjectName = signal.subjectName ?? eventTarget.subjectName;
+    const inferredSubjectName = inferVceSubjectFromQuestion(signalSubjectText(signal, fallbackSummary));
+    const preferredSubjectName = inferredSubjectName ?? currentSubjectName;
+    const subjectChanged = preferredSubjectName ? !sameSubjectName(preferredSubjectName, eventTarget.subjectName) : false;
+    return {
+        subjectId: subjectChanged ? null : currentSubjectId,
+        subjectName: preferredSubjectName ?? eventTarget.subjectName
+    };
 };
 export const recordStudentMemory = async (input, options = {}) => {
     try {
@@ -375,10 +475,7 @@ export const recordStudentMemory = async (input, options = {}) => {
             .slice(0, 8), (signal) => `${signal.signalType}:${(signal.topic ?? "").toLowerCase()}:${signal.title.toLowerCase()}`);
         const createInputs = [];
         for (const signal of normalizedSignals) {
-            const target = await resolveSubjectTarget(input.userId, {
-                subjectId: signal.subjectId === undefined ? eventTarget.subjectId : signal.subjectId,
-                subjectName: signal.subjectName ?? eventTarget.subjectName
-            });
+            const target = await resolveSubjectTarget(input.userId, targetForSignal(signal, eventTarget, input.summary));
             createInputs.push({
                 userId: input.userId,
                 subjectId: target.subjectId,

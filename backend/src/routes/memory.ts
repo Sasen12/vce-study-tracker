@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/authMiddleware.js";
-import { rebuildStudentMemoryMaps } from "../services/studentMemoryService.js";
+import { rebuildStudentMemoryMaps, repairLearningSignalSubjects } from "../services/studentMemoryService.js";
 import { asyncHandler } from "../utils/http.js";
 
 export const memoryRouter = Router();
@@ -54,6 +54,13 @@ memoryRouter.get(
   "/student-map",
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
+    const repairedSignals = await repairLearningSignalSubjects(authReq.user.id);
+    if (repairedSignals) {
+      const subjectMemories = await rebuildStudentMemoryMaps(authReq.user.id);
+      res.json({ subjectMemories });
+      return;
+    }
+
     const subjectMemories = await prisma.studentSubjectMemory.findMany({
       where: {
         userId: authReq.user.id,

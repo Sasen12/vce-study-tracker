@@ -65,7 +65,10 @@ const subjectSignals: Record<string, WeightedPattern[]> = {
   ],
   Literature: [{ pattern: /\bliterary perspective|close analysis|passage analysis|views and values|interpretation\b/i, weight: 6 }],
   "General Mathematics": [
-    { pattern: /\bmatrix|matrices|recursion|annuit(?:y|ies)|networks?|critical path|maximum flow\b/i, weight: 7 }
+    { pattern: /\bmatrix|matrices|recursion|recurrence|networks?|critical path|maximum flow\b/i, weight: 7 },
+    { pattern: /\bfinancial modelling|financial modeling\b/i, weight: 14 },
+    { pattern: /\bcompound interest|simple interest|depreciation|loan repayments?|annuit(?:y|ies)|perpetuit(?:y|ies)\b/i, weight: 9 },
+    { pattern: /\breducing balance|flat rate|monthly compounding|quarterly compounding|effective interest|nominal interest\b/i, weight: 7 }
   ],
   "Mathematical Methods": [
     { pattern: /\bcalculus|derivative|integral|function|probability density|normal distribution|stationary point\b/i, weight: 6 }
