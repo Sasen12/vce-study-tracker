@@ -38,13 +38,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights"
-        options={{
-          title: "Insights",
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-search-outline" color={color} size={size} />
-        }}
-      />
-      <Tabs.Screen
         name="study"
         options={{
           title: "Study",
@@ -59,8 +52,23 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="insights"
+        options={{
+          title: "Insights",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-search-outline" color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="dots-grid" color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen
         name="questions"
         options={{
+          href: null,
           title: "Questions",
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="cards-outline" color={color} size={size} />
         }}
@@ -68,6 +76,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="community"
         options={{
+          href: null,
           title: "Community",
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="forum-outline" color={color} size={size} />
         }}
@@ -75,6 +84,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="shop"
         options={{
+          href: null,
           title: "Shop",
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="shopping-outline" color={color} size={size} />
         }}
@@ -97,6 +107,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          href: null,
           title: "Profile",
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-circle-outline" color={color} size={size} />
         }}
