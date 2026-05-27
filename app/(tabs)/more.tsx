@@ -19,11 +19,11 @@ const moreItems = [
     route: "/(tabs)/questions"
   },
   {
-    title: "Community",
-    detail: "Chat and board",
-    icon: "forum-outline",
+    title: "Insights",
+    detail: "Weak spots",
+    icon: "map-search-outline",
     accent: palette.primary,
-    route: "/(tabs)/community"
+    route: "/(tabs)/insights"
   },
   {
     title: "Shop",

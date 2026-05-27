@@ -8,8 +8,8 @@ import { useActivePalette } from "@/hooks/useActiveTheme";
 import { useAuthStore } from "@/store/authStore";
 import { hasSeenAppGuide, markAppGuideSeen } from "@/utils/appGuide";
 
-type TourRoute = "/(tabs)" | "/(tabs)/study" | "/(tabs)/calendar" | "/(tabs)/insights" | "/(tabs)/more";
-type RouteKey = "home" | "study" | "calendar" | "insights" | "more";
+type TourRoute = "/(tabs)" | "/(tabs)/study" | "/(tabs)/calendar" | "/(tabs)/community" | "/(tabs)/more";
+type RouteKey = "home" | "study" | "calendar" | "community" | "more";
 type Target = { kind: "none" } | { kind: "bird" } | { kind: "tab"; index: number; routeKey: RouteKey; route: TourRoute };
 
 type TourStep = {
@@ -53,19 +53,19 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "calendar"
   },
   {
-    eyebrow: "Insights",
-    title: "Check the Student Map.",
-    body: "Insights shows weak areas, repeated mistakes and what the app has learned from your work.",
-    icon: "map-search-outline",
+    eyebrow: "Community",
+    title: "Students are in here.",
+    body: "Community is for chat, subject rooms and school-wide updates. It is a main tab because people are easier to find than buried tools.",
+    icon: "forum-outline",
     accent: palette.primary,
-    target: { kind: "tab", index: 3, routeKey: "insights", route: "/(tabs)/insights" },
-    route: "/(tabs)/insights",
-    advanceOnRoute: "insights"
+    target: { kind: "tab", index: 3, routeKey: "community", route: "/(tabs)/community" },
+    route: "/(tabs)/community",
+    advanceOnRoute: "community"
   },
   {
     eyebrow: "More",
     title: "Extra tools live here.",
-    body: "Questions, Community, Shop, Profile and Guide are grouped behind More so the main app stays calm.",
+    body: "Questions, Insights, Shop, Profile and Guide are grouped behind More so the main app stays calm.",
     icon: "dots-grid",
     accent: "#60A5FA",
     target: { kind: "tab", index: 4, routeKey: "more", route: "/(tabs)/more" },
@@ -83,7 +83,7 @@ const tourSteps: TourStep[] = [
   {
     eyebrow: "Done",
     title: "That is the loop.",
-    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Insights shows what to fix. The bird is there only when you want a quick ask.",
+    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Community keeps students close. The bird is there only when you want a quick ask.",
     icon: "check-circle-outline",
     accent: palette.info,
     target: { kind: "none" }
@@ -95,7 +95,7 @@ const POCKET_BIRD_HOST_ID = "birb-shadow-host";
 const routeKeyForPath = (pathname: string): RouteKey => {
   if (pathname.includes("study")) return "study";
   if (pathname.includes("calendar")) return "calendar";
-  if (pathname.includes("insights")) return "insights";
+  if (pathname.includes("community")) return "community";
   if (pathname.includes("more")) return "more";
   return "home";
 };
@@ -103,7 +103,7 @@ const routeKeyForPath = (pathname: string): RouteKey => {
 const routeForKey = (routeKey: RouteKey): TourRoute => {
   if (routeKey === "study") return "/(tabs)/study";
   if (routeKey === "calendar") return "/(tabs)/calendar";
-  if (routeKey === "insights") return "/(tabs)/insights";
+  if (routeKey === "community") return "/(tabs)/community";
   if (routeKey === "more") return "/(tabs)/more";
   return "/(tabs)";
 };

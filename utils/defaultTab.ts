@@ -1,11 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type DefaultTabId = "home" | "study" | "calendar" | "insights" | "more";
+export type DefaultTabId = "home" | "study" | "calendar" | "community" | "more";
 export type DefaultTabRoute =
   | "/(tabs)"
   | "/(tabs)/study"
   | "/(tabs)/calendar"
-  | "/(tabs)/insights"
+  | "/(tabs)/community"
   | "/(tabs)/more";
 
 export type DefaultTabOption = {
@@ -39,11 +39,11 @@ export const DEFAULT_TAB_OPTIONS: DefaultTabOption[] = [
     description: "Deadlines first"
   },
   {
-    id: "insights",
-    label: "Insights",
-    route: "/(tabs)/insights",
-    icon: "map-search-outline",
-    description: "Weak areas"
+    id: "community",
+    label: "Community",
+    route: "/(tabs)/community",
+    icon: "forum-outline",
+    description: "Chat and board"
   },
   {
     id: "more",
@@ -55,7 +55,7 @@ export const DEFAULT_TAB_OPTIONS: DefaultTabOption[] = [
 ];
 
 const defaultTabIds = new Set(DEFAULT_TAB_OPTIONS.map((option) => option.id));
-const legacyDefaultTabs = new Set(["questions", "community", "shop", "profile"]);
+const legacyDefaultTabs = new Set(["questions", "insights", "shop", "profile"]);
 
 const defaultTabKeyFor = (userId?: string | null) => `vce_default_tab_${userId ?? "guest"}`;
 

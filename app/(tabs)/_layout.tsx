@@ -56,10 +56,10 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="insights"
+          name="community"
           options={{
-            title: "Insights",
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-search-outline" color={color} size={size} />
+            title: "Community",
+            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="forum-outline" color={color} size={size} />
           }}
         />
         <Tabs.Screen
@@ -78,11 +78,11 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="community"
+          name="insights"
           options={{
             href: null,
-            title: "Community",
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="forum-outline" color={color} size={size} />
+            title: "Insights",
+            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-search-outline" color={color} size={size} />
           }}
         />
         <Tabs.Screen
