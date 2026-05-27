@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { palette } from "@/constants/theme";
@@ -15,96 +14,28 @@ import {
 } from "@/utils/studyPreferences";
 import type { StudyAnswer } from "@/types";
 
-type PixelCell = [number, number, string];
-
-const dark = "#06101E";
-const blue = "#2563EB";
-const lightBlue = "#60A5FA";
-const orange = "#F59E0B";
-const gold = "#FBBF24";
-const cream = "#FFF7E6";
-
-const birdCells = (wingUp: boolean): PixelCell[] => [
-  [2, 0, dark],
-  [3, 0, dark],
-  [4, 0, dark],
-  [1, 1, dark],
-  [2, 1, blue],
-  [3, 1, lightBlue],
-  [4, 1, blue],
-  [5, 1, dark],
-  [0, 2, dark],
-  [1, 2, blue],
-  [2, 2, blue],
-  [3, 2, dark],
-  [4, 2, blue],
-  [5, 2, blue],
-  [6, 2, dark],
-  [7, 2, dark],
-  [8, 2, dark],
-  [0, 3, dark],
-  [1, 3, blue],
-  [2, 3, blue],
-  [3, 3, blue],
-  [4, 3, blue],
-  [5, 3, blue],
-  [6, 3, blue],
-  [7, 3, blue],
-  [8, 3, blue],
-  [9, 3, dark],
-  [1, 4, dark],
-  [2, 4, orange],
-  [3, 4, orange],
-  [4, 4, blue],
-  [5, 4, blue],
-  [6, 4, blue],
-  [7, 4, dark],
-  [2, 5, dark],
-  [3, 5, orange],
-  [4, 5, gold],
-  [5, 5, dark],
-  [6, 5, dark],
-  [3, 6, dark],
-  [4, 6, dark],
-  [3, 7, dark],
-  [5, 7, dark],
-  ...(wingUp
-    ? [
-        [4, 0, lightBlue],
-        [5, 0, dark],
-        [6, 0, dark],
-        [5, 1, blue]
-      ]
-    : [
-        [5, 5, blue],
-        [6, 5, blue],
-        [7, 5, dark]
-      ]),
-  [3, 2, cream]
+const POCKET_BIRD_SRC = "https://cdn.jsdelivr.net/gh/IdreesInc/Pocket-Bird@main/dist/web/birb.embed.js";
+const POCKET_BIRD_SCRIPT_ID = "vce-forge-pocket-bird-script";
+const POCKET_BIRD_HOST_ID = "birb-shadow-host";
+const POCKET_BIRD_SAVE_KEY = "birbSaveData";
+const POCKET_BIRD_ASK_ID = "vce-forge-pocket-bird-ask";
+const POCKET_BIRD_ASK_SEPARATOR_ID = "vce-forge-pocket-bird-ask-separator";
+const POCKET_BIRD_FLIGHT_TARGET_CLASS = "vce-pocket-bird-flight-target";
+const TRANSPARENT_PIXEL =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const FLIGHT_TARGETS = [
+  { left: "8%", top: "18%", width: 140 },
+  { left: "52%", top: "24%", width: 180 },
+  { left: "78%", top: "46%", width: 150 },
+  { left: "24%", top: "68%", width: 170 }
 ];
 
-function PixelBird({ wingUp }: { wingUp: boolean }) {
-  const size = 5;
-  return (
-    <View style={[styles.pixelBird, { width: 11 * size, height: 8 * size }]}>
-      {birdCells(wingUp).map(([x, y, color], index) => (
-        <View
-          key={`${x}-${y}-${color}-${index}`}
-          style={[
-            styles.pixel,
-            {
-              left: x * size,
-              top: y * size,
-              width: size,
-              height: size,
-              backgroundColor: color
-            }
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
+type PocketBirdWindow = Window &
+  typeof globalThis & {
+    __vceForgePocketBirdLoaded?: boolean;
+  };
+
+const isWebDomAvailable = () => Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined";
 
 const compactAnswer = (answer: StudyAnswer) =>
   [
@@ -117,18 +48,108 @@ const compactAnswer = (answer: StudyAnswer) =>
     .filter(Boolean)
     .join("\n\n");
 
+const getPocketBirdHost = () => document.getElementById(POCKET_BIRD_HOST_ID) as HTMLElement | null;
+
+const setPocketBirdVisible = (visible: boolean) => {
+  if (!isWebDomAvailable()) return;
+  const host = getPocketBirdHost();
+  if (!host) return;
+  host.style.display = visible ? "" : "none";
+  host.style.pointerEvents = visible ? "" : "none";
+  host.setAttribute("aria-hidden", visible ? "false" : "true");
+};
+
+const seedPocketBirdDefaults = () => {
+  if (!isWebDomAvailable() || !("localStorage" in window)) return;
+
+  try {
+    const stored = window.localStorage.getItem(POCKET_BIRD_SAVE_KEY);
+    const rawParsed = stored ? JSON.parse(stored) : {};
+    const parsed = rawParsed && typeof rawParsed === "object" ? rawParsed : {};
+    const settings = parsed && typeof parsed.settings === "object" && parsed.settings ? parsed.settings : {};
+    const nextSettings = {
+      soundEnabled: false,
+      birbScaleMultiplier: 1.45,
+      ...settings
+    };
+
+    if (!stored || settings.soundEnabled === undefined || settings.birbScaleMultiplier === undefined) {
+      window.localStorage.setItem(
+        POCKET_BIRD_SAVE_KEY,
+        JSON.stringify({
+          ...parsed,
+          settings: nextSettings
+        })
+      );
+    }
+  } catch {
+    // Pocket-Bird can still boot with its own defaults if local storage is unavailable.
+  }
+};
+
+const ensurePocketBirdFlightTargets = () => {
+  if (!isWebDomAvailable() || document.querySelector(`.${POCKET_BIRD_FLIGHT_TARGET_CLASS}`)) return;
+
+  FLIGHT_TARGETS.forEach((target, index) => {
+    const image = document.createElement("img");
+    image.src = TRANSPARENT_PIXEL;
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+    image.className = POCKET_BIRD_FLIGHT_TARGET_CLASS;
+    image.style.position = "fixed";
+    image.style.left = target.left;
+    image.style.top = target.top;
+    image.style.width = `${target.width}px`;
+    image.style.height = "1px";
+    image.style.pointerEvents = "none";
+    image.style.userSelect = "none";
+    image.style.zIndex = "-1";
+    image.dataset.vceForgeFlightTarget = String(index);
+    document.body.appendChild(image);
+  });
+};
+
+const removePocketBirdFlightTargets = () => {
+  if (!isWebDomAvailable()) return;
+  document.querySelectorAll(`.${POCKET_BIRD_FLIGHT_TARGET_CLASS}`).forEach((element) => element.remove());
+};
+
+const ensurePocketBirdScript = () => {
+  if (!isWebDomAvailable()) return;
+  const pocketWindow = window as PocketBirdWindow;
+  seedPocketBirdDefaults();
+  ensurePocketBirdFlightTargets();
+
+  if (pocketWindow.__vceForgePocketBirdLoaded || document.getElementById(POCKET_BIRD_HOST_ID)) {
+    pocketWindow.__vceForgePocketBirdLoaded = true;
+    return;
+  }
+
+  if (document.getElementById(POCKET_BIRD_SCRIPT_ID)) return;
+
+  const script = document.createElement("script");
+  script.id = POCKET_BIRD_SCRIPT_ID;
+  script.src = POCKET_BIRD_SRC;
+  script.async = true;
+  script.dataset.vceForgePocketBird = "true";
+  script.onload = () => {
+    pocketWindow.__vceForgePocketBirdLoaded = true;
+    setPocketBirdVisible(true);
+  };
+  script.onerror = () => {
+    pocketWindow.__vceForgePocketBirdLoaded = false;
+  };
+  document.body.appendChild(script);
+};
+
 export function ForgeMascot() {
   const activePalette = useActivePalette();
   const userId = useAuthStore((state) => state.user?.id);
   const subjects = useAppStore((state) => state.subjects);
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
   const createNote = useAppStore((state) => state.createNote);
-  const { width } = useWindowDimensions();
-  const flyX = useSharedValue(0);
   const [preferences, setPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
   const [open, setOpen] = useState(false);
-  const [flying, setFlying] = useState(false);
-  const [wingUp, setWingUp] = useState(false);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
@@ -154,37 +175,86 @@ export function ForgeMascot() {
   }, [selectedSubjectId, subjects]);
 
   useEffect(() => {
-    if (!preferences.mascotEnabled) return;
-    const interval = setInterval(() => setWingUp((value) => !value), 360);
-    return () => clearInterval(interval);
-  }, [preferences.mascotEnabled]);
+    if (!isWebDomAvailable()) return;
+    if (preferences.mascotEnabled) {
+      ensurePocketBirdScript();
+      const poll = window.setInterval(() => setPocketBirdVisible(!open), 300);
+      return () => window.clearInterval(poll);
+    }
+
+    setPocketBirdVisible(false);
+    removePocketBirdFlightTargets();
+  }, [open, preferences.mascotEnabled]);
 
   useEffect(() => {
-    if (!preferences.mascotEnabled || open || width < 720) return;
+    return () => {
+      setPocketBirdVisible(false);
+      removePocketBirdFlightTargets();
+    };
+  }, []);
 
-    const fly = () => {
-      if (open) return;
-      setFlying(true);
-      flyX.value = width + 120;
-      flyX.value = withTiming(-width - 140, { duration: 5200, easing: Easing.inOut(Easing.cubic) }, (finished) => {
-        if (finished) {
-          flyX.value = 0;
-          runOnJS(setFlying)(false);
+  const openQuickAsk = useCallback(() => {
+    setMessage(null);
+    setAnswer(null);
+    setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isWebDomAvailable() || !preferences.mascotEnabled) return;
+
+    let observer: MutationObserver | null = null;
+    const injectAskItem = () => {
+      const host = getPocketBirdHost();
+      const root = host?.shadowRoot;
+      const content = root?.querySelector("#birb-menu .birb-window-content");
+      if (!root || !content || root.querySelector(`#${POCKET_BIRD_ASK_ID}`)) return;
+
+      const item = document.createElement("div");
+      item.id = POCKET_BIRD_ASK_ID;
+      item.className = "birb-menu-item";
+      item.textContent = "Ask VCE Forge";
+      item.setAttribute("role", "button");
+      item.tabIndex = 0;
+
+      const openFromMenu = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        root.querySelector("#birb-menu")?.remove();
+        root.querySelector("#birb-menu-exit")?.remove();
+        openQuickAsk();
+      };
+
+      item.addEventListener("click", openFromMenu);
+      item.addEventListener("touchend", openFromMenu);
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          openFromMenu(event);
         }
       });
+
+      const separator = document.createElement("div");
+      separator.id = POCKET_BIRD_ASK_SEPARATOR_ID;
+      separator.className = "birb-window-separator";
+
+      content.prepend(separator);
+      content.prepend(item);
     };
 
-    const firstFlight = setTimeout(fly, 24_000);
-    const interval = setInterval(fly, 68_000);
+    const connectObserver = () => {
+      const root = getPocketBirdHost()?.shadowRoot;
+      if (!root || observer) return;
+      observer = new MutationObserver(injectAskItem);
+      observer.observe(root, { childList: true, subtree: true });
+      injectAskItem();
+    };
+
+    connectObserver();
+    const poll = window.setInterval(connectObserver, 500);
     return () => {
-      clearTimeout(firstFlight);
-      clearInterval(interval);
+      window.clearInterval(poll);
+      observer?.disconnect();
     };
-  }, [flyX, open, preferences.mascotEnabled, width]);
-
-  const mascotStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: flyX.value }, { translateY: flying ? -26 : 0 }]
-  }));
+  }, [openQuickAsk, preferences.mascotEnabled]);
 
   const selectedSubject = useMemo(
     () => subjects.find((subject) => subject.id === selectedSubjectId) ?? subjects[0] ?? null,
@@ -227,141 +297,93 @@ export function ForgeMascot() {
     }
   };
 
-  if (!preferences.mascotEnabled) return null;
-
   return (
-    <>
-      <Animated.View
-        pointerEvents={flying ? "none" : "auto"}
-        style={[styles.mascotWrap, flying && styles.mascotFlying, mascotStyle]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open quick ask"
-          disabled={flying}
-          onPress={() => setOpen(true)}
-          style={({ pressed }) => [styles.mascotButton, pressed && styles.mascotButtonPressed]}
-        >
-          <PixelBird wingUp={wingUp || flying} />
-        </Pressable>
-      </Animated.View>
-
-      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
-          <View style={[styles.modalCard, { backgroundColor: activePalette.surface, borderColor: activePalette.border }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <View style={styles.modalBird}>
-                  <PixelBird wingUp={wingUp} />
-                </View>
-                <View style={styles.flexText}>
-                  <Text style={styles.eyebrow}>Quick ask</Text>
-                  <Text style={styles.modalTitle}>Ask from anywhere</Text>
-                </View>
+    <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+        <View style={[styles.modalCard, { backgroundColor: activePalette.surface, borderColor: activePalette.border }]}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalTitleRow}>
+              <View style={[styles.modalIcon, { backgroundColor: `${activePalette.primary}18` }]}>
+                <MaterialCommunityIcons name="message-question-outline" color={activePalette.primary} size={25} />
               </View>
-              <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.closeButton}>
-                <MaterialCommunityIcons name="close" color={palette.muted} size={22} />
-              </Pressable>
+              <View style={styles.flexText}>
+                <Text style={[styles.eyebrow, { color: activePalette.primary }]}>Quick ask</Text>
+                <Text style={styles.modalTitle}>Ask from anywhere</Text>
+              </View>
             </View>
+            <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.closeButton}>
+              <MaterialCommunityIcons name="close" color={palette.muted} size={22} />
+            </Pressable>
+          </View>
 
-            {subjects.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
-                {subjects.map((subject) => {
-                  const active = subject.id === selectedSubject?.id;
-                  return (
-                    <Pressable
-                      key={subject.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      onPress={() => setSelectedSubjectId(subject.id)}
-                      style={[
-                        styles.subjectChip,
-                        { borderColor: active ? subject.color : activePalette.border },
-                        active && { backgroundColor: `${subject.color}18` }
-                      ]}
-                    >
-                      <Text style={[styles.subjectChipText, active && { color: subject.color }]} numberOfLines={1}>
-                        {subject.subjectName}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : null}
+          {subjects.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
+              {subjects.map((subject) => {
+                const active = subject.id === selectedSubject?.id;
+                return (
+                  <Pressable
+                    key={subject.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setSelectedSubjectId(subject.id)}
+                    style={[
+                      styles.subjectChip,
+                      { borderColor: active ? subject.color : activePalette.border },
+                      active && { backgroundColor: `${subject.color}18` }
+                    ]}
+                  >
+                    <Text style={[styles.subjectChipText, active && { color: subject.color }]} numberOfLines={1}>
+                      {subject.subjectName}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
 
-            <TextInput
-              mode="outlined"
-              label="What are you stuck on?"
-              value={question}
-              multiline
-              numberOfLines={3}
-              onChangeText={setQuestion}
-            />
+          <TextInput
+            mode="outlined"
+            label="What are you stuck on?"
+            value={question}
+            multiline
+            numberOfLines={3}
+            onChangeText={setQuestion}
+          />
 
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
 
-            {answer ? (
-              <ScrollView style={styles.answerBox} contentContainerStyle={styles.answerContent}>
-                <Text style={styles.answerText}>{answer.answer}</Text>
-                {answer.key_points.length ? (
-                  <View style={styles.points}>
-                    {answer.key_points.slice(0, 4).map((point) => (
-                      <View key={point} style={styles.pointRow}>
-                        <View style={styles.pointDot} />
-                        <Text style={styles.pointText}>{point}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-              </ScrollView>
-            ) : null}
+          {answer ? (
+            <ScrollView style={styles.answerBox} contentContainerStyle={styles.answerContent}>
+              <Text style={styles.answerText}>{answer.answer}</Text>
+              {answer.key_points.length ? (
+                <View style={styles.points}>
+                  {answer.key_points.slice(0, 4).map((point) => (
+                    <View key={point} style={styles.pointRow}>
+                      <View style={styles.pointDot} />
+                      <Text style={styles.pointText}>{point}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </ScrollView>
+          ) : null}
 
-            <View style={styles.modalActions}>
-              <Button mode="text" onPress={() => setOpen(false)}>
-                Close
-              </Button>
-              <Button mode="contained" icon="send" loading={asking} disabled={asking} onPress={ask}>
-                Ask
-              </Button>
-            </View>
+          <View style={styles.modalActions}>
+            <Button mode="text" onPress={() => setOpen(false)}>
+              Close
+            </Button>
+            <Button mode="contained" icon="send" loading={asking} disabled={asking} onPress={ask}>
+              Ask
+            </Button>
           </View>
         </View>
-      </Modal>
-    </>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  mascotWrap: {
-    position: "absolute",
-    right: 18,
-    bottom: 92,
-    zIndex: 12
-  },
-  mascotFlying: {
-    bottom: 170
-  },
-  mascotButton: {
-    width: 66,
-    height: 58,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(15, 23, 42, 0.82)",
-    borderWidth: 1,
-    borderColor: "rgba(96, 165, 250, 0.38)"
-  },
-  mascotButtonPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.96 }]
-  },
-  pixelBird: {
-    position: "relative"
-  },
-  pixel: {
-    position: "absolute"
-  },
   modalBackdrop: {
     flex: 1,
     alignItems: "center",
@@ -390,19 +412,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12
   },
-  modalBird: {
-    width: 58,
-    height: 48,
+  modalIcon: {
+    width: 46,
+    height: 46,
     borderRadius: 8,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(96, 165, 250, 0.12)"
+    justifyContent: "center"
   },
   flexText: {
     flex: 1
   },
   eyebrow: {
-    color: palette.info,
     fontFamily: "Outfit_700Bold",
     fontSize: 12,
     textTransform: "uppercase"
