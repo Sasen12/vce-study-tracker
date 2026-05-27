@@ -207,6 +207,48 @@ export const TITLE_SHOP_ITEMS = [
     label: "SAC Ready",
     price: 640,
     description: "For going into assessment week prepared."
+  },
+  {
+    id: "founding_student",
+    label: "Founding Student",
+    price: 0,
+    description: "Early status for the students who helped shape VCE Forge."
+  },
+  {
+    id: "original_17",
+    label: "Original 17",
+    price: 0,
+    description: "For the first wave of students who made the community real."
+  },
+  {
+    id: "atar_goblin",
+    label: "ATAR Goblin",
+    price: 220,
+    description: "For dangerous amounts of revision energy."
+  },
+  {
+    id: "essay_demon",
+    label: "Essay Demon",
+    price: 260,
+    description: "For students who keep showing up to the blank page."
+  },
+  {
+    id: "methods_menace",
+    label: "Methods Menace",
+    price: 300,
+    description: "For Methods grinders who refuse to leave marks behind."
+  },
+  {
+    id: "business_weapon",
+    label: "Business Weapon",
+    price: 300,
+    description: "For sharp command-term and case-study work."
+  },
+  {
+    id: "data_wizard",
+    label: "Data Wizard",
+    price: 300,
+    description: "For students turning messy data into clean answers."
   }
 ] as const;
 
@@ -346,7 +388,9 @@ export const ensureGamification = async (userId: string) => {
       userId,
       unlockedCosmetics: mergeCosmetics([], []),
       activeTheme: DEFAULT_THEME_ID,
-      activeTitle: DEFAULT_TITLE_ID
+      activeTitle: DEFAULT_TITLE_ID,
+      leaderboardOptIn: true,
+      leaderboardPromptedAt: new Date()
     }
   });
 
@@ -361,15 +405,17 @@ export const ensureGamification = async (userId: string) => {
   const today = todayMelbourne();
   const streakExpired =
     gamification.currentStreak > 0 && (!lastStudyDate || (lastStudyDate !== today && !isYesterday(lastStudyDate, today)));
+  const shouldDefaultCommunityOptIn = !gamification.leaderboardOptIn && !gamification.leaderboardPromptedAt;
 
-  if (missingStarterTitles || shouldInferStarterTitle || shouldBackfillBalance || streakExpired) {
+  if (missingStarterTitles || shouldInferStarterTitle || shouldBackfillBalance || streakExpired || shouldDefaultCommunityOptIn) {
     return prisma.userGamification.update({
       where: { userId },
       data: {
         ...(shouldBackfillBalance ? { xpBalance: gamification.totalXp } : {}),
         ...(missingStarterTitles ? { unlockedCosmetics: nextUnlocked } : {}),
         ...(shouldInferStarterTitle ? { activeTitle: inferredStarterTitle } : {}),
-        ...(streakExpired ? { currentStreak: 0 } : {})
+        ...(streakExpired ? { currentStreak: 0 } : {}),
+        ...(shouldDefaultCommunityOptIn ? { leaderboardOptIn: true, leaderboardPromptedAt: new Date() } : {})
       }
     });
   }
@@ -676,10 +722,37 @@ export const awardQuestionBadges = async (userId: string) => {
   return gamification;
 };
 
+export const awardFoundingBadges = async (userId: string) => {
+  const [firstUsers, gamification] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+      take: 17,
+      select: { id: true }
+    }),
+    ensureGamification(userId)
+  ]);
+
+  if (!firstUsers.some((user) => user.id === userId)) {
+    return gamification;
+  }
+
+  return prisma.userGamification.update({
+    where: { userId },
+    data: {
+      badges: mergeBadges(gamification.badges, ["founding_student", "original_17"]),
+      unlockedCosmetics: mergeCosmetics(gamification.unlockedCosmetics, [
+        titleCosmeticId("founding_student"),
+        titleCosmeticId("original_17")
+      ])
+    }
+  });
+};
+
 export const syncAllBadges = async (userId: string) => {
   await awardGoalBadges(userId);
   await awardEventBadges(userId);
   await awardQuestionBadges(userId);
+  await awardFoundingBadges(userId);
   return ensureGamification(userId);
 };
 

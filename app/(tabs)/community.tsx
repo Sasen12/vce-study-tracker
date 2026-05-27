@@ -16,18 +16,23 @@ import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type {
   AdminUsageAnalytics,
   ChatAllowance,
+  CommunityBoards,
   CommunityChatMessage,
+  CommunityLeaderboardEntry,
+  CommunityLiveRoom,
+  CommunityMission,
+  CommunityQuestionWallItem,
+  CommunitySquad,
   CommunitySubjectRoom,
   CommunityUserSummary,
-  LeaderboardEntry,
   PublicContactSubmission,
   UsageScreen,
   UserSubject,
   UserFeedback
 } from "@/types";
 
-type Mode = "chat" | "leaderboard" | "feedback" | "users" | "analytics";
-type ChatScope = "school" | "subject";
+type Mode = "squads" | "rooms" | "questions" | "chat" | "leaderboard" | "feedback" | "users" | "analytics";
+type BoardScope = "week" | "today" | "improved" | "streaks";
 type FeedbackCategory = UserFeedback["category"];
 
 const SUBJECT_ROOM_INTRO_KEY = "vce_subject_rooms_intro_seen_v1";
@@ -256,7 +261,21 @@ function LandingContactItem({
   );
 }
 
-function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
+const boardMetricLabel = (entry: CommunityLeaderboardEntry, scope: BoardScope) => {
+  if (scope === "week") return `${entry.score} XP`;
+  if (scope === "today") return `${entry.score} min`;
+  if (scope === "improved") return `+${entry.score} min`;
+  return `${entry.score} day${entry.score === 1 ? "" : "s"}`;
+};
+
+const boardDetailLabel = (entry: CommunityLeaderboardEntry, scope: BoardScope) => {
+  if (scope === "week") return `${entry.weekMinutes} min - ${entry.sessionCount} sessions`;
+  if (scope === "today") return `${entry.weekXp} XP this week - ${entry.sessionCount} sessions`;
+  if (scope === "improved") return `${entry.weekMinutes} min this week - ${entry.previousMinutes} min last week`;
+  return `${entry.weekMinutes} min this week - ${entry.weekXp} XP`;
+};
+
+function CommunityBoardRow({ entry, scope }: { entry: CommunityLeaderboardEntry; scope: BoardScope }) {
   return (
     <View style={[styles.leaderboardRow, entry.isCurrentUser && styles.leaderboardRowActive]}>
       <Text style={styles.leaderboardRank}>#{entry.rank}</Text>
@@ -265,10 +284,184 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
           {entry.displayName}
         </Text>
         <Text style={styles.muted} numberOfLines={1}>
-          {titleLabelById(entry.activeTitle)} - {entry.weekMinutes} min - {entry.sessionCount} sessions
+          {titleLabelById(entry.activeTitle)} - {boardDetailLabel(entry, scope)}
         </Text>
       </View>
-      <Text style={styles.leaderboardXp}>{entry.weekXp} XP</Text>
+      <Text style={styles.leaderboardXp}>{boardMetricLabel(entry, scope)}</Text>
+    </View>
+  );
+}
+
+function SquadCard({ squad }: { squad: CommunitySquad }) {
+  return (
+    <View style={[styles.squadCard, squad.viewerJoined && { borderColor: `${squad.color}aa` }]}>
+      <View style={styles.squadTop}>
+        <View style={[styles.squadMark, { backgroundColor: `${squad.color}20` }]}>
+          <MaterialCommunityIcons name="account-group-outline" color={squad.color} size={22} />
+        </View>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {squad.name}
+          </Text>
+          <Text style={styles.mutedSmall}>
+            {squad.memberCount} members {squad.viewerJoined ? "- your squad" : ""}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.squadStatGrid}>
+        <View style={styles.squadStat}>
+          <Text style={styles.metricValue}>{squad.weeklyMinutes}</Text>
+          <Text style={styles.mutedSmall}>weekly min</Text>
+        </View>
+        <View style={styles.squadStat}>
+          <Text style={styles.metricValue}>{squad.questionsAnswered}</Text>
+          <Text style={styles.mutedSmall}>answers</Text>
+        </View>
+        <View style={styles.squadStat}>
+          <Text style={styles.metricValue}>{squad.streakCount}</Text>
+          <Text style={styles.mutedSmall}>on streak</Text>
+        </View>
+      </View>
+      <Text style={styles.userThemeText} numberOfLines={1}>
+        Top: {squad.topContributor ? `${squad.topContributor.displayName} - ${squad.topContributor.minutes} min` : "waiting for first session"}
+      </Text>
+    </View>
+  );
+}
+
+function MissionCard({ mission }: { mission: CommunityMission | null }) {
+  if (!mission) return null;
+  return (
+    <AppCard style={styles.missionCard}>
+      <View style={styles.roomHubHeader}>
+        <View style={styles.missionIcon}>
+          <MaterialCommunityIcons name={mission.complete ? "check-decagram" : "flag-checkered"} color={palette.warning} size={22} />
+        </View>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>This week's mission</Text>
+          <Text style={styles.muted}>{mission.reward}</Text>
+        </View>
+      </View>
+      <View style={styles.missionList}>
+        {mission.items.map((item) => (
+          <View key={item.id} style={styles.missionRow}>
+            <MaterialCommunityIcons
+              name={item.complete ? "check-circle" : "checkbox-blank-circle-outline"}
+              color={item.complete ? palette.success : palette.muted}
+              size={18}
+            />
+            <View style={styles.flexText}>
+              <Text style={styles.missionLabel}>{item.label}</Text>
+              <View style={styles.missionTrack}>
+                <View style={[styles.missionFill, { width: `${Math.min(100, (item.progress / item.target) * 100)}%` }]} />
+              </View>
+            </View>
+            <Text style={styles.mutedSmall}>
+              {item.progress}/{item.target}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </AppCard>
+  );
+}
+
+function LiveRoomCard({
+  room,
+  active,
+  elapsedSeconds,
+  onJoin,
+  onLeave
+}: {
+  room: CommunityLiveRoom;
+  active: boolean;
+  elapsedSeconds: number;
+  onJoin: (room: CommunityLiveRoom) => void;
+  onLeave: () => void;
+}) {
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  const elapsedRemainder = `${elapsedSeconds % 60}`.padStart(2, "0");
+  return (
+    <View style={[styles.liveRoomCard, active && { borderColor: `${room.color}cc`, backgroundColor: `${room.color}12` }]}>
+      <View style={styles.squadTop}>
+        <View style={[styles.squadMark, { backgroundColor: `${room.color}20` }]}>
+          <MaterialCommunityIcons name={active ? "timer-play-outline" : "door-open"} color={room.color} size={22} />
+        </View>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {room.title}
+          </Text>
+          <Text style={styles.mutedSmall}>
+            {room.subjectHint} - {room.targetMinutes}m target - {room.weeklyMinutes}m this week
+          </Text>
+        </View>
+        <Button mode={active ? "outlined" : "contained"} compact onPress={() => (active ? onLeave() : onJoin(room))}>
+          {active ? "Leave" : "Join"}
+        </Button>
+      </View>
+      <View style={styles.liveRoomFooter}>
+        <Text style={styles.userThemeText}>
+          {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder}` : `${room.activeCount} studying now`}
+        </Text>
+        <Text style={styles.mutedSmall} numberOfLines={1}>
+          {room.activeStudents.length
+            ? room.activeStudents.map((student) => student.displayName).slice(0, 3).join(", ")
+            : "No one inside yet"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function QuestionWallItem({
+  item,
+  answerDraft,
+  onAnswerDraft,
+  onAnswer,
+  sending
+}: {
+  item: CommunityQuestionWallItem;
+  answerDraft: string;
+  onAnswerDraft: (value: string) => void;
+  onAnswer: (item: CommunityQuestionWallItem) => void;
+  sending: boolean;
+}) {
+  return (
+    <View style={styles.questionItem}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.feedbackMeta}>
+          <Text style={styles.feedbackCategory}>{item.subjectName ?? "General"}</Text>
+          <Text style={styles.feedbackStatus}>Anonymous</Text>
+        </View>
+        <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+      </View>
+      <Text style={styles.feedbackMessage}>{item.message}</Text>
+      {item.answers.length ? (
+        <View style={styles.answerList}>
+          {item.answers.map((answer) => (
+            <View key={answer.id} style={styles.answerItem}>
+              <Text style={styles.feedbackSender}>{answer.user.displayName}</Text>
+              <Text style={styles.mutedSmall}>{formatTime(answer.createdAt)}</Text>
+              <Text style={styles.feedbackMessage}>{answer.message}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.mutedSmall}>No answers yet. Be useful, earn XP and bonus messages.</Text>
+      )}
+      <TextInput
+        mode="outlined"
+        label="Helpful answer"
+        value={answerDraft}
+        onChangeText={onAnswerDraft}
+        multiline
+        numberOfLines={2}
+        maxLength={600}
+        style={styles.input}
+      />
+      <Button mode="outlined" compact icon="reply-outline" disabled={!answerDraft.trim() || sending} loading={sending} onPress={() => onAnswer(item)}>
+        Answer
+      </Button>
     </View>
   );
 }
@@ -530,11 +723,16 @@ function AnalyticsPanel({
 export default function CommunityScreen() {
   useTrackScreen("community");
   const { subjects, gamification, leaderboard, fetchAll, setLeaderboardPreference } = useAppStore();
-  const [mode, setMode] = useState<Mode>("chat");
-  const [chatScope, setChatScope] = useState<ChatScope>("school");
+  const [mode, setMode] = useState<Mode>("squads");
+  const [boardScope, setBoardScope] = useState<BoardScope>("week");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [landingContacts, setLandingContacts] = useState<PublicContactSubmission[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
+  const [squads, setSquads] = useState<CommunitySquad[]>([]);
+  const [liveRooms, setLiveRooms] = useState<CommunityLiveRoom[]>([]);
+  const [questionWall, setQuestionWall] = useState<CommunityQuestionWallItem[]>([]);
+  const [mission, setMission] = useState<CommunityMission | null>(null);
+  const [boards, setBoards] = useState<CommunityBoards | null>(null);
   const [roomChat, setRoomChat] = useState<Record<string, CommunityChatMessage[]>>({});
   const [joinedRoomIds, setJoinedRoomIds] = useState<string[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -554,6 +752,12 @@ export default function CommunityScreen() {
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [roomMessage, setRoomMessage] = useState("");
+  const [questionSubject, setQuestionSubject] = useState("");
+  const [questionMessage, setQuestionMessage] = useState("");
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [activeLiveRoomId, setActiveLiveRoomId] = useState<string | null>(null);
+  const [liveRoomStartedAt, setLiveRoomStartedAt] = useState<number | null>(null);
+  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const [roomIntroOpen, setRoomIntroOpen] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
@@ -575,6 +779,11 @@ export default function CommunityScreen() {
       setUsers(data.users ?? []);
       setAllowance(data.allowance);
       setIsAdmin(Boolean(data.isAdmin));
+      setSquads(data.squads ?? []);
+      setLiveRooms(data.liveRooms ?? []);
+      setQuestionWall(data.questionWall ?? []);
+      setMission(data.mission ?? null);
+      setBoards(data.boards ?? null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load feedback");
     } finally {
@@ -659,9 +868,42 @@ export default function CommunityScreen() {
   }, []);
 
   useEffect(() => {
-    if (chatScope !== "subject" || !selectedRoom) return;
+    if (mode !== "rooms" || !selectedRoom) return;
     loadSubjectRoom(selectedRoom.id);
-  }, [chatScope, loadSubjectRoom, selectedRoom]);
+  }, [loadSubjectRoom, mode, selectedRoom]);
+
+  useEffect(() => {
+    if (!activeLiveRoomId || !liveRoomStartedAt) {
+      setLiveElapsedSeconds(0);
+      return;
+    }
+
+    const tick = () => setLiveElapsedSeconds(Math.max(0, Math.floor((Date.now() - liveRoomStartedAt) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [activeLiveRoomId, liveRoomStartedAt]);
+
+  useEffect(() => {
+    if (!activeLiveRoomId) return;
+
+    let active = true;
+    const heartbeat = async () => {
+      try {
+        const data = await studyApi.liveRoomHeartbeat(activeLiveRoomId);
+        if (active) setLiveRooms(data.liveRooms);
+      } catch {
+        // Live presence is intentionally best-effort.
+      }
+    };
+
+    heartbeat();
+    const interval = setInterval(heartbeat, 45_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [activeLiveRoomId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -749,7 +991,6 @@ export default function CommunityScreen() {
   const joinRoom = async (room: CommunitySubjectRoom) => {
     const nextRoomIds = Array.from(new Set([...joinedRoomIds, room.id]));
     await persistJoinedRooms(nextRoomIds);
-    setChatScope("subject");
     setSelectedRoomId(room.id);
     await loadSubjectRoom(room.id);
   };
@@ -782,6 +1023,66 @@ export default function CommunityScreen() {
       setRoomMessage("");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not send room message");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const joinLiveRoom = async (room: CommunityLiveRoom) => {
+    setActiveLiveRoomId(room.id);
+    setLiveRoomStartedAt(Date.now());
+    setNotice(`Joined ${room.title}. Stay in the room while you study.`);
+    setError(null);
+    try {
+      const data = await studyApi.liveRoomHeartbeat(room.id);
+      setLiveRooms(data.liveRooms);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not join live room");
+    }
+  };
+
+  const leaveLiveRoom = () => {
+    setActiveLiveRoomId(null);
+    setLiveRoomStartedAt(null);
+    setLiveElapsedSeconds(0);
+    setNotice("Left the live study room.");
+  };
+
+  const sendQuestion = async () => {
+    if (!questionMessage.trim()) return;
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.sendQuestionWallQuestion({
+        subjectName: questionSubject.trim() || null,
+        message: questionMessage.trim()
+      });
+      setQuestionWall(data.questionWall);
+      setQuestionMessage("");
+      setQuestionSubject("");
+      setNotice("Posted anonymously to the question wall.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not post question");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const sendQuestionAnswer = async (item: CommunityQuestionWallItem) => {
+    const draft = answerDrafts[item.id]?.trim();
+    if (!draft) return;
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.sendQuestionWallAnswer(item.id, { message: draft });
+      setQuestionWall(data.questionWall);
+      setAllowance(data.allowance);
+      setAnswerDrafts((current) => ({ ...current, [item.id]: "" }));
+      setNotice("Answer posted. You earned XP and bonus chat energy.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not answer that question");
     } finally {
       setSending(false);
     }
@@ -881,9 +1182,16 @@ export default function CommunityScreen() {
     }
   };
 
-  const leaderboardEntries = leaderboard?.entries ?? [];
-  const topThree = leaderboardEntries.slice(0, 3);
-  const viewerRank = leaderboard?.viewer?.rank;
+  const boardEntries = boards?.[boardScope] ?? [];
+  const boardCopy: Record<BoardScope, { title: string; empty: string }> = {
+    week: { title: "This week", empty: "No weekly study yet." },
+    today: { title: "Today", empty: "No one has logged study today yet." },
+    improved: { title: "Most improved", empty: "Improvement appears once students beat last week." },
+    streaks: { title: "Longest active streaks", empty: "No active streaks yet." }
+  };
+  const selectedBoardCopy = boardCopy[boardScope];
+  const spotlightEntries = boardEntries.slice(0, 3);
+  const viewerBoardRank = boardEntries.find((entry) => entry.isCurrentUser)?.rank;
   const chooseMode = (value: string) => {
     const nextMode = value as Mode;
     setMode(nextMode);
@@ -918,6 +1226,9 @@ export default function CommunityScreen() {
         value={mode}
         onValueChange={chooseMode}
         buttons={[
+          { value: "squads", label: "Squads", icon: "account-group-outline" },
+          { value: "rooms", label: "Rooms", icon: "timer-outline" },
+          { value: "questions", label: "Q&A", icon: "comment-question-outline" },
           { value: "chat", label: "Chat", icon: "chat-outline" },
           { value: "leaderboard", label: "Board", icon: "trophy-outline" },
           { value: "feedback", label: isAdmin ? "Inbox" : "Feedback", icon: "inbox-arrow-up" },
@@ -929,7 +1240,245 @@ export default function CommunityScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-      {mode === "users" && isAdmin ? (
+      {mode === "squads" ? (
+        <>
+          <MissionCard mission={mission} />
+
+          <AppCard style={styles.leaderboardStatusCard}>
+            <View style={styles.allowanceTop}>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Community is on by default</Text>
+                <Text style={styles.muted}>
+                  Your display name, weekly study minutes and squad stats can appear in Community. Opt out anytime.
+                </Text>
+              </View>
+              <Button
+                mode={gamification?.leaderboardOptIn ? "outlined" : "contained"}
+                disabled={leaderboardSaving}
+                loading={leaderboardSaving}
+                onPress={() => chooseLeaderboard(!gamification?.leaderboardOptIn)}
+              >
+                {gamification?.leaderboardOptIn ? "Opt out" : "Join"}
+              </Button>
+            </View>
+          </AppCard>
+
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.cardTitle}>Weekly subject squads</Text>
+              <Text style={styles.muted}>{formatWeekRange(boards?.weekStart ?? leaderboard?.weekStart, boards?.weekEnd ?? leaderboard?.weekEnd)}</Text>
+            </View>
+            <View style={styles.squadGrid}>
+              {squads.map((squad) => (
+                <SquadCard key={squad.id} squad={squad} />
+              ))}
+            </View>
+          </AppCard>
+        </>
+      ) : mode === "rooms" ? (
+        <>
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Live study rooms</Text>
+                <Text style={styles.muted}>Join a room, keep your timer running, and let others see someone is working.</Text>
+              </View>
+              {activeLiveRoomId ? (
+                <Button mode="outlined" compact icon="exit-to-app" onPress={leaveLiveRoom}>
+                  Leave
+                </Button>
+              ) : null}
+            </View>
+            <View style={styles.list}>
+              {liveRooms.map((room) => (
+                <LiveRoomCard
+                  key={room.id}
+                  room={room}
+                  active={room.id === activeLiveRoomId}
+                  elapsedSeconds={room.id === activeLiveRoomId ? liveElapsedSeconds : 0}
+                  onJoin={joinLiveRoom}
+                  onLeave={leaveLiveRoom}
+                />
+              ))}
+            </View>
+          </AppCard>
+
+          <AppCard style={styles.roomHubCard}>
+            <View style={styles.roomHubHeader}>
+              <View style={styles.roomHubIcon}>
+                <MaterialCommunityIcons name="book-open-page-variant-outline" color={palette.info} size={22} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Subject chat rooms</Text>
+                <Text style={styles.muted}>Quieter rooms for the subjects you actually take.</Text>
+              </View>
+            </View>
+
+            {joinedRooms.length ? (
+              <View style={styles.roomTabs}>
+                {joinedRooms.map((room) => {
+                  const selected = selectedRoom?.id === room.id;
+                  return (
+                    <Pressable
+                      key={room.id}
+                      style={[styles.roomTab, selected && styles.roomTabActive, { borderColor: selected ? room.color : palette.border }]}
+                      onPress={() => setSelectedRoomId(room.id)}
+                    >
+                      <View style={[styles.roomDot, { backgroundColor: room.color }]} />
+                      <Text style={styles.roomTabText} numberOfLines={1}>
+                        {room.subjectName}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {availableRooms.length ? (
+              <View style={styles.availableRooms}>
+                <Text style={styles.roomSectionLabel}>Available to join</Text>
+                {availableRooms.map((room) => (
+                  <View key={room.id} style={styles.availableRoomRow}>
+                    <View style={[styles.roomDot, { backgroundColor: room.color }]} />
+                    <View style={styles.flexText}>
+                      <Text style={styles.availableRoomName}>{room.subjectName}</Text>
+                      <Text style={styles.mutedSmall}>{room.unit}</Text>
+                    </View>
+                    <Button mode="outlined" compact icon="plus" onPress={() => joinRoom(room)}>
+                      Join
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {!subjectRooms.length ? (
+              <EmptyState title="No subjects yet" body="Add subjects from Profile, then their rooms will appear here." />
+            ) : !joinedRooms.length ? (
+              <EmptyState title="No joined rooms" body="Join a subject room above when you want a quieter space for that class." />
+            ) : null}
+          </AppCard>
+
+          {selectedRoom ? (
+            <>
+              <AppCard style={styles.roomStatusCard}>
+                <View style={styles.roomHeader}>
+                  <View style={[styles.roomIcon, { backgroundColor: `${selectedRoom.color}22` }]}>
+                    <MaterialCommunityIcons name="book-open-outline" color={selectedRoom.color} size={22} />
+                  </View>
+                  <View style={styles.flexText}>
+                    <Text style={styles.cardTitle}>{selectedRoom.subjectName}</Text>
+                    <Text style={styles.muted}>{selectedRoom.unit} room</Text>
+                  </View>
+                  <Button mode="outlined" compact icon="exit-to-app" onPress={() => leaveRoom(selectedRoom.id)}>
+                    Leave
+                  </Button>
+                </View>
+              </AppCard>
+
+              <AppCard style={styles.chatCard}>
+                {roomLoading ? (
+                  <Text style={styles.muted}>Loading room messages...</Text>
+                ) : selectedRoomMessages.length ? (
+                  <View style={styles.chatList}>
+                    {selectedRoomMessages.map((item) => (
+                      <ChatBubble
+                        key={item.id}
+                        item={item}
+                        canDelete={isAdmin}
+                        deleting={deletingChatId === item.id}
+                        onDelete={deleteChatMessage}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <EmptyState title="Room is quiet" body="Start with a question, a resource, or a quick study win." />
+                )}
+              </AppCard>
+
+              <AppCard style={styles.formCard}>
+                <TextInput
+                  mode="outlined"
+                  label={`${selectedRoom.subjectName} room message`}
+                  value={roomMessage}
+                  onChangeText={setRoomMessage}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={280}
+                  style={styles.input}
+                />
+                <Button
+                  mode="contained"
+                  icon="send"
+                  disabled={!roomMessage.trim() || sending || !allowance?.remainingMinutes}
+                  loading={sending}
+                  onPress={sendRoomChat}
+                >
+                  Send to room
+                </Button>
+              </AppCard>
+            </>
+          ) : null}
+        </>
+      ) : mode === "questions" ? (
+        <>
+          <AppCard style={styles.formCard}>
+            <View style={styles.roomHubHeader}>
+              <View style={styles.questionIcon}>
+                <MaterialCommunityIcons name="comment-question-outline" color={palette.info} size={22} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Anonymous question wall</Text>
+                <Text style={styles.muted}>Ask the thing you are stuck on without putting your name on the question.</Text>
+              </View>
+            </View>
+            <TextInput
+              mode="outlined"
+              label="Subject"
+              value={questionSubject}
+              onChangeText={setQuestionSubject}
+              placeholder="Business Management, General Maths..."
+              style={styles.input}
+            />
+            <TextInput
+              mode="outlined"
+              label="What are you stuck on?"
+              value={questionMessage}
+              onChangeText={setQuestionMessage}
+              multiline
+              numberOfLines={3}
+              maxLength={360}
+              style={styles.input}
+            />
+            <Button mode="contained" icon="send" disabled={!questionMessage.trim() || sending} loading={sending} onPress={sendQuestion}>
+              Post anonymously
+            </Button>
+          </AppCard>
+
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.cardTitle}>Open questions</Text>
+              <Text style={styles.muted}>{questionWall.length} active</Text>
+            </View>
+            {questionWall.length ? (
+              <View style={styles.list}>
+                {questionWall.map((item) => (
+                  <QuestionWallItem
+                    key={item.id}
+                    item={item}
+                    answerDraft={answerDrafts[item.id] ?? ""}
+                    onAnswerDraft={(value) => setAnswerDrafts((current) => ({ ...current, [item.id]: value }))}
+                    onAnswer={sendQuestionAnswer}
+                    sending={sending}
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState title="No questions yet" body="When someone posts a stuck point, helpful answers appear here." />
+            )}
+          </AppCard>
+        </>
+      ) : mode === "users" && isAdmin ? (
         <AppCard style={styles.listCard}>
           <View style={styles.feedbackHeader}>
             <Text style={styles.cardTitle}>Users</Text>
@@ -956,8 +1505,8 @@ export default function CommunityScreen() {
                 <Text style={styles.cardTitle}>{gamification?.leaderboardOptIn ? "You are competing" : "You are opted out"}</Text>
                 <Text style={styles.muted}>
                   {gamification?.leaderboardOptIn
-                    ? viewerRank
-                      ? `Your current weekly rank is #${viewerRank}.`
+                    ? viewerBoardRank
+                      ? `Your current ${selectedBoardCopy.title.toLowerCase()} rank is #${viewerBoardRank}.`
                       : "Log a study session to land on the board."
                     : "Stay private, or join when you want your weekly XP to count against other opted-in students."}
                 </Text>
@@ -1008,15 +1557,31 @@ export default function CommunityScreen() {
             </View>
           </AppCard>
 
-          {topThree.length ? (
+          <AppCard style={styles.chatSwitchCard}>
+            <SegmentedButtons
+              value={boardScope}
+              onValueChange={(value) => setBoardScope(value as BoardScope)}
+              buttons={[
+                { value: "week", label: "Week", icon: "calendar-week" },
+                { value: "today", label: "Today", icon: "clock-outline" },
+                { value: "improved", label: "Improved", icon: "trending-up" },
+                { value: "streaks", label: "Streaks", icon: "fire" }
+              ]}
+            />
+            <Text style={styles.muted}>
+              Weekly reset, daily sprint, improvement and streak boards give new students a real shot at showing up.
+            </Text>
+          </AppCard>
+
+          {spotlightEntries.length ? (
             <View style={styles.podium}>
-              {topThree.map((entry) => (
+              {spotlightEntries.map((entry) => (
                 <View key={entry.userId} style={[styles.podiumCard, entry.isCurrentUser && styles.leaderboardRowActive]}>
                   <Text style={styles.podiumRank}>#{entry.rank}</Text>
                   <Text style={styles.leaderboardName} numberOfLines={1}>
                     {entry.displayName}
                   </Text>
-                  <Text style={styles.podiumXp}>{entry.weekXp} XP</Text>
+                  <Text style={styles.podiumXp}>{boardMetricLabel(entry, boardScope)}</Text>
                   <Text style={styles.muted}>{titleLabelById(entry.activeTitle)}</Text>
                 </View>
               ))}
@@ -1025,17 +1590,17 @@ export default function CommunityScreen() {
 
           <AppCard style={styles.listCard}>
             <View style={styles.feedbackHeader}>
-              <Text style={styles.cardTitle}>Weekly rankings</Text>
-              <Text style={styles.muted}>{leaderboardEntries.length} competing</Text>
+              <Text style={styles.cardTitle}>{selectedBoardCopy.title}</Text>
+              <Text style={styles.muted}>{boardEntries.length} competing</Text>
             </View>
-            {leaderboardEntries.length ? (
+            {boardEntries.length ? (
               <View style={styles.list}>
-                {leaderboardEntries.map((entry) => (
-                  <LeaderboardRow key={entry.userId} entry={entry} />
+                {boardEntries.map((entry) => (
+                  <CommunityBoardRow key={`${boardScope}-${entry.userId}`} entry={entry} scope={boardScope} />
                 ))}
               </View>
             ) : (
-              <EmptyState title="No competitors yet" body="Once students opt in and log study sessions, the rankings appear here." />
+              <EmptyState title="No competitors yet" body={selectedBoardCopy.empty} />
             )}
           </AppCard>
         </>
@@ -1129,197 +1694,74 @@ export default function CommunityScreen() {
           <AppCard style={styles.allowanceCard}>
             <View style={styles.allowanceTop}>
               <View>
-                <Text style={styles.cardTitle}>Student chat</Text>
+                <Text style={styles.cardTitle}>Chat unlocks</Text>
                 <Text style={styles.muted}>{allowanceLabel}</Text>
               </View>
               <View style={styles.minutePill}>
-                <MaterialCommunityIcons name="timer-sand" color={palette.warning} size={16} />
+                <MaterialCommunityIcons name={allowance?.unlimitedRoomChat ? "infinity" : "message-text-outline"} color={palette.warning} size={16} />
                 <Text style={styles.minuteText}>{allowance?.remainingMinutes ?? 0}</Text>
               </View>
             </View>
             <Text style={styles.muted}>
-              Base {allowance?.baseMinutes ?? 3} per day. Every {allowance?.studyMinutesPerChatMinute ?? 5} study minutes earns 1 more.
+              Study {allowance?.unlockStudyMinutes ?? 10} minutes to unlock {allowance?.unlockedMessages ?? 5} messages.
+              Study {allowance?.roomUnlimitedStudyMinutes ?? 30} minutes for unlimited room chat today. Helpful Q&A answers add bonus messages.
             </Text>
           </AppCard>
 
-          <AppCard style={styles.chatSwitchCard}>
-            <SegmentedButtons
-              value={chatScope}
-              onValueChange={(value) => setChatScope(value as ChatScope)}
-              buttons={[
-                { value: "school", label: "All school", icon: "account-group-outline" },
-                { value: "subject", label: "Subject rooms", icon: "book-open-variant" }
-              ]}
+          <AppCard style={styles.chatCard}>
+            {chat.length ? (
+              <View style={styles.chatList}>
+                {chat.map((item) => (
+                  <ChatBubble
+                    key={item.id}
+                    item={item}
+                    canDelete={isAdmin}
+                    deleting={deletingChatId === item.id}
+                    onDelete={deleteChatMessage}
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState title="No chat yet" body="The main chat appears here once someone sends the first message." />
+            )}
+          </AppCard>
+
+          <AppCard style={styles.formCard}>
+            <TextInput
+              mode="outlined"
+              label="Chat message"
+              value={chatMessage}
+              onChangeText={setChatMessage}
+              multiline
+              numberOfLines={3}
+              maxLength={280}
+              style={styles.input}
             />
-            <Text style={styles.muted}>
-              {chatScope === "school"
-                ? "The main chat is shared by everyone."
-                : "Join only the subject rooms you want. Room messages stay out of the main chat."}
-            </Text>
+            <Button
+              mode="contained"
+              icon="send"
+              disabled={!chatMessage.trim() || sending || !allowance?.remainingMinutes}
+              loading={sending}
+              onPress={sendChat}
+            >
+              Send chat
+            </Button>
           </AppCard>
 
-          {chatScope === "school" ? (
-            <>
-              <AppCard style={styles.chatCard}>
-                {chat.length ? (
-                  <View style={styles.chatList}>
-                    {chat.map((item) => (
-                      <ChatBubble
-                        key={item.id}
-                        item={item}
-                        canDelete={isAdmin}
-                        deleting={deletingChatId === item.id}
-                        onDelete={deleteChatMessage}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <EmptyState title="No chat yet" body="The public chat will appear here once someone sends the first message." />
-                )}
-              </AppCard>
-
-              <AppCard style={styles.formCard}>
-                <TextInput
-                  mode="outlined"
-                  label="Chat message"
-                  value={chatMessage}
-                  onChangeText={setChatMessage}
-                  multiline
-                  numberOfLines={3}
-                  maxLength={280}
-                  style={styles.input}
-                />
-                <Button
-                  mode="contained"
-                  icon="send"
-                  disabled={!chatMessage.trim() || sending || !allowance?.remainingMinutes}
-                  loading={sending}
-                  onPress={sendChat}
-                >
-                  Send chat
-                </Button>
-              </AppCard>
-            </>
-          ) : (
-            <>
-              <AppCard style={styles.roomHubCard}>
-                <View style={styles.roomHubHeader}>
-                  <View style={styles.roomHubIcon}>
-                    <MaterialCommunityIcons name="book-open-page-variant-outline" color={palette.info} size={22} />
-                  </View>
-                  <View style={styles.flexText}>
-                    <Text style={styles.cardTitle}>Subject rooms</Text>
-                    <Text style={styles.muted}>Optional spaces for classmates studying the same subject.</Text>
-                  </View>
-                </View>
-
-                {joinedRooms.length ? (
-                  <View style={styles.roomTabs}>
-                    {joinedRooms.map((room) => {
-                      const selected = selectedRoom?.id === room.id;
-                      return (
-                        <Pressable
-                          key={room.id}
-                          style={[styles.roomTab, selected && styles.roomTabActive, { borderColor: selected ? room.color : palette.border }]}
-                          onPress={() => setSelectedRoomId(room.id)}
-                        >
-                          <View style={[styles.roomDot, { backgroundColor: room.color }]} />
-                          <Text style={styles.roomTabText} numberOfLines={1}>
-                            {room.subjectName}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-
-                {availableRooms.length ? (
-                  <View style={styles.availableRooms}>
-                    <Text style={styles.roomSectionLabel}>Available to join</Text>
-                    {availableRooms.map((room) => (
-                      <View key={room.id} style={styles.availableRoomRow}>
-                        <View style={[styles.roomDot, { backgroundColor: room.color }]} />
-                        <View style={styles.flexText}>
-                          <Text style={styles.availableRoomName}>{room.subjectName}</Text>
-                          <Text style={styles.mutedSmall}>{room.unit}</Text>
-                        </View>
-                        <Button mode="outlined" compact icon="plus" onPress={() => joinRoom(room)}>
-                          Join
-                        </Button>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {!subjectRooms.length ? (
-                  <EmptyState title="No subjects yet" body="Add subjects from Profile, then their rooms will appear here." />
-                ) : !joinedRooms.length ? (
-                  <EmptyState title="No joined rooms" body="Join a subject room above when you want a quieter space for that class." />
-                ) : null}
-              </AppCard>
-
-              {selectedRoom ? (
-                <>
-                  <AppCard style={styles.roomStatusCard}>
-                    <View style={styles.roomHeader}>
-                      <View style={[styles.roomIcon, { backgroundColor: `${selectedRoom.color}22` }]}>
-                        <MaterialCommunityIcons name="book-open-outline" color={selectedRoom.color} size={22} />
-                      </View>
-                      <View style={styles.flexText}>
-                        <Text style={styles.cardTitle}>{selectedRoom.subjectName}</Text>
-                        <Text style={styles.muted}>{selectedRoom.unit} room</Text>
-                      </View>
-                      <Button mode="outlined" compact icon="exit-to-app" onPress={() => leaveRoom(selectedRoom.id)}>
-                        Leave
-                      </Button>
-                    </View>
-                  </AppCard>
-
-                  <AppCard style={styles.chatCard}>
-                    {roomLoading ? (
-                      <Text style={styles.muted}>Loading room messages...</Text>
-                    ) : selectedRoomMessages.length ? (
-                      <View style={styles.chatList}>
-                        {selectedRoomMessages.map((item) => (
-                          <ChatBubble
-                            key={item.id}
-                            item={item}
-                            canDelete={isAdmin}
-                            deleting={deletingChatId === item.id}
-                            onDelete={deleteChatMessage}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <EmptyState title="Room is quiet" body="Start with a question, a resource, or a quick study win." />
-                    )}
-                  </AppCard>
-
-                  <AppCard style={styles.formCard}>
-                    <TextInput
-                      mode="outlined"
-                      label={`${selectedRoom.subjectName} room message`}
-                      value={roomMessage}
-                      onChangeText={setRoomMessage}
-                      multiline
-                      numberOfLines={3}
-                      maxLength={280}
-                      style={styles.input}
-                    />
-                    <Button
-                      mode="contained"
-                      icon="send"
-                      disabled={!roomMessage.trim() || sending || !allowance?.remainingMinutes}
-                      loading={sending}
-                      onPress={sendRoomChat}
-                    >
-                      Send to room
-                    </Button>
-                  </AppCard>
-                </>
-              ) : null}
-            </>
-          )}
+          <AppCard style={styles.leaderboardPrivacyCard}>
+            <View style={styles.privacyHeader}>
+              <View style={styles.privacyIcon}>
+                <MaterialCommunityIcons name="door-open" color={palette.info} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Need subject chat?</Text>
+                <Text style={styles.muted}>Subject rooms and live timers live under Rooms so this chat stays clean.</Text>
+              </View>
+              <Button mode="outlined" compact icon="timer-outline" onPress={() => setMode("rooms")}>
+                Rooms
+              </Button>
+            </View>
+          </AppCard>
         </>
       )}
       <Portal>
@@ -1754,6 +2196,124 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 10
+  },
+  squadGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  squadCard: {
+    flexGrow: 1,
+    flexBasis: 260,
+    minHeight: 196,
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  squadTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  squadMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  squadStatGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  squadStat: {
+    flex: 1,
+    minWidth: 86,
+    gap: 2,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.14)"
+  },
+  missionCard: {
+    gap: 14,
+    borderColor: "rgba(245,158,11,0.28)",
+    backgroundColor: "rgba(245,158,11,0.08)"
+  },
+  missionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,158,11,0.14)"
+  },
+  missionList: {
+    gap: 10
+  },
+  missionRow: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  missionLabel: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  missionTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  missionFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: palette.warning
+  },
+  liveRoomCard: {
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  liveRoomFooter: {
+    gap: 4,
+    paddingLeft: 56
+  },
+  questionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(96,165,250,0.14)"
+  },
+  questionItem: {
+    gap: 10,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  answerList: {
+    gap: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: "rgba(96,165,250,0.28)"
+  },
+  answerItem: {
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(96,165,250,0.08)"
   },
   feedbackItem: {
     gap: 8,

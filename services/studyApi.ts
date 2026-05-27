@@ -6,7 +6,12 @@ import type {
   ClassNoteChunk,
   ClassNoteDraft,
   ChatAllowance,
+  CommunityBoards,
   CommunityChatMessage,
+  CommunityLiveRoom,
+  CommunityMission,
+  CommunityQuestionWallItem,
+  CommunitySquad,
   CommunitySubjectRoom,
   CommunityUserSummary,
   DailyInspiration,
@@ -201,6 +206,11 @@ export const studyApi = {
       chat: CommunityChatMessage[];
       allowance: ChatAllowance;
       users: CommunityUserSummary[];
+      squads: CommunitySquad[];
+      liveRooms: CommunityLiveRoom[];
+      questionWall: CommunityQuestionWallItem[];
+      mission: CommunityMission;
+      boards: CommunityBoards;
     }>("/community"),
   updateContactSubmissionStatus: (id: string, adminStatus: PublicContactSubmission["adminStatus"]) =>
     apiFetch<{ submission: PublicContactSubmission }>(`/contact/${id}/status`, {
@@ -231,6 +241,21 @@ export const studyApi = {
   sendSubjectRoomChat: (roomId: string, body: { message: string }) =>
     apiFetch<{ room: CommunitySubjectRoom; chatMessage: CommunityChatMessage; allowance: ChatAllowance }>(
       `/community/subject-rooms/${roomId}/chat`,
+      {
+        method: "POST",
+        body
+      }
+    ),
+  liveRoomHeartbeat: (roomId: string) =>
+    apiFetch<{ liveRooms: CommunityLiveRoom[] }>(`/community/live-rooms/${roomId}/heartbeat`, {
+      method: "POST",
+      body: { roomId }
+    }),
+  sendQuestionWallQuestion: (body: { subjectName?: string | null; message: string }) =>
+    apiFetch<{ questionWall: CommunityQuestionWallItem[] }>("/community/question-wall", { method: "POST", body }),
+  sendQuestionWallAnswer: (questionId: string, body: { message: string }) =>
+    apiFetch<{ questionWall: CommunityQuestionWallItem[]; allowance: ChatAllowance }>(
+      `/community/question-wall/${questionId}/answers`,
       {
         method: "POST",
         body

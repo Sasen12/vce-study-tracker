@@ -26,7 +26,10 @@ export const BADGES = [
   { id: "badge_deadline_defender", label: "Deadline Defender", trigger: "Coin shop collectible" },
   { id: "badge_past_paper_pro", label: "Past Paper Pro", trigger: "Coin shop collectible" },
   { id: "badge_focus_keeper", label: "Focus Keeper", trigger: "Coin shop collectible" },
-  { id: "badge_comeback_energy", label: "Comeback Energy", trigger: "Coin shop collectible" }
+  { id: "badge_comeback_energy", label: "Comeback Energy", trigger: "Coin shop collectible" },
+  { id: "founding_student", label: "Founding Student", trigger: "Early community member" },
+  { id: "original_17", label: "Original 17", trigger: "First wave of VCE Forge students" },
+  { id: "weekly_lock_in", label: "Weekly Lock-In", trigger: "Complete the weekly community mission" }
 ];
 
 export const DEFAULT_TITLE_ID = "vce_rookie";
@@ -86,6 +89,48 @@ export const TITLE_SHOP_ITEMS = [
     label: "SAC Ready",
     price: 640,
     description: "For going into assessment week prepared."
+  },
+  {
+    id: "founding_student",
+    label: "Founding Student",
+    price: 0,
+    description: "Early status for the students who helped shape VCE Forge."
+  },
+  {
+    id: "original_17",
+    label: "Original 17",
+    price: 0,
+    description: "For the first wave of students who made the community real."
+  },
+  {
+    id: "atar_goblin",
+    label: "ATAR Goblin",
+    price: 220,
+    description: "For dangerous amounts of revision energy."
+  },
+  {
+    id: "essay_demon",
+    label: "Essay Demon",
+    price: 260,
+    description: "For students who keep showing up to the blank page."
+  },
+  {
+    id: "methods_menace",
+    label: "Methods Menace",
+    price: 300,
+    description: "For Methods grinders who refuse to leave marks behind."
+  },
+  {
+    id: "business_weapon",
+    label: "Business Weapon",
+    price: 300,
+    description: "For sharp command-term and case-study work."
+  },
+  {
+    id: "data_wizard",
+    label: "Data Wizard",
+    price: 300,
+    description: "For students turning messy data into clean answers."
   }
 ];
 

@@ -158,6 +158,94 @@ export type ChatAllowance = {
   remainingMinutes: number;
   minutesPerMessage: number;
   studyMinutesPerChatMinute: number;
+  unlockStudyMinutes?: number;
+  unlockedMessages?: number;
+  roomUnlimitedStudyMinutes?: number;
+  unlimitedRoomChat?: boolean;
+  bonusMessages?: number;
+};
+
+export type CommunitySquad = {
+  id: string;
+  name: string;
+  shortName: string;
+  color: string;
+  weeklyMinutes: number;
+  topContributor?: {
+    displayName: string;
+    minutes: number;
+  } | null;
+  questionsAnswered: number;
+  streakCount: number;
+  memberCount: number;
+  viewerJoined: boolean;
+};
+
+export type CommunityLiveRoom = {
+  id: string;
+  title: string;
+  subjectHint: string;
+  squadId: string;
+  targetMinutes: number;
+  color: string;
+  weeklyMinutes: number;
+  activeCount: number;
+  activeStudents: {
+    displayName: string;
+    lastSeenAt: string;
+  }[];
+};
+
+export type CommunityQuestionWallAnswer = {
+  id: string;
+  message: string;
+  createdAt: string;
+  user: {
+    displayName: string;
+  };
+  isCurrentUser: boolean;
+};
+
+export type CommunityQuestionWallItem = {
+  id: string;
+  subjectName?: string | null;
+  message: string;
+  createdAt: string;
+  answerCount: number;
+  isCurrentUser: boolean;
+  answers: CommunityQuestionWallAnswer[];
+};
+
+export type CommunityMission = {
+  id: string;
+  title: string;
+  reward: string;
+  complete: boolean;
+  rewardClaimed?: boolean;
+  items: {
+    id: string;
+    label: string;
+    target: number;
+    progress: number;
+    complete: boolean;
+  }[];
+};
+
+export type CommunityLeaderboardEntry = LeaderboardEntry & {
+  score: number;
+  todayMinutes: number;
+  previousMinutes: number;
+  improvementMinutes: number;
+  currentStreak: number;
+};
+
+export type CommunityBoards = {
+  weekStart: string;
+  weekEnd: string;
+  week: CommunityLeaderboardEntry[];
+  today: CommunityLeaderboardEntry[];
+  improved: CommunityLeaderboardEntry[];
+  streaks: CommunityLeaderboardEntry[];
 };
 
 export type CommunityUserSummary = {

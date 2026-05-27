@@ -119,6 +119,13 @@ const ensureSubjectLifecycleSchema = async () => {
 
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
+  await prisma.$executeRawUnsafe("ALTER TABLE user_gamification ALTER COLUMN leaderboard_opt_in SET DEFAULT TRUE");
+  await prisma.$executeRawUnsafe(`
+    UPDATE user_gamification
+    SET leaderboard_opt_in = TRUE, leaderboard_prompted_at = COALESCE(leaderboard_prompted_at, now())
+    WHERE leaderboard_opt_in = FALSE
+      AND leaderboard_prompted_at IS NULL
+  `);
   await ensureSubjectLifecycleSchema();
   await ensureStudentMemorySchema();
   await ensurePublicContactSchema();
