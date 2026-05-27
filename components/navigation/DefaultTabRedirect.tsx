@@ -15,7 +15,7 @@ export function DefaultTabRedirect() {
         if (active) setRoute(nextRoute);
       })
       .catch(() => {
-        if (active) setRoute("/(tabs)/onboarding");
+        if (active) setRoute("/(tabs)");
       });
     return () => {
       active = false;

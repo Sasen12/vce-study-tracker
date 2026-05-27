@@ -64,7 +64,15 @@ export default function MoreScreen() {
       <View style={styles.grid}>
         {moreItems.map((item, index) => (
           <Animated.View key={item.title} entering={motion.card(index * 35)} style={styles.gridItem}>
-            <Pressable accessibilityRole="button" onPress={() => router.push(item.route)} style={({ pressed }) => [pressed && styles.pressed]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                item.title === "Guide"
+                  ? router.push({ pathname: "/(tabs)", params: { guide: "1" } })
+                  : router.push(item.route)
+              }
+              style={({ pressed }) => [pressed && styles.pressed]}
+            >
               <AppCard style={styles.toolCard}>
                 <View style={[styles.iconBox, { backgroundColor: `${item.accent}18` }]}>
                   <MaterialCommunityIcons name={item.icon} color={item.accent} size={24} />

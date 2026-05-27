@@ -1094,7 +1094,7 @@ export default function DashboardScreen() {
             <Pressable
               accessibilityRole="button"
               style={styles.guideButton}
-              onPress={() => router.push("/(tabs)/onboarding")}
+              onPress={() => router.push({ pathname: "/(tabs)", params: { guide: "1" } })}
             >
               <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
               <Text style={styles.guideButtonText}>Guide</Text>
