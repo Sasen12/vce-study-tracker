@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Dialog, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
 import * as Haptics from "expo-haptics";
@@ -49,6 +49,7 @@ const formatStudyDuration = (seconds: number) => {
 const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (seconds > 3600 ? 25 : 0);
 const defaultCheckpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
+const studyModes = new Set(["coach", "timer", "notes", "resources", "calculator", "chess"]);
 
 const confidenceButtons = ["1", "2", "3", "4", "5"].map((value) => ({ value, label: value }));
 
@@ -209,7 +210,11 @@ export default function StudyScreen() {
   }, [userId]);
 
   useEffect(() => {
-    if (params.mode === "coach" || params.mode === "timer") {
+    if (params.mode === "questions") {
+      router.push("/(tabs)/questions");
+      return;
+    }
+    if (studyModes.has(params.mode ?? "")) {
       setMode(params.mode);
     }
   }, [params.mode]);
@@ -379,10 +384,10 @@ export default function StudyScreen() {
     () => [
       { value: "timer", label: "Timer" },
       { value: "coach", label: "Coach" },
+      { value: "questions", label: "Questions" },
       { value: "notes", label: "Notes" },
       { value: "resources", label: "Files" },
-      ...(calculatorSubjects.length ? [{ value: "calculator", label: "Calc" }] : []),
-      { value: "chess", label: "Chess" }
+      ...(calculatorSubjects.length ? [{ value: "calculator", label: "Calc" }] : [])
     ],
     [calculatorSubjects.length]
   );
@@ -553,6 +558,10 @@ export default function StudyScreen() {
   }, [askCheckpoint, checkInsActive, checkpointGenerating, checkpointOpen, elapsed, nextCheckpointAt, running]);
 
   const changeMode = (value: string) => {
+    if (value === "questions") {
+      router.push("/(tabs)/questions");
+      return;
+    }
     setMode(value);
   };
 
@@ -763,7 +772,17 @@ export default function StudyScreen() {
         </Text>
       </View>
 
-      {running && focusMode ? (
+      {mode === "chess" ? (
+        <AppCard style={styles.runningTimerBanner}>
+          <View style={styles.runningTimerText}>
+            <Text style={styles.cardTitle}>Break tool</Text>
+            <Text style={styles.muted}>Quick reset before the next block.</Text>
+          </View>
+          <Button mode="contained-tonal" compact icon="timer-outline" onPress={() => setMode("timer")}>
+            Back to study
+          </Button>
+        </AppCard>
+      ) : running && focusMode ? (
         <AppCard style={styles.focusBanner}>
           <View style={styles.focusBannerText}>
             <Text style={styles.cardTitle}>Focus filter is on</Text>

@@ -29,7 +29,7 @@ export const DEFAULT_TAB_OPTIONS: DefaultTabOption[] = [
     label: "Study",
     route: "/(tabs)/study",
     icon: "timer-outline",
-    description: "Timer and coach"
+    description: "Timer and questions"
   },
   {
     id: "calendar",
@@ -50,17 +50,23 @@ export const DEFAULT_TAB_OPTIONS: DefaultTabOption[] = [
     label: "More",
     route: "/(tabs)/more",
     icon: "dots-grid",
-    description: "Extra tools"
+    description: "Account and extras"
   }
 ];
 
 const defaultTabIds = new Set(DEFAULT_TAB_OPTIONS.map((option) => option.id));
-const legacyDefaultTabs = new Set(["questions", "insights", "shop", "profile"]);
+const legacyMoreTabs = new Set(["insights", "shop", "profile"]);
 
 const defaultTabKeyFor = (userId?: string | null) => `vce_default_tab_${userId ?? "guest"}`;
 
 export const normalizeDefaultTab = (value?: string | null): DefaultTabId =>
-  defaultTabIds.has(value as DefaultTabId) ? (value as DefaultTabId) : legacyDefaultTabs.has(value ?? "") ? "more" : "home";
+  defaultTabIds.has(value as DefaultTabId)
+    ? (value as DefaultTabId)
+    : value === "questions"
+      ? "study"
+      : legacyMoreTabs.has(value ?? "")
+        ? "more"
+        : "home";
 
 export const defaultTabRouteFor = (tab?: string | null): DefaultTabRoute => {
   const normalized = normalizeDefaultTab(tab);

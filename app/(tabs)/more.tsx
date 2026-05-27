@@ -12,13 +12,6 @@ import { useTrackScreen } from "@/hooks/useTrackScreen";
 
 const moreItems = [
   {
-    title: "Questions",
-    detail: "Forge practice",
-    icon: "cards-outline",
-    accent: palette.info,
-    route: "/(tabs)/questions"
-  },
-  {
     title: "Insights",
     detail: "Weak spots",
     icon: "map-search-outline",
@@ -45,6 +38,13 @@ const moreItems = [
     icon: "compass-outline",
     accent: palette.warning,
     route: "/(tabs)/onboarding"
+  },
+  {
+    title: "Chess break",
+    detail: "Reset tool",
+    icon: "chess-knight",
+    accent: palette.info,
+    route: "/(tabs)/study"
   }
 ] as const;
 
@@ -69,6 +69,8 @@ export default function MoreScreen() {
               onPress={() =>
                 item.title === "Guide"
                   ? router.push({ pathname: "/(tabs)", params: { guide: "1" } })
+                  : item.title === "Chess break"
+                    ? router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } })
                   : router.push(item.route)
               }
               style={({ pressed }) => [pressed && styles.pressed]}

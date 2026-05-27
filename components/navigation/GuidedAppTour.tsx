@@ -34,8 +34,8 @@ const tourSteps: TourStep[] = [
   },
   {
     eyebrow: "Study",
-    title: "Timer, coach, notes.",
-    body: "Use Study when you are ready to do work. It keeps the actual session in one place.",
+    title: "Timer, coach, questions.",
+    body: "Use Study when you are ready to do work. Timer, coach, question forge, notes and files live together.",
     icon: "timer-outline",
     accent: palette.success,
     target: { kind: "tab", index: 1, routeKey: "study", route: "/(tabs)/study" },
@@ -65,7 +65,7 @@ const tourSteps: TourStep[] = [
   {
     eyebrow: "More",
     title: "Extra tools live here.",
-    body: "Questions, Insights, Shop, Profile and Guide are grouped behind More so the main app stays calm.",
+    body: "Insights, Shop, Profile, Guide and break tools are grouped behind More so the main app stays calm.",
     icon: "dots-grid",
     accent: "#60A5FA",
     target: { kind: "tab", index: 4, routeKey: "more", route: "/(tabs)/more" },
