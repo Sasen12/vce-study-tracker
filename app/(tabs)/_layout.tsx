@@ -1,6 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ForgeMascot } from "@/components/navigation/ForgeMascot";
 import { GuidedAppTour } from "@/components/navigation/GuidedAppTour";
 import { useActivePalette } from "@/hooks/useActiveTheme";
 import { useStudyReminders } from "@/hooks/useStudyReminders";
@@ -116,6 +117,7 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+      <ForgeMascot />
       <GuidedAppTour />
     </View>
   );

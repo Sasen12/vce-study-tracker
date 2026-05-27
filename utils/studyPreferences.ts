@@ -14,6 +14,7 @@ export type StudyPreferences = {
   coachTone: CoachTone;
   examWeekMode: boolean;
   homeDensity: HomeDensity;
+  mascotEnabled: boolean;
 };
 
 export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
@@ -24,13 +25,15 @@ export const DEFAULT_STUDY_PREFERENCES: StudyPreferences = {
   defaultAim: "",
   coachTone: "sharp",
   examWeekMode: false,
-  homeDensity: "focus"
+  homeDensity: "focus",
+  mascotEnabled: true
 };
 
 const allowedPresetIds = new Set(STUDY_SESSION_PRESETS.map((preset) => preset.id));
 const allowedRhythms = new Set(["8", "10", "15"]);
 const allowedCoachTones = new Set(["calm", "sharp", "brutal"]);
 const allowedHomeDensities = new Set(["focus", "full"]);
+const preferenceListeners = new Set<(preferences: StudyPreferences) => void>();
 
 const studyPreferencesKeyFor = (userId?: string | null) => `vce_study_preferences_${userId ?? "guest"}`;
 
@@ -59,7 +62,8 @@ export const normalizeStudyPreferences = (input: unknown): StudyPreferences => {
     examWeekMode: typeof value.examWeekMode === "boolean" ? value.examWeekMode : DEFAULT_STUDY_PREFERENCES.examWeekMode,
     homeDensity: allowedHomeDensities.has(value.homeDensity ?? "")
       ? (value.homeDensity as HomeDensity)
-      : DEFAULT_STUDY_PREFERENCES.homeDensity
+      : DEFAULT_STUDY_PREFERENCES.homeDensity,
+    mascotEnabled: typeof value.mascotEnabled === "boolean" ? value.mascotEnabled : DEFAULT_STUDY_PREFERENCES.mascotEnabled
   };
 };
 
@@ -76,5 +80,11 @@ export const loadStudyPreferences = async (userId?: string | null): Promise<Stud
 export const saveStudyPreferences = async (userId: string | null | undefined, preferences: StudyPreferences) => {
   const normalized = normalizeStudyPreferences(preferences);
   await AsyncStorage.setItem(studyPreferencesKeyFor(userId), JSON.stringify(normalized));
+  preferenceListeners.forEach((listener) => listener(normalized));
   return normalized;
+};
+
+export const subscribeStudyPreferences = (listener: (preferences: StudyPreferences) => void) => {
+  preferenceListeners.add(listener);
+  return () => preferenceListeners.delete(listener);
 };

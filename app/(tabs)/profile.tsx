@@ -785,6 +785,22 @@ export default function ProfileScreen() {
               color={palette.primary}
             />
           </View>
+          <View style={styles.preferenceSetting}>
+            <View style={styles.preferenceSettingText}>
+              <Text style={styles.preferenceSettingTitle}>Forge bird</Text>
+              <Text style={styles.defaultTabDescription}>Show the floating quick-ask helper.</Text>
+            </View>
+            <Switch
+              value={studyPreferences.mascotEnabled}
+              onValueChange={(value) =>
+                void updateStudyPreferences(
+                  { mascotEnabled: value },
+                  value ? "Forge bird enabled." : "Forge bird hidden."
+                )
+              }
+              color={palette.primary}
+            />
+          </View>
         </View>
         <View style={styles.preferenceInputBlock}>
           <Text style={styles.preferenceLabel}>Home layout</Text>
