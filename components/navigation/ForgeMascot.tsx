@@ -24,16 +24,46 @@ const POCKET_BIRD_FLIGHT_TARGET_CLASS = "vce-pocket-bird-flight-target";
 const TRANSPARENT_PIXEL =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const FLIGHT_TARGETS = [
-  { left: "7%", top: "calc(100vh - 145px)", width: 220 },
-  { left: "34%", top: "calc(100vh - 118px)", width: 260 },
-  { left: "69%", top: "calc(100vh - 168px)", width: 220 },
-  { left: "18%", top: "calc(100vh - 260px)", width: 190 },
-  { left: "54%", top: "calc(100vh - 310px)", width: 240 },
-  { left: "75%", top: "calc(100vh - 390px)", width: 180 },
-  { left: "12%", top: "52%", width: 180 },
-  { left: "47%", top: "44%", width: 230 },
-  { left: "70%", top: "58%", width: 200 },
-  { left: "22%", top: "30%", width: 190 }
+  { x: 0.08, y: 0.18, width: 118 },
+  { x: 0.7, y: 0.76, width: 132 },
+  { x: 0.44, y: 0.5, width: 124 },
+  { x: 0.2, y: 0.72, width: 136 },
+  { x: 0.78, y: 0.32, width: 116 },
+  { x: 0.54, y: 0.2, width: 128 },
+  { x: 0.1, y: 0.46, width: 120 },
+  { x: 0.86, y: 0.58, width: 112 }
+];
+const ROAM_LANES = [
+  [
+    { x: 0.08, y: 0.18 },
+    { x: 0.82, y: 0.78 },
+    { x: 0.45, y: 0.52 },
+    { x: 0.2, y: 0.72 },
+    { x: 0.74, y: 0.28 },
+    { x: 0.55, y: 0.2 },
+    { x: 0.1, y: 0.46 },
+    { x: 0.88, y: 0.56 }
+  ],
+  [
+    { x: 0.84, y: 0.22 },
+    { x: 0.12, y: 0.78 },
+    { x: 0.6, y: 0.64 },
+    { x: 0.34, y: 0.3 },
+    { x: 0.76, y: 0.72 },
+    { x: 0.18, y: 0.5 },
+    { x: 0.48, y: 0.18 },
+    { x: 0.9, y: 0.44 }
+  ],
+  [
+    { x: 0.16, y: 0.84 },
+    { x: 0.86, y: 0.16 },
+    { x: 0.42, y: 0.76 },
+    { x: 0.66, y: 0.4 },
+    { x: 0.24, y: 0.24 },
+    { x: 0.78, y: 0.6 },
+    { x: 0.1, y: 0.58 },
+    { x: 0.52, y: 0.32 }
+  ]
 ];
 
 type PocketBirdWindow = Window &
@@ -42,6 +72,7 @@ type PocketBirdWindow = Window &
   };
 
 const isWebDomAvailable = () => Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined";
+const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const compactAnswer = (answer: StudyAnswer) =>
   [
@@ -103,8 +134,8 @@ const ensurePocketBirdFlightTargets = () => {
     image.setAttribute("aria-hidden", "true");
     image.className = POCKET_BIRD_FLIGHT_TARGET_CLASS;
     image.style.position = "fixed";
-    image.style.left = target.left;
-    image.style.top = target.top;
+    image.style.left = `${target.x * 100}%`;
+    image.style.top = `${target.y * 100}%`;
     image.style.width = `${target.width}px`;
     image.style.height = "1px";
     image.style.pointerEvents = "none";
@@ -113,6 +144,41 @@ const ensurePocketBirdFlightTargets = () => {
     image.dataset.vceForgeFlightTarget = String(index);
     document.body.appendChild(image);
   });
+};
+
+const movePocketBirdFlightTargets = (step: number) => {
+  if (!isWebDomAvailable()) return;
+  const targets = Array.from(document.querySelectorAll<HTMLImageElement>(`.${POCKET_BIRD_FLIGHT_TARGET_CLASS}`));
+  if (!targets.length) return;
+
+  const lane = ROAM_LANES[step % ROAM_LANES.length];
+  const safeTop = 92;
+  const safeBottom = 132;
+  const availableHeight = Math.max(220, window.innerHeight - safeTop - safeBottom);
+
+  targets.forEach((target, index) => {
+    const point = lane[index % lane.length];
+    const width = 108 + ((index + step) % 4) * 18;
+    const xJitter = ((step + index * 7) % 5 - 2) * 18;
+    const yJitter = ((step * 3 + index * 5) % 5 - 2) * 16;
+    const left = clampNumber(window.innerWidth * point.x + xJitter, 16, window.innerWidth - width - 16);
+    const top = clampNumber(safeTop + availableHeight * point.y + yJitter, safeTop, window.innerHeight - safeBottom);
+
+    target.style.left = `${Math.round(left)}px`;
+    target.style.top = `${Math.round(top)}px`;
+    target.style.width = `${width}px`;
+  });
+};
+
+const startPocketBirdRoamDirector = () => {
+  if (!isWebDomAvailable()) return () => undefined;
+  let step = 0;
+  movePocketBirdFlightTargets(step);
+  const interval = window.setInterval(() => {
+    step += 1;
+    movePocketBirdFlightTargets(step);
+  }, 5200);
+  return () => window.clearInterval(interval);
 };
 
 const removePocketBirdFlightTargets = () => {
@@ -184,8 +250,12 @@ export function ForgeMascot() {
     if (!isWebDomAvailable()) return;
     if (preferences.mascotEnabled) {
       ensurePocketBirdScript();
+      const stopRoaming = startPocketBirdRoamDirector();
       const poll = window.setInterval(() => setPocketBirdVisible(!open), 300);
-      return () => window.clearInterval(poll);
+      return () => {
+        window.clearInterval(poll);
+        stopRoaming();
+      };
     }
 
     setPocketBirdVisible(false);
