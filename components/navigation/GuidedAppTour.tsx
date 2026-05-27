@@ -10,7 +10,7 @@ import { hasSeenAppGuide, markAppGuideSeen } from "@/utils/appGuide";
 
 type TourRoute = "/(tabs)" | "/(tabs)/study" | "/(tabs)/calendar" | "/(tabs)/insights" | "/(tabs)/more";
 type RouteKey = "home" | "study" | "calendar" | "insights" | "more";
-type Target = { kind: "none" } | { kind: "tab"; index: number; routeKey: RouteKey; route: TourRoute };
+type Target = { kind: "none" } | { kind: "bird" } | { kind: "tab"; index: number; routeKey: RouteKey; route: TourRoute };
 
 type TourStep = {
   eyebrow: string;
@@ -73,14 +73,24 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "more"
   },
   {
+    eyebrow: "Study bird",
+    title: "Ask without changing pages.",
+    body: "Click the bird when it lands, choose Ask VCE Forge, and ask a quick question from wherever you are. If it is not your thing, hide it in Profile.",
+    icon: "message-question-outline",
+    accent: palette.warning,
+    target: { kind: "bird" }
+  },
+  {
     eyebrow: "Done",
     title: "That is the loop.",
-    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Insights shows what to fix. More holds the extras.",
+    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Insights shows what to fix. The bird is there only when you want a quick ask.",
     icon: "check-circle-outline",
     accent: palette.info,
     target: { kind: "none" }
   }
 ];
+
+const POCKET_BIRD_HOST_ID = "birb-shadow-host";
 
 const routeKeyForPath = (pathname: string): RouteKey => {
   if (pathname.includes("study")) return "study";
@@ -106,6 +116,12 @@ export function GuidedAppTour() {
   const { width } = useWindowDimensions();
   const [visible, setVisible] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [birdTargetStyle, setBirdTargetStyle] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const currentRouteKey = routeKeyForPath(pathname);
   const step = tourSteps[stepIndex] ?? tourSteps[0];
   const isLast = stepIndex >= tourSteps.length - 1;
@@ -140,7 +156,7 @@ export function GuidedAppTour() {
     return () => clearTimeout(timeout);
   }, [currentRouteKey, step.advanceOnRoute, visible]);
 
-  const targetStyle = useMemo(() => {
+  const tabTargetStyle = useMemo(() => {
     if (step.target.kind !== "tab") {
       return null;
     }
@@ -154,6 +170,38 @@ export function GuidedAppTour() {
       bottom: 8
     };
   }, [step.target, width]);
+
+  useEffect(() => {
+    if (!visible || step.target.kind !== "bird" || typeof document === "undefined") {
+      setBirdTargetStyle(null);
+      return;
+    }
+
+    let frame = 0;
+    const updateBirdTarget = () => {
+      const host = document.getElementById(POCKET_BIRD_HOST_ID);
+      const bird = host?.shadowRoot?.querySelector("#birb");
+      const rect = bird?.getBoundingClientRect();
+
+      if (rect && rect.width > 0 && rect.height > 0) {
+        setBirdTargetStyle({
+          left: Math.max(8, rect.left - 12),
+          top: Math.max(80, rect.top - 12),
+          width: rect.width + 24,
+          height: rect.height + 24
+        });
+      } else {
+        setBirdTargetStyle(null);
+      }
+
+      frame = window.requestAnimationFrame(updateBirdTarget);
+    };
+
+    updateBirdTarget();
+    return () => window.cancelAnimationFrame(frame);
+  }, [step.target.kind, visible]);
+
+  const targetStyle = step.target.kind === "bird" ? birdTargetStyle : tabTargetStyle;
 
   const finish = async () => {
     await markAppGuideSeen(userId);
@@ -190,7 +238,7 @@ export function GuidedAppTour() {
           style={[styles.spotlight, targetStyle, { borderColor: step.accent, shadowColor: step.accent }]}
         />
       ) : null}
-      <View pointerEvents="auto" style={styles.coachWrap}>
+      <View pointerEvents="auto" style={[styles.coachWrap, step.target.kind === "bird" && styles.coachWrapTop]}>
         <View style={[styles.coachCard, { backgroundColor: activePalette.surface, borderColor: `${step.accent}88` }]}>
           <View style={styles.coachHeader}>
             <View style={[styles.iconBox, { backgroundColor: `${step.accent}18` }]}>
@@ -239,6 +287,10 @@ const styles = StyleSheet.create({
     right: 16,
     alignItems: "center",
     bottom: 96
+  },
+  coachWrapTop: {
+    top: 170,
+    bottom: undefined
   },
   coachCard: {
     width: "100%",
