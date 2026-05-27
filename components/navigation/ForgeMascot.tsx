@@ -24,10 +24,16 @@ const POCKET_BIRD_FLIGHT_TARGET_CLASS = "vce-pocket-bird-flight-target";
 const TRANSPARENT_PIXEL =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const FLIGHT_TARGETS = [
-  { left: "8%", top: "18%", width: 140 },
-  { left: "52%", top: "24%", width: 180 },
-  { left: "78%", top: "46%", width: 150 },
-  { left: "24%", top: "68%", width: 170 }
+  { left: "7%", top: "calc(100vh - 145px)", width: 220 },
+  { left: "34%", top: "calc(100vh - 118px)", width: 260 },
+  { left: "69%", top: "calc(100vh - 168px)", width: 220 },
+  { left: "18%", top: "calc(100vh - 260px)", width: 190 },
+  { left: "54%", top: "calc(100vh - 310px)", width: 240 },
+  { left: "75%", top: "calc(100vh - 390px)", width: 180 },
+  { left: "12%", top: "52%", width: 180 },
+  { left: "47%", top: "44%", width: 230 },
+  { left: "70%", top: "58%", width: 200 },
+  { left: "22%", top: "30%", width: 190 }
 ];
 
 type PocketBirdWindow = Window &
