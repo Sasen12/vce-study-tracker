@@ -10,9 +10,7 @@ import { hasSeenAppGuide, markAppGuideSeen } from "@/utils/appGuide";
 
 type TourRoute = "/(tabs)" | "/(tabs)/study" | "/(tabs)/calendar" | "/(tabs)/insights" | "/(tabs)/more";
 type RouteKey = "home" | "study" | "calendar" | "insights" | "more";
-type Target =
-  | { kind: "content"; screen: RouteKey }
-  | { kind: "tab"; index: number; routeKey: RouteKey; route: TourRoute };
+type Target = { kind: "none" } | { kind: "tab"; index: number; routeKey: RouteKey; route: TourRoute };
 
 type TourStep = {
   eyebrow: string;
@@ -28,16 +26,16 @@ type TourStep = {
 const tourSteps: TourStep[] = [
   {
     eyebrow: "Home",
-    title: "Start with one decision.",
-    body: "Home is the calm version of the dashboard. It should answer: what deserves attention right now?",
+    title: "This is the Now view.",
+    body: "Start here when you feel lost. Home picks the next useful study move instead of showing every feature at once.",
     icon: "view-dashboard",
     accent: palette.info,
-    target: { kind: "content", screen: "home" }
+    target: { kind: "none" }
   },
   {
-    eyebrow: "Tap Study",
-    title: "Open the work room.",
-    body: "The timer, coach, notes and files live behind Study. Tap the Study tab to continue.",
+    eyebrow: "Study",
+    title: "Timer, coach, notes.",
+    body: "Use Study when you are ready to do work. It keeps the actual session in one place.",
     icon: "timer-outline",
     accent: palette.success,
     target: { kind: "tab", index: 1, routeKey: "study", route: "/(tabs)/study" },
@@ -45,17 +43,9 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "study"
   },
   {
-    eyebrow: "Study",
-    title: "One focused block creates evidence.",
-    body: "Use the timer first. The app learns from real sessions, not from a giant setup form.",
-    icon: "timer-play-outline",
-    accent: palette.success,
-    target: { kind: "content", screen: "study" }
-  },
-  {
-    eyebrow: "Tap Calendar",
-    title: "Show the app what is coming.",
-    body: "SAC dates and exam pressure belong in Calendar. Tap Calendar to continue.",
+    eyebrow: "Calendar",
+    title: "Put dates here first.",
+    body: "SACs, SATs, exams and study blocks belong in Calendar. Once the date is saved, Home can plan backwards.",
     icon: "calendar-month",
     accent: palette.warning,
     target: { kind: "tab", index: 2, routeKey: "calendar", route: "/(tabs)/calendar" },
@@ -63,17 +53,9 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "calendar"
   },
   {
-    eyebrow: "Calendar",
-    title: "Deadlines become plans.",
-    body: "Once dates are here, Home can plan backwards instead of guessing.",
-    icon: "calendar-alert",
-    accent: palette.warning,
-    target: { kind: "content", screen: "calendar" }
-  },
-  {
-    eyebrow: "Tap Insights",
-    title: "Find the weak spots.",
-    body: "Insights is the Student Map: strengths, weak areas and what the app has learned. Tap Insights to continue.",
+    eyebrow: "Insights",
+    title: "Check the Student Map.",
+    body: "Insights shows weak areas, repeated mistakes and what the app has learned from your work.",
     icon: "map-search-outline",
     accent: palette.primary,
     target: { kind: "tab", index: 3, routeKey: "insights", route: "/(tabs)/insights" },
@@ -81,17 +63,9 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "insights"
   },
   {
-    eyebrow: "Insights",
-    title: "Less guessing. More evidence.",
-    body: "This is where repeated mistakes and useful patterns become visible.",
-    icon: "map-search-outline",
-    accent: palette.primary,
-    target: { kind: "content", screen: "insights" }
-  },
-  {
-    eyebrow: "Tap More",
-    title: "Extra tools stay out of the way.",
-    body: "Questions, Community, Shop, Profile and Guide are still here, just grouped behind More. Tap More to finish.",
+    eyebrow: "More",
+    title: "Extra tools live here.",
+    body: "Questions, Community, Shop, Profile and Guide are grouped behind More so the main app stays calm.",
     icon: "dots-grid",
     accent: "#60A5FA",
     target: { kind: "tab", index: 4, routeKey: "more", route: "/(tabs)/more" },
@@ -99,12 +73,12 @@ const tourSteps: TourStep[] = [
     advanceOnRoute: "more"
   },
   {
-    eyebrow: "More",
-    title: "Power tools when you need them.",
-    body: "The advanced features are available without shouting at you every time you open the app.",
-    icon: "dots-grid",
-    accent: "#60A5FA",
-    target: { kind: "content", screen: "more" }
+    eyebrow: "Done",
+    title: "That is the loop.",
+    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Insights shows what to fix. More holds the extras.",
+    icon: "check-circle-outline",
+    accent: palette.info,
+    target: { kind: "none" }
   }
 ];
 
@@ -129,7 +103,7 @@ export function GuidedAppTour() {
   const userId = useAuthStore((state) => state.user?.id);
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ guide?: string }>();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const [visible, setVisible] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const currentRouteKey = routeKeyForPath(pathname);
@@ -167,43 +141,19 @@ export function GuidedAppTour() {
   }, [currentRouteKey, step.advanceOnRoute, visible]);
 
   const targetStyle = useMemo(() => {
-    if (step.target.kind === "tab") {
-      const tabWidth = width / 5;
-      return {
-        left: tabWidth * step.target.index + 8,
-        width: Math.max(54, tabWidth - 16),
-        height: 62,
-        bottom: 8
-      };
+    if (step.target.kind !== "tab") {
+      return null;
     }
 
-    const contentWidth = Math.min(width - 32, 760);
-    const contentLeft = Math.max(16, (width - contentWidth) / 2);
-    const compact = width < 720;
-    const topByScreen: Record<RouteKey, number> = {
-      home: compact ? 150 : 170,
-      study: compact ? 260 : 310,
-      calendar: compact ? 210 : 270,
-      insights: compact ? 210 : 250,
-      more: compact ? 125 : 145
-    };
-    const heightByScreen: Record<RouteKey, number> = {
-      home: compact ? 250 : 290,
-      study: compact ? 260 : 340,
-      calendar: compact ? 230 : 300,
-      insights: compact ? 230 : 300,
-      more: compact ? 320 : 360
-    };
-
+    const tabWidth = width / 5;
+    const targetWidth = Math.min(168, Math.max(66, tabWidth - 18));
     return {
-      left: contentLeft,
-      width: contentWidth,
-      top: topByScreen[step.target.screen],
-      height: Math.min(heightByScreen[step.target.screen], height - 230)
+      left: tabWidth * step.target.index + (tabWidth - targetWidth) / 2,
+      width: targetWidth,
+      height: 62,
+      bottom: 8
     };
-  }, [height, step.target, width]);
-
-  const cardAtTop = step.target.kind === "tab";
+  }, [step.target, width]);
 
   const finish = async () => {
     await markAppGuideSeen(userId);
@@ -232,8 +182,15 @@ export function GuidedAppTour() {
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim]} />
-      <View pointerEvents="none" style={[styles.spotlight, targetStyle, { borderColor: step.accent, shadowColor: step.accent }]} />
-      <View pointerEvents="auto" style={[styles.coachWrap, cardAtTop ? styles.coachTop : styles.coachBottom]}>
+      {targetStyle ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${step.eyebrow}`}
+          onPress={openTarget}
+          style={[styles.spotlight, targetStyle, { borderColor: step.accent, shadowColor: step.accent }]}
+        />
+      ) : null}
+      <View pointerEvents="auto" style={styles.coachWrap}>
         <View style={[styles.coachCard, { backgroundColor: activePalette.surface, borderColor: `${step.accent}88` }]}>
           <View style={styles.coachHeader}>
             <View style={[styles.iconBox, { backgroundColor: `${step.accent}18` }]}>
@@ -254,7 +211,7 @@ export function GuidedAppTour() {
             </Button>
             <Pressable accessibilityRole="button" onPress={openTarget} style={[styles.primaryAction, { backgroundColor: step.accent }]}>
               <Text style={styles.primaryActionText}>{step.route ? "Open" : isLast ? "Finish" : "Next"}</Text>
-              <MaterialCommunityIcons name={step.route ? "cursor-default-click-outline" : "arrow-right"} color="#03111F" size={18} />
+              <MaterialCommunityIcons name={step.route ? "arrow-right" : "arrow-right"} color="#03111F" size={18} />
             </Pressable>
           </View>
         </View>
@@ -265,13 +222,13 @@ export function GuidedAppTour() {
 
 const styles = StyleSheet.create({
   dim: {
-    backgroundColor: "rgba(2, 6, 23, 0.58)"
+    backgroundColor: "rgba(2, 6, 23, 0.48)"
   },
   spotlight: {
     position: "absolute",
     borderWidth: 2,
     borderRadius: 10,
-    backgroundColor: "rgba(56, 189, 248, 0.06)",
+    backgroundColor: "rgba(56, 189, 248, 0.08)",
     shadowOpacity: 0.45,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 0 }
@@ -280,17 +237,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    alignItems: "center"
-  },
-  coachTop: {
-    top: 18
-  },
-  coachBottom: {
+    alignItems: "center",
     bottom: 96
   },
   coachCard: {
     width: "100%",
-    maxWidth: 560,
+    maxWidth: 520,
     borderWidth: 1,
     borderRadius: 8,
     padding: 14,
