@@ -1384,10 +1384,24 @@ communityRouter.post(
       where: {
         message: { startsWith: `${QUESTION_WALL_PREFIX}q:${questionId}]]` }
       },
-      select: { id: true }
+      select: { id: true, userId: true }
     });
     if (!question) {
       throw new HttpError(404, "Question not found");
+    }
+    if (question.userId === authReq.user.id) {
+      throw new HttpError(400, "Let another student answer your question.");
+    }
+
+    const existingAnswer = await prisma.communityChatMessage.findFirst({
+      where: {
+        userId: authReq.user.id,
+        message: { startsWith: `${QUESTION_WALL_PREFIX}a:${questionId}]]` }
+      },
+      select: { id: true }
+    });
+    if (existingAnswer) {
+      throw new HttpError(400, "You have already answered this question.");
     }
 
     await prisma.communityChatMessage.create({
@@ -1429,9 +1443,13 @@ communityRouter.get(
     const authReq = req as AuthenticatedRequest;
     const roomId = subjectRoomIdSchema.parse(req.params.roomId);
     const room = await requireSubjectRoomForUser(authReq.user.id, roomId);
+    const roomMarker = subjectRoomMarkerFor(room.id);
     const chatDesc = await prisma.communityChatMessage.findMany({
+      where: {
+        message: { startsWith: roomMarker }
+      },
       orderBy: { createdAt: "desc" },
-      take: 240,
+      take: 80,
       include: {
         user: {
           select: { displayName: true }
@@ -1440,8 +1458,6 @@ communityRouter.get(
     });
 
     const chat = chatDesc
-      .filter((message) => parseSubjectRoomMessage(message.message)?.roomId === room.id)
-      .slice(0, 80)
       .reverse()
       .map((message) => serialiseChatMessage(message, authReq.user.id));
 
@@ -1461,7 +1477,7 @@ communityRouter.post(
     if (allowance.remainingMinutes <= 0) {
       throw new HttpError(
         429,
-        `Study ${CHAT_UNLOCK_STUDY_MINUTES} minutes today to unlock ${CHAT_UNLOCK_MESSAGES} messages. Study ${ROOM_CHAT_UNLOCK_STUDY_MINUTES} for unlimited room chat today.`
+        `Study ${CHAT_UNLOCK_STUDY_MINUTES} minutes today to unlock ${CHAT_UNLOCK_MESSAGES} messages. Study ${ROOM_CHAT_UNLOCK_STUDY_MINUTES} minutes for unlimited chat today.`
       );
     }
 

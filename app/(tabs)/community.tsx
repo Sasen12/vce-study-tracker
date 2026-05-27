@@ -917,8 +917,9 @@ export default function CommunityScreen() {
   );
 
   const allowanceLabel = useMemo(() => {
-    if (!allowance) return "Loading chat minutes";
-    return `${allowance.remainingMinutes}/${allowance.totalMinutes} chat minutes left`;
+    if (!allowance) return "Loading chat messages";
+    if (allowance.unlimitedRoomChat) return "Unlimited chat today";
+    return `${allowance.remainingMinutes}/${allowance.totalMinutes} chat messages left`;
   }, [allowance]);
 
   const sendFeedback = async () => {
@@ -1704,7 +1705,7 @@ export default function CommunityScreen() {
             </View>
             <Text style={styles.muted}>
               Study {allowance?.unlockStudyMinutes ?? 10} minutes to unlock {allowance?.unlockedMessages ?? 5} messages.
-              Study {allowance?.roomUnlimitedStudyMinutes ?? 30} minutes for unlimited room chat today. Helpful Q&A answers add bonus messages.
+              Study {allowance?.roomUnlimitedStudyMinutes ?? 30} minutes for unlimited chat today. Helpful Q&A answers add bonus messages.
             </Text>
           </AppCard>
 
@@ -1772,7 +1773,7 @@ export default function CommunityScreen() {
               The main Community chat is still there. You can now optionally join rooms for your subjects inside
               Community Chat, and those room messages stay separate from the all-school chat.
             </Text>
-            <Text style={styles.muted}>Your daily chat minutes apply across both main chat and subject rooms.</Text>
+            <Text style={styles.muted}>Your daily chat unlocks apply across both main chat and subject rooms.</Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button mode="contained" onPress={dismissRoomIntro}>
