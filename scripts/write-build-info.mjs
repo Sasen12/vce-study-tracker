@@ -35,6 +35,7 @@ const seoDescription =
   "VCE Forge helps Australian VCE students track SACs and exams, plan study sessions, generate VCE-style practice questions, use AI coaching, manage notes and build study momentum.";
 const seoKeywords =
   "VCE study planner, VCE SAC tracker, VCE practice questions, VCE study app, VCE exams, ATAR study tools, VCE notes, VCE AI tutor";
+const googleVerificationFile = "google7265f1c8749174ff.html";
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -144,8 +145,17 @@ Sitemap: ${siteUrl}/sitemap.xml
   console.log("Wrote dist/robots.txt and dist/sitemap.xml");
 };
 
+const writeVerificationFiles = () => {
+  writeFileSync(
+    join("dist", googleVerificationFile),
+    `google-site-verification: ${googleVerificationFile}\n`
+  );
+  console.log(`Wrote dist/${googleVerificationFile}`);
+};
+
 mkdirSync("dist", { recursive: true });
 patchIndexHtml();
 writeCrawlerFiles();
+writeVerificationFiles();
 writeFileSync(join("dist", "build-info.json"), `${JSON.stringify(payload, null, 2)}\n`);
 console.log(`Wrote dist/build-info.json for ${payload.shortHash}`);
