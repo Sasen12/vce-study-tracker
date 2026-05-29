@@ -7,6 +7,12 @@
   EXPO_NO_TELEMETRY = "1"
 
 [[redirects]]
+  from = "https://vceforge.space/*"
+  to = "https://www.vceforge.space/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "https://request-abiding-shove.ngrok-free.dev/api/:splat"
   status = 200
