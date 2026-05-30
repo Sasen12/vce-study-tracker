@@ -23,6 +23,7 @@ type AuthState = {
     schoolName?: string | null;
     subjects: RegisterSubject[];
   }) => Promise<void>;
+  setWeeklyDigestPreference: (optIn: boolean) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -81,6 +82,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ loading: false, error: error instanceof Error ? error.message : "Registration failed" });
       throw error;
     }
+  },
+  setWeeklyDigestPreference: async (optIn) => {
+    const data = await apiFetch<{ user: User }>("/auth/me/preferences", {
+      method: "PATCH",
+      body: { weeklyDigestOptIn: optIn }
+    });
+    set({ user: data.user });
   },
   logout: async () => {
     await clearAuthTokens();

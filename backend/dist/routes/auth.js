@@ -26,12 +26,18 @@ const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1)
 });
+const preferenceSchema = z.object({
+    weeklyDigestOptIn: z.boolean().optional()
+});
 const publicUser = (user) => ({
     id: user.id,
     email: user.email,
     displayName: user.displayName,
     schoolName: user.schoolName,
     avatarUrl: user.avatarUrl,
+    weeklyDigestOptIn: user.weeklyDigestOptIn,
+    weeklyDigestUnsubscribedAt: user.weeklyDigestUnsubscribedAt,
+    weeklyDigestLastSentAt: user.weeklyDigestLastSentAt,
     createdAt: user.createdAt
 });
 const isUniqueConstraintError = (error) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
@@ -125,4 +131,20 @@ authRouter.get("/me", requireAuth, asyncHandler(async (req, res) => {
         subjects: user.subjects,
         gamification
     });
+}));
+authRouter.patch("/me/preferences", requireAuth, asyncHandler(async (req, res) => {
+    const authReq = req;
+    const payload = preferenceSchema.parse(req.body);
+    const user = await prisma.user.update({
+        where: { id: authReq.user.id },
+        data: {
+            ...(payload.weeklyDigestOptIn === undefined
+                ? {}
+                : {
+                    weeklyDigestOptIn: payload.weeklyDigestOptIn,
+                    weeklyDigestUnsubscribedAt: payload.weeklyDigestOptIn ? null : new Date()
+                })
+        }
+    });
+    res.json({ user: publicUser(user) });
 }));

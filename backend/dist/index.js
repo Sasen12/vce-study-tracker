@@ -12,10 +12,12 @@ import { gamificationRouter } from "./routes/gamification.js";
 import { coachRouter } from "./routes/coach.js";
 import { communityRouter } from "./routes/community.js";
 import { contactRouter } from "./routes/contact.js";
+import { digestRouter } from "./routes/digest.js";
 import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
 import { errorHandler } from "./utils/http.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
+import { sendWeeklyDigestToAllUsers, weeklyDigestCronExpression } from "./services/weeklyDigestService.js";
 import { APP_TIME_ZONE } from "./utils/date.js";
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -55,6 +57,7 @@ app.use("/api/gamification", gamificationRouter);
 app.use("/api/coach", coachRouter);
 app.use("/api/community", communityRouter);
 app.use("/api/contact", contactRouter);
+app.use("/api/digest", digestRouter);
 app.use("/api/memory", memoryRouter);
 app.use("/api", (_req, res) => {
     res.status(404).json({ message: "API route not found. The backend may need to be updated or restarted." });
@@ -67,6 +70,17 @@ cron.schedule("59 23 * * *", async () => {
     }
     catch (error) {
         console.error("Streak reset job failed", error);
+    }
+}, {
+    timezone: APP_TIME_ZONE
+});
+cron.schedule(weeklyDigestCronExpression(), async () => {
+    try {
+        const result = await sendWeeklyDigestToAllUsers();
+        console.log(`Weekly digest job completed. Sent ${result.sent}, skipped ${result.skipped}, failed ${result.failed}.`);
+    }
+    catch (error) {
+        console.error("Weekly digest job failed", error);
     }
 }, {
     timezone: APP_TIME_ZONE

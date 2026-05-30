@@ -7,6 +7,9 @@ CREATE TABLE users (
   display_name TEXT NOT NULL,
   school_name TEXT,
   avatar_url TEXT,
+  weekly_digest_opt_in BOOLEAN NOT NULL DEFAULT TRUE,
+  weekly_digest_unsubscribed_at TIMESTAMPTZ,
+  weekly_digest_last_sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

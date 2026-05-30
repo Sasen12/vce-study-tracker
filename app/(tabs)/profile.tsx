@@ -427,6 +427,7 @@ export default function ProfileScreen() {
   } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const setWeeklyDigestPreference = useAuthStore((state) => state.setWeeklyDigestPreference);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [archivingSubject, setArchivingSubject] = useState<UserSubject | null>(null);
   const [archivingSubjectSaving, setArchivingSubjectSaving] = useState(false);
@@ -435,6 +436,8 @@ export default function ProfileScreen() {
   const [defaultTabMessage, setDefaultTabMessage] = useState<string | null>(null);
   const [studyPreferences, setStudyPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
   const [studyPreferenceMessage, setStudyPreferenceMessage] = useState<string | null>(null);
+  const [digestSaving, setDigestSaving] = useState(false);
+  const [digestMessage, setDigestMessage] = useState<string | null>(null);
   const [defaultAimDraft, setDefaultAimDraft] = useState("");
   const [ritualsExpanded, setRitualsExpanded] = useState(false);
   const subjectLimit = maxSubjects;
@@ -494,6 +497,19 @@ export default function ProfileScreen() {
 
   const saveDefaultAim = () => {
     void updateStudyPreferences({ defaultAim: defaultAimDraft.trim() }, "Default aim saved.");
+  };
+
+  const updateWeeklyDigest = async (optIn: boolean) => {
+    setDigestSaving(true);
+    setDigestMessage(null);
+    try {
+      await setWeeklyDigestPreference(optIn);
+      setDigestMessage(optIn ? "Weekly brief enabled." : "Weekly brief turned off.");
+    } catch {
+      setDigestMessage("Could not update weekly emails. Try again.");
+    } finally {
+      setDigestSaving(false);
+    }
   };
 
   const weekStart = useMemo(startOfWeek, []);
@@ -711,6 +727,24 @@ export default function ProfileScreen() {
           })}
         </View>
         {defaultTabMessage ? <Text style={styles.preferenceMessage}>{defaultTabMessage}</Text> : null}
+      </AppCard>
+
+      <AppCard style={styles.preferenceCard}>
+        <View style={styles.preferenceSetting}>
+          <View style={styles.preferenceSettingText}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Weekly email brief
+            </Text>
+            <Text style={styles.defaultTabDescription}>Sunday recap with study time, weak spots, XP and upcoming SAC pressure.</Text>
+          </View>
+          <Switch
+            value={user?.weeklyDigestOptIn ?? true}
+            disabled={digestSaving}
+            onValueChange={(value) => void updateWeeklyDigest(value)}
+            color={palette.primary}
+          />
+        </View>
+        {digestMessage ? <Text style={styles.preferenceMessage}>{digestMessage}</Text> : null}
       </AppCard>
 
       <AppCard style={styles.preferenceCard}>

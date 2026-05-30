@@ -14,7 +14,7 @@ const loadNodemailer = async () => {
     }
 };
 const recipientEmail = () => process.env.CONTACT_RECIPIENT_EMAIL?.trim() || "techsavvy356@gmail.com";
-const smtpTransport = async () => {
+export const smtpTransport = async () => {
     const mailer = await loadNodemailer();
     if (!mailer)
         return null;
@@ -37,13 +37,18 @@ const smtpTransport = async () => {
         auth: user && pass ? { user, pass } : undefined
     });
 };
-const escapeHtml = (value) => value
+export const escapeHtml = (value) => value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 const field = (label, value) => `${label}: ${value?.trim() || "Not provided"}`;
+export const defaultFromEmail = (fallback) => process.env.CONTACT_FROM_EMAIL?.trim() ||
+    process.env.SMTP_FROM_EMAIL?.trim() ||
+    process.env.CONTACT_SMTP_USER?.trim() ||
+    process.env.SMTP_USER?.trim() ||
+    fallback;
 export const sendContactEmail = async (message) => {
     const transport = await smtpTransport();
     if (!transport) {
@@ -51,11 +56,7 @@ export const sendContactEmail = async (message) => {
         return { sent: false, reason: hasSmtpConfig ? "mailer_unavailable" : "smtp_missing" };
     }
     const to = recipientEmail();
-    const from = process.env.CONTACT_FROM_EMAIL?.trim() ||
-        process.env.SMTP_FROM_EMAIL?.trim() ||
-        process.env.CONTACT_SMTP_USER?.trim() ||
-        process.env.SMTP_USER?.trim() ||
-        to;
+    const from = defaultFromEmail(to);
     const text = [
         "A student sent a pre-account question from the VCE Forge contact page.",
         "",

@@ -4,6 +4,9 @@ export type User = {
   displayName: string;
   schoolName?: string | null;
   avatarUrl?: string | null;
+  weeklyDigestOptIn?: boolean;
+  weeklyDigestUnsubscribedAt?: string | null;
+  weeklyDigestLastSentAt?: string | null;
   createdAt?: string;
 };
 

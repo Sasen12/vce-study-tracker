@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate dev --schema src/db/prisma/schema.prisma",
     "prisma:push": "prisma db push --schema src/db/prisma/schema.prisma",
     "grant:theme": "tsx src/scripts/grantTheme.ts",
+    "digest:send": "npm run build && node dist/scripts/sendWeeklyDigest.js",
     "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {

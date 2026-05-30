@@ -119,6 +119,9 @@ const ensureSubjectLifecycleSchema = async () => {
 
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
+  await prisma.$executeRawUnsafe("ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN NOT NULL DEFAULT TRUE");
+  await prisma.$executeRawUnsafe("ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_unsubscribed_at TIMESTAMPTZ");
+  await prisma.$executeRawUnsafe("ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_last_sent_at TIMESTAMPTZ");
   await prisma.$executeRawUnsafe("ALTER TABLE user_gamification ALTER COLUMN leaderboard_opt_in SET DEFAULT TRUE");
   await prisma.$executeRawUnsafe(`
     UPDATE user_gamification

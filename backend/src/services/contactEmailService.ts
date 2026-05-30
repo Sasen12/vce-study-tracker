@@ -9,7 +9,7 @@ export type ContactMessage = {
   question: string;
 };
 
-type EmailResult =
+export type EmailResult =
   | {
       sent: true;
       reason: null;
@@ -39,7 +39,7 @@ const loadNodemailer = async () => {
 
 const recipientEmail = () => process.env.CONTACT_RECIPIENT_EMAIL?.trim() || "techsavvy356@gmail.com";
 
-const smtpTransport = async () => {
+export const smtpTransport = async () => {
   const mailer = await loadNodemailer();
   if (!mailer) return null;
 
@@ -65,7 +65,7 @@ const smtpTransport = async () => {
   });
 };
 
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -75,6 +75,13 @@ const escapeHtml = (value: string) =>
 
 const field = (label: string, value?: string | null) => `${label}: ${value?.trim() || "Not provided"}`;
 
+export const defaultFromEmail = (fallback: string) =>
+  process.env.CONTACT_FROM_EMAIL?.trim() ||
+  process.env.SMTP_FROM_EMAIL?.trim() ||
+  process.env.CONTACT_SMTP_USER?.trim() ||
+  process.env.SMTP_USER?.trim() ||
+  fallback;
+
 export const sendContactEmail = async (message: ContactMessage): Promise<EmailResult> => {
   const transport = await smtpTransport();
   if (!transport) {
@@ -83,12 +90,7 @@ export const sendContactEmail = async (message: ContactMessage): Promise<EmailRe
   }
 
   const to = recipientEmail();
-  const from =
-    process.env.CONTACT_FROM_EMAIL?.trim() ||
-    process.env.SMTP_FROM_EMAIL?.trim() ||
-    process.env.CONTACT_SMTP_USER?.trim() ||
-    process.env.SMTP_USER?.trim() ||
-    to;
+  const from = defaultFromEmail(to);
 
   const text = [
     "A student sent a pre-account question from the VCE Forge contact page.",
