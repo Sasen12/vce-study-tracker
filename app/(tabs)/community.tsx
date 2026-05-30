@@ -96,7 +96,8 @@ const usageScreenLabels: Record<UsageScreen, string> = {
   community: "Community",
   shop: "Shop",
   pro: "Pro",
-  profile: "Profile"
+  profile: "Profile",
+  more: "More"
 };
 
 const usageScreenLabel = (screen?: string | null) =>
@@ -385,7 +386,7 @@ function LiveRoomCard({
     <View style={[styles.liveRoomCard, active && { borderColor: `${room.color}cc`, backgroundColor: `${room.color}12` }]}>
       <View style={styles.squadTop}>
         <View style={[styles.squadMark, { backgroundColor: `${room.color}20` }]}>
-          <MaterialCommunityIcons name={active ? "timer-play-outline" : "door-open"} color={room.color} size={22} />
+          <MaterialCommunityIcons name={active ? "timer-outline" : "door-open"} color={room.color} size={22} />
         </View>
         <View style={styles.flexText}>
           <Text style={styles.cardTitle} numberOfLines={1}>

@@ -34,7 +34,7 @@ const questionAnswerSchema = z.object({
 const liveRoomHeartbeatSchema = z.object({
     roomId: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/)
 });
-const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "pro", "profile"];
+const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "pro", "profile", "more"];
 const usageEventSchema = z.object({
     screen: z.enum(trackedScreens),
     action: z.literal("view").default("view")
@@ -48,7 +48,8 @@ const screenLabels = {
     community: "Community",
     shop: "Shop",
     pro: "Pro",
-    profile: "Profile"
+    profile: "Profile",
+    more: "More"
 };
 const LEADERBOARD_INVITE_TITLE = "Weekly leaderboard invite";
 const LEADERBOARD_INVITE_MESSAGE = "Sasen reopened the weekly leaderboard invite. Join from the pop-up or Community > Leaderboard if you want your weekly XP to count.";

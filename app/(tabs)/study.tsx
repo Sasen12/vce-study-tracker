@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Dialog, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
@@ -49,7 +50,26 @@ const formatStudyDuration = (seconds: number) => {
 const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (seconds > 3600 ? 25 : 0);
 const defaultCheckpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
+const activeTimerStoragePrefix = "vce_active_study_timer_v1";
+const maxBackgroundTimerSeconds = 8 * 60 * 60;
 const studyModes = new Set(["coach", "timer", "notes", "resources", "calculator", "chess"]);
+
+type StoredActiveTimer = {
+  userId?: string;
+  subjectId: string;
+  studyTopic: string;
+  sessionGoal: string;
+  targetMinutes: string;
+  checkInsEnabled: boolean;
+  checkInIntervalMinutes: string;
+  timerBonusXp: number;
+  nextCheckpointAt: number;
+  focusMode: boolean;
+  startedAtMs: number;
+  elapsedBeforeRun: number;
+};
+
+const activeTimerStorageKey = (userId?: string | null) => `${activeTimerStoragePrefix}:${userId ?? "local"}`;
 
 const confidenceButtons = ["1", "2", "3", "4", "5"].map((value) => ({ value, label: value }));
 
@@ -178,10 +198,40 @@ export default function StudyScreen() {
   const [ritualBonusAwarded, setRitualBonusAwarded] = useState(false);
   const scale = useSharedValue(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedRef = useRef(0);
+  const runningRef = useRef(false);
+  const runStartedAtRef = useRef<number | null>(null);
+  const elapsedAtRunStartRef = useRef(0);
+  const lastMinutePulseRef = useRef(0);
   const intentionalFullscreenExitRef = useRef(false);
   const fullscreenLockActiveRef = useRef(false);
   const preferencesAppliedRef = useRef(false);
   const appliedRitualRef = useRef<string | null>(null);
+  const restoredTimerRef = useRef(false);
+
+  const syncElapsed = useCallback(
+    (animate = true) => {
+      if (!runningRef.current || !runStartedAtRef.current) return elapsedRef.current;
+
+      const previousElapsed = elapsedRef.current;
+      const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - runStartedAtRef.current) / 1000));
+      const nextElapsed = Math.min(maxBackgroundTimerSeconds, elapsedAtRunStartRef.current + elapsedSinceStart);
+      if (nextElapsed === previousElapsed) return nextElapsed;
+
+      elapsedRef.current = nextElapsed;
+      setElapsed(nextElapsed);
+
+      const previousMinute = Math.floor(previousElapsed / 60);
+      const nextMinute = Math.floor(nextElapsed / 60);
+      if (animate && nextMinute > previousMinute && nextMinute > lastMinutePulseRef.current) {
+        lastMinutePulseRef.current = nextMinute;
+        scale.value = withSequence(withTiming(1.035, { duration: 120 }), withTiming(1, { duration: 180 }));
+      }
+
+      return nextElapsed;
+    },
+    [scale]
+  );
 
   const releaseFocusLock = useCallback(() => {
     fullscreenLockActiveRef.current = false;
@@ -191,11 +241,53 @@ export default function StudyScreen() {
     });
   }, []);
 
+  const clearStoredActiveTimer = useCallback(() => {
+    void AsyncStorage.removeItem(activeTimerStorageKey(userId)).catch(() => undefined);
+  }, [userId]);
+
+  const persistActiveTimer = useCallback(() => {
+    if (!selectedSubjectId || !runStartedAtRef.current) return;
+    const payload: StoredActiveTimer = {
+      userId,
+      subjectId: selectedSubjectId,
+      studyTopic,
+      sessionGoal,
+      targetMinutes,
+      checkInsEnabled,
+      checkInIntervalMinutes,
+      timerBonusXp,
+      nextCheckpointAt,
+      focusMode,
+      startedAtMs: runStartedAtRef.current,
+      elapsedBeforeRun: elapsedAtRunStartRef.current
+    };
+    void AsyncStorage.setItem(activeTimerStorageKey(userId), JSON.stringify(payload)).catch(() => undefined);
+  }, [
+    checkInIntervalMinutes,
+    checkInsEnabled,
+    focusMode,
+    nextCheckpointAt,
+    selectedSubjectId,
+    sessionGoal,
+    studyTopic,
+    targetMinutes,
+    timerBonusXp,
+    userId
+  ]);
+
   useFocusEffect(
     useCallback(() => {
       fetchAll();
     }, [fetchAll])
   );
+
+  useEffect(() => {
+    elapsedRef.current = elapsed;
+  }, [elapsed]);
+
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
 
   useEffect(() => {
     if (params.subjectId) {
@@ -207,15 +299,68 @@ export default function StudyScreen() {
 
   useEffect(() => {
     preferencesAppliedRef.current = false;
+    restoredTimerRef.current = false;
   }, [userId]);
 
   useEffect(() => {
-    if (params.mode === "questions") {
+    let active = true;
+    if (!userId || restoredTimerRef.current || running || elapsedRef.current > 0) return undefined;
+    restoredTimerRef.current = true;
+
+    AsyncStorage.getItem(activeTimerStorageKey(userId))
+      .then((raw) => {
+        if (!active || !raw) return;
+        const parsed = JSON.parse(raw) as Partial<StoredActiveTimer>;
+        if (
+          typeof parsed.subjectId !== "string" ||
+          typeof parsed.startedAtMs !== "number" ||
+          typeof parsed.elapsedBeforeRun !== "number"
+        ) {
+          void AsyncStorage.removeItem(activeTimerStorageKey(userId));
+          return;
+        }
+
+        const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - parsed.startedAtMs) / 1000));
+        const restoredElapsed = Math.min(maxBackgroundTimerSeconds, parsed.elapsedBeforeRun + elapsedSinceStart);
+        elapsedRef.current = restoredElapsed;
+        elapsedAtRunStartRef.current = parsed.elapsedBeforeRun;
+        runStartedAtRef.current = parsed.startedAtMs;
+        runningRef.current = true;
+        lastMinutePulseRef.current = Math.floor(restoredElapsed / 60);
+
+        setSelectedSubjectId(parsed.subjectId);
+        setStudyTopic(typeof parsed.studyTopic === "string" ? parsed.studyTopic : "");
+        setSessionGoal(typeof parsed.sessionGoal === "string" ? parsed.sessionGoal : "");
+        setTargetMinutes(typeof parsed.targetMinutes === "string" ? parsed.targetMinutes : "25");
+        setCheckInsEnabled(Boolean(parsed.checkInsEnabled));
+        setCheckInIntervalMinutes(typeof parsed.checkInIntervalMinutes === "string" ? parsed.checkInIntervalMinutes : "10");
+        setTimerBonusXp(typeof parsed.timerBonusXp === "number" ? parsed.timerBonusXp : 0);
+        setNextCheckpointAt(typeof parsed.nextCheckpointAt === "number" ? parsed.nextCheckpointAt : defaultCheckpointIntervalSeconds);
+        setFocusMode(Boolean(parsed.focusMode));
+        setElapsed(restoredElapsed);
+        setMode("timer");
+        setRunning(true);
+        setMessage(
+          restoredElapsed >= maxBackgroundTimerSeconds
+            ? "Recovered a long background timer and capped it at 8 hours. Save the real block or reset it."
+            : "Recovered your background timer. Folio work still counts when the tab is away."
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [running, userId]);
+
+  useEffect(() => {
+    const routeMode = params.mode;
+    if (routeMode === "questions") {
       router.push("/(tabs)/questions");
       return;
     }
-    if (studyModes.has(params.mode ?? "")) {
-      setMode(params.mode);
+    if (routeMode && studyModes.has(routeMode)) {
+      setMode(routeMode);
     }
   }, [params.mode]);
 
@@ -297,26 +442,57 @@ export default function StudyScreen() {
 
   useEffect(() => {
     if (running) {
-      intervalRef.current = setInterval(() => {
-        setElapsed((value) => {
-          const next = value + 1;
-          if (next % 60 === 0) {
-            scale.value = withSequence(withTiming(1.035, { duration: 120 }), withTiming(1, { duration: 180 }));
-          }
-          return next;
-        });
-      }, 1000);
+      if (!runStartedAtRef.current) {
+        elapsedAtRunStartRef.current = elapsedRef.current;
+        runStartedAtRef.current = Date.now();
+        lastMinutePulseRef.current = Math.floor(elapsedRef.current / 60);
+      }
+
+      const tick = () => syncElapsed();
+      tick();
+      intervalRef.current = setInterval(tick, 1000);
+
+      if (Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined") {
+        const syncWhenVisible = () => syncElapsed(false);
+        document.addEventListener("visibilitychange", syncWhenVisible);
+        window.addEventListener("focus", syncWhenVisible);
+        window.addEventListener("pageshow", syncWhenVisible);
+        return () => {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          document.removeEventListener("visibilitychange", syncWhenVisible);
+          window.removeEventListener("focus", syncWhenVisible);
+          window.removeEventListener("pageshow", syncWhenVisible);
+          cancelAnimation(scale);
+        };
+      }
     }
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       cancelAnimation(scale);
     };
-  }, [running, scale]);
+  }, [running, scale, syncElapsed]);
 
   useEffect(() => {
     setTimerActivity({ running });
   }, [running]);
+
+  useEffect(() => {
+    if (!running || !selectedSubjectId || !runStartedAtRef.current) return;
+    persistActiveTimer();
+  }, [
+    checkInIntervalMinutes,
+    checkInsEnabled,
+    focusMode,
+    nextCheckpointAt,
+    persistActiveTimer,
+    running,
+    selectedSubjectId,
+    sessionGoal,
+    studyTopic,
+    targetMinutes,
+    timerBonusXp
+  ]);
 
   useEffect(() => {
     return () => {
@@ -336,15 +512,15 @@ export default function StudyScreen() {
       if (!fullscreenLockActiveRef.current) return;
       fullscreenLockActiveRef.current = false;
       if (running) {
-        setRunning(false);
-        setMessage("Focus lock paused because fullscreen was exited. Press Start to lock back in.");
+        syncElapsed(false);
+        setMessage("Focus lock ended, but the timer kept counting for background work.");
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "hidden" || !running || !fullscreenLockActiveRef.current) return;
-      setRunning(false);
-      setMessage("Focus lock paused because the tab lost focus. Press Start to lock back in.");
+      syncElapsed(false);
+      setMessage("Focus lock ended when the tab changed. Timer kept counting for folio work.");
       releaseFocusLock();
     };
 
@@ -362,7 +538,7 @@ export default function StudyScreen() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [releaseFocusLock, running]);
+  }, [releaseFocusLock, running, syncElapsed]);
 
   useEffect(() => {
     return () => {
@@ -594,7 +770,8 @@ export default function StudyScreen() {
   const start = async () => {
     if (!selectedSubject) return;
     setStarting(true);
-    if (elapsed === 0) {
+    const baseElapsed = elapsedRef.current;
+    if (baseElapsed === 0) {
       setTimerBonusXp(0);
       setNextCheckpointAt(checkpointIntervalSeconds);
       setCheckpointQuestion(null);
@@ -602,6 +779,10 @@ export default function StudyScreen() {
       setSelectedCheckpointOption(null);
       setCheckpointResult(null);
     }
+    elapsedAtRunStartRef.current = baseElapsed;
+    runStartedAtRef.current = Date.now();
+    lastMinutePulseRef.current = Math.floor(baseElapsed / 60);
+    runningRef.current = true;
     setMode("timer");
     setRunning(true);
     try {
@@ -609,7 +790,10 @@ export default function StudyScreen() {
       if (!focusMode) {
         fullscreenLockActiveRef.current = false;
       }
-      const movementMessage = focusMode ? null : "Timer is running in the background. You can switch to Coach, Notes or Files.";
+      persistActiveTimer();
+      const movementMessage = focusMode
+        ? null
+        : "Timer is background-safe. You can switch to Word, Coach, Notes or Files and it will catch up when you return.";
       const checkInMessage = checkInsActive ? null : "Check-ins are off for this session.";
       setMessage([focusLockMessage, movementMessage, checkInMessage].filter(Boolean).join(" ") || null);
     } finally {
@@ -618,14 +802,26 @@ export default function StudyScreen() {
   };
 
   const pause = () => {
+    const currentElapsed = syncElapsed(false);
+    elapsedAtRunStartRef.current = currentElapsed;
+    runStartedAtRef.current = null;
+    runningRef.current = false;
+    setElapsed(currentElapsed);
     setRunning(false);
+    clearStoredActiveTimer();
     releaseFocusLock();
   };
 
   const stop = () => {
+    const currentElapsed = syncElapsed(false);
+    elapsedAtRunStartRef.current = currentElapsed;
+    runStartedAtRef.current = null;
+    runningRef.current = false;
+    setElapsed(currentElapsed);
     setRunning(false);
+    clearStoredActiveTimer();
     releaseFocusLock();
-    if (elapsed >= 60) {
+    if (currentElapsed >= 60) {
       setSummaryError(null);
       setSummaryOpen(true);
     } else {
@@ -643,6 +839,7 @@ export default function StudyScreen() {
     const goal = sessionGoal.trim();
     const typedNotes = notes.trim();
     const nextStep = nextAction.trim();
+    const elapsedForSave = elapsedRef.current;
     const completedSteps = ritualSteps.filter((_, index) => completedRitualSteps[index]);
     const sessionNotes = [
       topic ? `Topic: ${topic}` : "",
@@ -662,7 +859,7 @@ export default function StudyScreen() {
     try {
       await saveSession({
         subjectId: selectedSubject.id,
-        durationSeconds: elapsed,
+        durationSeconds: elapsedForSave,
         notes: sessionNotes || null,
         bonusXp: timerBonusXp + evidenceBonusXp
       });
@@ -676,7 +873,7 @@ export default function StudyScreen() {
             noteType: "general",
             tags: ["session-summary"],
             body: [
-              `${formatElapsed(elapsed)} focused on ${selectedSubject.subjectName}.`,
+              `${formatElapsed(elapsedForSave)} focused on ${selectedSubject.subjectName}.`,
               topic ? `Topic: ${topic}` : "",
               goal ? `Aim: ${goal}` : "",
               typedNotes || "No extra notes written.",
@@ -696,6 +893,11 @@ export default function StudyScreen() {
       if (nextLevel > previousLevel) setConfettiKey((key) => key + 1);
       setMessage(noteMirrorError ?? MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)]);
       setSummaryOpen(false);
+      clearStoredActiveTimer();
+      elapsedRef.current = 0;
+      elapsedAtRunStartRef.current = 0;
+      runStartedAtRef.current = null;
+      runningRef.current = false;
       setElapsed(0);
       setStudyTopic("");
       setSessionGoal("");
@@ -930,6 +1132,7 @@ export default function StudyScreen() {
                 </Text>
               </View>
               <View style={styles.timerHeaderChips}>
+                <Text style={styles.backgroundPill}>Background safe</Text>
                 <Text style={styles.progressPill}>{targetMinutes}m target</Text>
                 <Pressable
                   accessibilityRole="switch"
@@ -1674,6 +1877,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${palette.primary}55`,
     backgroundColor: `${palette.primary}18`,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  backgroundPill: {
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}44`,
+    backgroundColor: `${palette.success}12`,
     paddingHorizontal: 10,
     paddingVertical: 5
   },

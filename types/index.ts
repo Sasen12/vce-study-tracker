@@ -277,7 +277,7 @@ export type UserGiftMessage = {
   createdAt: string;
 };
 
-export type UsageScreen = "home" | "insights" | "study" | "calendar" | "questions" | "community" | "shop" | "pro" | "profile";
+export type UsageScreen = "home" | "insights" | "study" | "calendar" | "questions" | "community" | "shop" | "pro" | "profile" | "more";
 
 export type UsageHourlyBucket = {
   hourStart: string;
