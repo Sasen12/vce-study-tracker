@@ -19,6 +19,9 @@ import { asyncHandler, HttpError } from "../utils/http.js";
 export const communityRouter = Router();
 communityRouter.use(requireAuth);
 
+const QUESTION_TYPES = ["Homework help", "SAC prep", "Exam revision", "Concept help", "Motivation"] as const;
+const questionTypeSchema = z.enum(QUESTION_TYPES);
+
 const feedbackSchema = z.object({
   category: z.enum(["bug", "feature", "content", "other"]).default("other"),
   message: z.string().trim().min(5).max(1200)
@@ -49,6 +52,7 @@ const adminEmailSchema = z.object({
 
 const questionWallSchema = z.object({
   subjectName: z.string().trim().min(2).max(80).optional().nullable(),
+  questionType: questionTypeSchema.optional().nullable().default("Concept help"),
   message: z.string().trim().min(8).max(360)
 });
 
@@ -96,7 +100,17 @@ const SUBJECT_ROOM_PREFIX = "[[subject-room:";
 const SUBJECT_ROOM_MESSAGE_PATTERN = /^\[\[subject-room:([a-z0-9-]+)\]\]\s*([\s\S]*)$/;
 const QUESTION_WALL_PREFIX = "[[question-wall:";
 const QUESTION_WALL_MESSAGE_PATTERN = /^\[\[question-wall:(q|a):([a-z0-9-]+)\]\]\s*(?:(.*?)\s*\|\|\s*)?([\s\S]*)$/;
+const QUESTION_TYPE_PATTERN = /^\[\[type:([a-z-]+)\]\]\s*/;
 const LIVE_ROOM_ACTION_PREFIX = "study-room:";
+
+const questionTypeSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const questionTypeFromSlug = (slug?: string | null) =>
+  QUESTION_TYPES.find((type) => questionTypeSlug(type) === slug) ?? "Concept help";
 
 const COMMUNITY_SQUADS = [
   {
@@ -104,6 +118,7 @@ const COMMUNITY_SQUADS = [
     name: "English squad",
     shortName: "English",
     color: "#60A5FA",
+    identity: "Essay reps, quotes, argument pressure and language analysis without the panic.",
     aliases: ["english", "english as an additional language", "english language", "literature"]
   },
   {
@@ -111,6 +126,7 @@ const COMMUNITY_SQUADS = [
     name: "Methods squad",
     shortName: "Methods",
     color: "#A78BFA",
+    identity: "CAS checks, algebra reps and methods questions that stop becoming mysterious.",
     aliases: ["mathematical methods", "methods"]
   },
   {
@@ -118,6 +134,7 @@ const COMMUNITY_SQUADS = [
     name: "General Maths squad",
     shortName: "General Maths",
     color: "#FF6B6B",
+    identity: "Networks, finance, matrices and exam-style reps with clean working.",
     aliases: ["general mathematics", "general maths"]
   },
   {
@@ -125,6 +142,7 @@ const COMMUNITY_SQUADS = [
     name: "Business squad",
     shortName: "Business",
     color: "#F59E0B",
+    identity: "Command terms, case links and answers that actually hit the marks.",
     aliases: ["business management"]
   },
   {
@@ -132,6 +150,7 @@ const COMMUNITY_SQUADS = [
     name: "Software Dev squad",
     shortName: "Software Dev",
     color: "#34D399",
+    identity: "SAT progress, SRS clarity, bugs fixed and theory that links to the folio.",
     aliases: ["software development", "applied computing software development"]
   },
   {
@@ -139,6 +158,7 @@ const COMMUNITY_SQUADS = [
     name: "Data Analytics squad",
     shortName: "Data Analytics",
     color: "#22D3EE",
+    identity: "Data questions, SAT evidence, visualisations and clean exam explanations.",
     aliases: ["data analytics", "applied computing data analytics"]
   }
 ] as const;
@@ -151,6 +171,7 @@ const LIVE_STUDY_ROOMS = [
     squadId: "general-maths",
     targetMinutes: 35,
     color: "#FF6B6B",
+    description: "A room for SAC pressure, finance models, matrices and one worked solution at a time.",
     focusPrompt: "One question. One clean method. No wandering."
   },
   {
@@ -160,6 +181,7 @@ const LIVE_STUDY_ROOMS = [
     squadId: "english",
     targetMinutes: 45,
     color: "#60A5FA",
+    description: "Essay blocks, quote repair, topic sentences and language analysis reps.",
     focusPrompt: "One paragraph, one quote, one sharper contention."
   },
   {
@@ -169,6 +191,7 @@ const LIVE_STUDY_ROOMS = [
     squadId: "business",
     targetMinutes: 40,
     color: "#F59E0B",
+    description: "Command terms, 10-markers, case study links and SAC rescue work.",
     focusPrompt: "One command term, one case link, one mark saved."
   },
   {
@@ -178,6 +201,7 @@ const LIVE_STUDY_ROOMS = [
     squadId: "software-dev",
     targetMinutes: 50,
     color: "#34D399",
+    description: "SAT build time, SRS cleanup, pseudocode, testing and folio evidence.",
     focusPrompt: "One SAT section, one commit, one clean explanation."
   }
 ] as const;
@@ -187,10 +211,38 @@ const PUBLIC_MISSION = {
   title: "Weekly Lock-In",
   reward: `Finish all four to claim ${WEEKLY_MISSION_XP} XP and the Weekly Lock-In badge.`,
   items: [
-    { id: "deep-work", label: "Complete 3 deep work sessions", target: 3 },
-    { id: "questions", label: "Answer or save 2 questions", target: 2 },
-    { id: "notes", label: "Upload or write 1 note", target: 1 },
-    { id: "practice", label: "Do 1 practice quiz", target: 1 }
+    {
+      id: "deep-work",
+      label: "Complete 3 deep work sessions",
+      target: 3,
+      action: "study",
+      actionLabel: "Start timer",
+      helper: "Deep blocks power your squad and your streak."
+    },
+    {
+      id: "questions",
+      label: "Answer or save 2 questions",
+      target: 2,
+      action: "questions",
+      actionLabel: "Open Q&A",
+      helper: "Help someone or bank a question for revision."
+    },
+    {
+      id: "notes",
+      label: "Upload or write 1 note",
+      target: 1,
+      action: "notes",
+      actionLabel: "Open notes",
+      helper: "Turn class chaos into memory the coach can use."
+    },
+    {
+      id: "practice",
+      label: "Do 1 practice quiz",
+      target: 1,
+      action: "practice",
+      actionLabel: "Forge quiz",
+      helper: "Practice questions count as evidence, not just vibes."
+    }
   ] as const
 };
 
@@ -332,6 +384,20 @@ const parseQuestionWallMessage = (message: string) => {
     message: match[4].trim()
   };
 };
+
+const extractQuestionType = (message: string) => {
+  const match = QUESTION_TYPE_PATTERN.exec(message);
+  if (!match) {
+    return { questionType: "Concept help", message };
+  }
+
+  return {
+    questionType: questionTypeFromSlug(match[1]),
+    message: message.replace(QUESTION_TYPE_PATTERN, "").trim()
+  };
+};
+
+const activityTime = (date: Date) => date.toISOString();
 
 const isCommunitySystemMessage = (message: string) => Boolean(parseSubjectRoomMessage(message) || parseQuestionWallMessage(message));
 
@@ -696,12 +762,15 @@ const buildQuestionWall = async (viewerUserId: string) => {
     {
       id: string;
       subjectName: string | null;
+      questionType: string;
       message: string;
       createdAt: Date;
       answerCount: number;
       isCurrentUser: boolean;
       answeredByViewer: boolean;
       lastActivityAt: Date;
+      status: "Open" | "Answered" | "Needs explanation";
+      helpfulScore: number;
       answers: {
         id: string;
         message: string;
@@ -717,15 +786,19 @@ const buildQuestionWall = async (viewerUserId: string) => {
     if (!parsed) continue;
 
     if (parsed.kind === "q") {
+      const typed = extractQuestionType(parsed.message);
       questions.set(parsed.questionId, {
         id: parsed.questionId,
         subjectName: parsed.subjectName,
-        message: parsed.message,
+        questionType: typed.questionType,
+        message: typed.message,
         createdAt: row.createdAt,
         answerCount: 0,
         isCurrentUser: row.userId === viewerUserId,
         answeredByViewer: false,
         lastActivityAt: row.createdAt,
+        status: "Open",
+        helpfulScore: 0,
         answers: []
       });
       continue;
@@ -750,6 +823,8 @@ const buildQuestionWall = async (viewerUserId: string) => {
   return Array.from(questions.values())
     .map((question) => ({
       ...question,
+      status: question.answerCount > 0 ? "Answered" : Date.now() - question.createdAt.getTime() > 12 * 60 * 60 * 1000 ? "Needs explanation" : "Open",
+      helpfulScore: question.answers.length * 2 + (question.answeredByViewer ? 1 : 0),
       answers: question.answers.slice(-4)
     }))
     .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())
@@ -788,6 +863,22 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
           createdAt: true,
           subject: { select: { subjectName: true } }
         }
+      },
+      savedQuestions: {
+        where: { createdAt: { gte: weekStart, lt: weekEnd } },
+        select: { id: true }
+      },
+      notes: {
+        where: { createdAt: { gte: weekStart, lt: weekEnd } },
+        select: { id: true }
+      },
+      resources: {
+        where: { createdAt: { gte: weekStart, lt: weekEnd } },
+        select: { id: true }
+      },
+      chatMessages: {
+        where: { createdAt: { gte: weekStart, lt: weekEnd }, message: { startsWith: `${QUESTION_WALL_PREFIX}a:` } },
+        select: { id: true }
       }
     }
   });
@@ -800,6 +891,13 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
     const previousMinutes = Math.round(previousSessions.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
     const todayMinutes = Math.round(todaySessions.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
     const weekXp = weekSessions.reduce((sum, session) => sum + session.xpEarned, 0);
+    const helpfulAnswers = participant.chatMessages.length;
+    const deepSessions = weekSessions.filter((session) => session.durationSeconds >= 45 * 60).length;
+    const challengeScore =
+      Math.min(3, deepSessions) +
+      Math.min(2, participant.savedQuestions.length + helpfulAnswers) +
+      Math.min(1, participant.notes.length + participant.resources.length) +
+      Math.min(1, participant.savedQuestions.length);
     return {
       userId: participant.id,
       displayName: participant.displayName,
@@ -813,6 +911,8 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
       improvementMinutes: Math.max(0, weekMinutes - previousMinutes),
       sessionCount: weekSessions.length,
       currentStreak: participant.gamification?.currentStreak ?? 0,
+      helpfulAnswers,
+      challengeScore,
       isCurrentUser: participant.id === viewerUserId
     };
   });
@@ -826,6 +926,8 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
   const today = withRank(rows.map((row) => boardEntry(row, row.todayMinutes))).filter((entry) => entry.score > 0).slice(0, 25);
   const improved = withRank(rows.map((row) => boardEntry(row, row.improvementMinutes))).filter((entry) => entry.score > 0).slice(0, 25);
   const streaks = withRank(rows.map((row) => boardEntry(row, row.currentStreak))).filter((entry) => entry.score > 0).slice(0, 25);
+  const helpful = withRank(rows.map((row) => boardEntry(row, row.helpfulAnswers))).filter((entry) => entry.score > 0).slice(0, 25);
+  const challenge = withRank(rows.map((row) => boardEntry(row, row.challengeScore))).filter((entry) => entry.score > 0).slice(0, 25);
 
   return {
     weekStart: weekStart.toISOString(),
@@ -833,7 +935,9 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
     week,
     today,
     improved,
-    streaks
+    streaks,
+    helpful,
+    challenge
   };
 };
 
@@ -842,6 +946,8 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
   const weekStart = startOfWeek(now);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
+  const previousWeekStart = new Date(weekStart);
+  previousWeekStart.setDate(previousWeekStart.getDate() - 7);
 
   const [subjects, sessions, savedQuestions, wall] = await Promise.all([
     prisma.userSubject.findMany({
@@ -864,7 +970,7 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
     }),
     prisma.studySession.findMany({
       where: {
-        createdAt: { gte: weekStart, lt: weekEnd },
+        createdAt: { gte: previousWeekStart, lt: weekEnd },
         user: { gamification: { is: { leaderboardOptIn: true } } }
       },
       select: {
@@ -890,15 +996,14 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
   return COMMUNITY_SQUADS.map((squad) => {
     const memberRows = subjects.filter((subject) => squadForSubjectName(subject.subjectName)?.id === squad.id);
     const memberIds = new Set(memberRows.map((subject) => subject.userId));
-    const sessionRows = sessions.filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === squad.id);
+    const allSessionRows = sessions.filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === squad.id);
+    const sessionRows = allSessionRows.filter((session) => session.createdAt >= weekStart);
+    const previousSessionRows = allSessionRows.filter((session) => session.createdAt < weekStart);
     const todayRows = sessionRows.filter((session) => session.createdAt >= startOfDay(now));
     const questionCount = savedQuestions.filter((question) => squadForSubjectName(question.subject?.subjectName)?.id === squad.id).length;
-    const wallAnswerCount = wall
-      .filter((question) => squadForSubjectName(question.subjectName)?.id === squad.id)
-      .reduce((sum, question) => sum + question.answerCount, 0);
-    const openQuestionCount = wall.filter(
-      (question) => squadForSubjectName(question.subjectName)?.id === squad.id && question.answerCount === 0
-    ).length;
+    const squadWallQuestions = wall.filter((question) => squadForSubjectName(question.subjectName)?.id === squad.id);
+    const wallAnswerCount = squadWallQuestions.reduce((sum, question) => sum + question.answerCount, 0);
+    const openQuestionCount = squadWallQuestions.filter((question) => question.answerCount === 0).length;
 
     const contributorMinutes = new Map<string, { displayName: string; minutes: number }>();
     for (const session of sessionRows) {
@@ -906,10 +1011,30 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       current.minutes += Math.round(session.durationSeconds / 60);
       contributorMinutes.set(session.userId, current);
     }
+    const previousContributorMinutes = new Map<string, { displayName: string; minutes: number }>();
+    for (const session of previousSessionRows) {
+      const current = previousContributorMinutes.get(session.userId) ?? { displayName: session.user.displayName, minutes: 0 };
+      current.minutes += Math.round(session.durationSeconds / 60);
+      previousContributorMinutes.set(session.userId, current);
+    }
+    const helperCounts = new Map<string, number>();
+    for (const question of squadWallQuestions) {
+      for (const answer of question.answers) {
+        helperCounts.set(answer.user.displayName, (helperCounts.get(answer.user.displayName) ?? 0) + 1);
+      }
+    }
 
     const topContributor = Array.from(contributorMinutes.values()).sort(
       (a, b) => b.minutes - a.minutes || a.displayName.localeCompare(b.displayName)
     )[0];
+    const topHelperEntry = Array.from(helperCounts.entries()).sort(([nameA, countA], [nameB, countB]) => countB - countA || nameA.localeCompare(nameB))[0];
+    const mostImproved = Array.from(contributorMinutes.entries())
+      .map(([userId, current]) => ({
+        displayName: current.displayName,
+        minutesGained: Math.max(0, current.minutes - (previousContributorMinutes.get(userId)?.minutes ?? 0))
+      }))
+      .filter((entry) => entry.minutesGained > 0)
+      .sort((a, b) => b.minutesGained - a.minutesGained || a.displayName.localeCompare(b.displayName))[0];
     const rankedContributors = Array.from(contributorMinutes.entries()).sort(
       ([, a], [, b]) => b.minutes - a.minutes || a.displayName.localeCompare(b.displayName)
     );
@@ -948,6 +1073,7 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       name: squad.name,
       shortName: squad.shortName,
       color: squad.color,
+      identity: squad.identity,
       weeklyMinutes,
       weeklyGoalMinutes,
       goalProgress,
@@ -959,6 +1085,8 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       activeTodayCount,
       nextNudge,
       topContributor: topContributor ? { displayName: topContributor.displayName, minutes: topContributor.minutes } : null,
+      topHelper: topHelperEntry ? { displayName: topHelperEntry[0], answers: topHelperEntry[1] } : null,
+      mostImproved: mostImproved ?? null,
       questionsAnswered: questionCount + wallAnswerCount,
       streakCount: new Set(
         memberRows
@@ -969,6 +1097,17 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       viewerJoined: memberIds.has(viewerUserId)
     };
   });
+};
+
+const nextSuggestedRoomSession = (roomId: string, fromDate: Date) => {
+  const roomIndex = Math.max(0, LIVE_STUDY_ROOMS.findIndex((room) => room.id === roomId));
+  const next = new Date(fromDate);
+  next.setSeconds(0, 0);
+  const baseMinutes = next.getMinutes();
+  const roundedMinutes = baseMinutes < 30 ? 30 : 60;
+  next.setMinutes(roundedMinutes, 0, 0);
+  next.setMinutes(next.getMinutes() + roomIndex * 10);
+  return next;
 };
 
 const buildLiveStudyRooms = async () => {
@@ -996,6 +1135,7 @@ const buildLiveStudyRooms = async () => {
       },
       select: {
         durationSeconds: true,
+        createdAt: true,
         subject: { select: { subjectName: true } }
       }
     })
@@ -1022,9 +1162,20 @@ const buildLiveStudyRooms = async () => {
     const weeklyGoalMinutes = room.targetMinutes * 8;
     const goalProgress = Math.min(100, Math.round((weeklyMinutes / weeklyGoalMinutes) * 100));
     const roomState = activeStudents.length ? "live" : weeklyMinutes > 0 ? "warming" : "quiet";
+    const roomSessions = sessions.filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === room.squadId);
+    const recentlyActiveAt = roomSessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]?.createdAt ?? null;
+    const activityPreview = activeStudents.length
+      ? `${activeStudents.length} student${activeStudents.length === 1 ? "" : "s"} currently studying here.`
+      : recentlyActiveAt
+        ? `Recently active from ${room.subjectHint} study.`
+        : `No one inside yet. Start the first ${room.targetMinutes}m lock-in.`;
 
     return {
       ...room,
+      nextSessionAt: nextSuggestedRoomSession(room.id, now).toISOString(),
+      recentlyActiveAt,
+      activityPreview,
+      emptyCta: `Start ${room.targetMinutes}m room`,
       weeklyMinutes,
       weeklyGoalMinutes,
       goalProgress,
@@ -1035,13 +1186,138 @@ const buildLiveStudyRooms = async () => {
   });
 };
 
+const buildCommunityActivityFeed = async () => {
+  const now = new Date();
+  const weekStart = startOfWeek(now);
+  const [sessions, wallRows, roomEvents] = await Promise.all([
+    prisma.studySession.findMany({
+      where: {
+        createdAt: { gte: weekStart },
+        durationSeconds: { gte: 10 * 60 },
+        user: { gamification: { is: { leaderboardOptIn: true } } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 18,
+      select: {
+        durationSeconds: true,
+        createdAt: true,
+        subject: { select: { subjectName: true } },
+        user: { select: { email: true } }
+      }
+    }),
+    prisma.communityChatMessage.findMany({
+      where: { createdAt: { gte: weekStart }, message: { startsWith: QUESTION_WALL_PREFIX } },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      select: {
+        id: true,
+        message: true,
+        createdAt: true,
+        user: { select: { email: true } }
+      }
+    }),
+    prisma.userUsageEvent.findMany({
+      where: {
+        createdAt: { gte: weekStart },
+        action: { startsWith: LIVE_ROOM_ACTION_PREFIX },
+        user: { gamification: { is: { leaderboardOptIn: true } } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        action: true,
+        createdAt: true,
+        user: { select: { email: true } }
+      }
+    })
+  ]);
+
+  const questionSubjects = new Map<string, string>();
+  for (const row of wallRows) {
+    const parsed = parseQuestionWallMessage(row.message);
+    if (parsed?.kind === "q") {
+      questionSubjects.set(parsed.questionId, parsed.subjectName ?? "General");
+    }
+  }
+
+  const activity = [
+    ...sessions
+      .filter((session) => !isAdminEmail(session.user.email))
+      .map((session) => {
+        const minutes = Math.round(session.durationSeconds / 60);
+        const subjectName = session.subject?.subjectName ?? "VCE";
+        return {
+          id: `study-${session.createdAt.getTime()}-${subjectName}`,
+          type: "study" as const,
+          title: `${subjectName} study logged`,
+          detail: `A ${subjectName} student completed ${minutes} minutes.`,
+          createdAt: activityTime(session.createdAt),
+          color: "#38BDF8",
+          icon: "timer-outline"
+        };
+      }),
+    ...wallRows
+      .filter((row) => !isAdminEmail(row.user.email))
+      .map((row) => {
+        const parsed = parseQuestionWallMessage(row.message);
+        if (!parsed) return null;
+        const subjectName = parsed.kind === "q" ? parsed.subjectName ?? "General" : questionSubjects.get(parsed.questionId) ?? "General";
+        return {
+          id: `wall-${row.id}`,
+          type: parsed.kind === "q" ? ("question" as const) : ("answer" as const),
+          title: parsed.kind === "q" ? `${subjectName} question posted` : `${subjectName} question answered`,
+          detail:
+            parsed.kind === "q"
+              ? "Someone asked for help without putting their name on it."
+              : "A student helped the room move one question forward.",
+          createdAt: activityTime(row.createdAt),
+          color: parsed.kind === "q" ? "#A78BFA" : "#4ADE80",
+          icon: parsed.kind === "q" ? "comment-question-outline" : "hand-heart-outline"
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    ...roomEvents
+      .filter((event) => !isAdminEmail(event.user.email))
+      .map((event) => {
+        const roomId = event.action.replace(LIVE_ROOM_ACTION_PREFIX, "");
+        const room = LIVE_STUDY_ROOMS.find((item) => item.id === roomId);
+        return {
+          id: `room-${event.id}`,
+          type: "room" as const,
+          title: room ? `${room.title} opened` : "Study room opened",
+          detail: room ? room.focusPrompt : "Someone started a public study room.",
+          createdAt: activityTime(event.createdAt),
+          color: room?.color ?? "#60A5FA",
+          icon: "door-open"
+        };
+      })
+  ];
+
+  return activity
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
+};
+
 const buildCommunityPulse = (
   squads: Awaited<ReturnType<typeof buildWeeklySubjectSquads>>,
   liveRooms: Awaited<ReturnType<typeof buildLiveStudyRooms>>,
-  questionWall: Awaited<ReturnType<typeof buildQuestionWall>>
+  questionWall: Awaited<ReturnType<typeof buildQuestionWall>>,
+  gamification: Awaited<ReturnType<typeof ensureGamification>>,
+  activityFeed: Awaited<ReturnType<typeof buildCommunityActivityFeed>>
 ) => {
   const topSquad = [...squads].sort((a, b) => b.weeklyMinutes - a.weeklyMinutes)[0];
+  const viewerRanks = squads.map((squad) => squad.viewerRank).filter((rank): rank is number => typeof rank === "number");
   return {
+    snapshot: {
+      weeklyStudyMinutes: squads.reduce((sum, squad) => sum + squad.viewerMinutes, 0),
+      bestSquadRank: viewerRanks.length ? Math.min(...viewerRanks) : null,
+      questionsHelped: questionWall.filter((question) => question.answeredByViewer).length,
+      badgesEarned: badgesAsArray(gamification.badges).length,
+      currentStreak: gamification.currentStreak,
+      joinedSquads: squads.filter((squad) => squad.viewerJoined).length
+    },
+    activityFeed,
     weeklyMinutes: squads.reduce((sum, squad) => sum + squad.weeklyMinutes, 0),
     activeNow: liveRooms.reduce((sum, room) => sum + room.activeCount, 0),
     openQuestions: questionWall.filter((question) => question.answerCount === 0).length,
@@ -1109,6 +1385,7 @@ const buildPublicMission = async (viewerUserId: string) => {
   }));
   const complete = items.every((item) => item.complete);
   const rewardClaimed = await awardPublicMissionIfReady(viewerUserId, complete);
+  const nextIncomplete = items.find((item) => !item.complete);
 
   return {
     id: PUBLIC_MISSION.id,
@@ -1116,14 +1393,21 @@ const buildPublicMission = async (viewerUserId: string) => {
     reward: rewardClaimed ? `Reward secured: ${WEEKLY_MISSION_XP} XP and Weekly Lock-In badge.` : PUBLIC_MISSION.reward,
     items,
     complete,
-    rewardClaimed
+    rewardClaimed,
+    nextAction: nextIncomplete
+      ? {
+          id: nextIncomplete.id,
+          label: nextIncomplete.actionLabel,
+          action: nextIncomplete.action
+        }
+      : null
   };
 };
 
 const communityPayload = async (user: AuthenticatedRequest["user"]) => {
   const isAdmin = isAdminEmail(user.email);
-  await ensureDefaultCommunityVisibility(user.id);
-  const [feedback, chatDesc, allowance, users, landingContacts, squads, liveRooms, questionWall, mission, boards] = await Promise.all([
+  const gamification = await ensureDefaultCommunityVisibility(user.id);
+  const [feedback, chatDesc, allowance, users, landingContacts, squads, liveRooms, questionWall, mission, boards, activityFeed] = await Promise.all([
     prisma.userFeedback.findMany({
       where: isAdmin ? {} : { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -1153,7 +1437,8 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     buildLiveStudyRooms(),
     buildQuestionWall(user.id),
     buildPublicMission(user.id),
-    buildCommunityLeaderboards(user.id)
+    buildCommunityLeaderboards(user.id),
+    buildCommunityActivityFeed()
   ]);
 
   const chat = chatDesc
@@ -1169,7 +1454,7 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     chat,
     allowance,
     users,
-    pulse: buildCommunityPulse(squads, liveRooms, questionWall),
+    pulse: buildCommunityPulse(squads, liveRooms, questionWall, gamification, activityFeed),
     squads,
     liveRooms,
     questionWall,
@@ -1514,10 +1799,11 @@ communityRouter.post(
     const payload = questionWallSchema.parse(req.body);
     const questionId = randomUUID();
     const subjectName = payload.subjectName?.trim() || "General";
+    const questionType = payload.questionType ?? "Concept help";
     await prisma.communityChatMessage.create({
       data: {
         userId: authReq.user.id,
-        message: `${QUESTION_WALL_PREFIX}q:${questionId}]] ${subjectName} || ${payload.message}`
+        message: `${QUESTION_WALL_PREFIX}q:${questionId}]] ${subjectName} || [[type:${questionTypeSlug(questionType)}]] ${payload.message}`
       }
     });
 
@@ -1692,12 +1978,13 @@ communityRouter.delete(
   "/chat/:id",
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
-    requireAdmin(authReq.user);
-
     const id = z.string().uuid().parse(req.params.id);
     const existing = await prisma.communityChatMessage.findUnique({ where: { id } });
     if (!existing) {
       throw new HttpError(404, "Chat message not found");
+    }
+    if (existing.userId !== authReq.user.id && !isAdminEmail(authReq.user.email)) {
+      requireAdmin(authReq.user);
     }
 
     await prisma.communityChatMessage.delete({ where: { id } });

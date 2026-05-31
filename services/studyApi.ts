@@ -255,7 +255,7 @@ export const studyApi = {
       method: "POST",
       body: { roomId }
     }),
-  sendQuestionWallQuestion: (body: { subjectName?: string | null; message: string }) =>
+  sendQuestionWallQuestion: (body: { subjectName?: string | null; questionType?: string | null; message: string }) =>
     apiFetch<{ questionWall: CommunityQuestionWallItem[] }>("/community/question-wall", { method: "POST", body }),
   sendQuestionWallAnswer: (questionId: string, body: { message: string }) =>
     apiFetch<{ questionWall: CommunityQuestionWallItem[]; allowance: ChatAllowance }>(

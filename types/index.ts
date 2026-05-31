@@ -168,11 +168,31 @@ export type ChatAllowance = {
   bonusMessages?: number;
 };
 
+export type CommunityActivityItem = {
+  id: string;
+  type: "study" | "question" | "answer" | "squad" | "room" | "badge";
+  title: string;
+  detail: string;
+  createdAt: string;
+  color: string;
+  icon: string;
+};
+
+export type CommunitySnapshot = {
+  weeklyStudyMinutes: number;
+  bestSquadRank?: number | null;
+  questionsHelped: number;
+  badgesEarned: number;
+  currentStreak: number;
+  joinedSquads: number;
+};
+
 export type CommunitySquad = {
   id: string;
   name: string;
   shortName: string;
   color: string;
+  identity: string;
   weeklyMinutes: number;
   weeklyGoalMinutes: number;
   goalProgress: number;
@@ -187,6 +207,14 @@ export type CommunitySquad = {
     displayName: string;
     minutes: number;
   } | null;
+  topHelper?: {
+    displayName: string;
+    answers: number;
+  } | null;
+  mostImproved?: {
+    displayName: string;
+    minutesGained: number;
+  } | null;
   questionsAnswered: number;
   streakCount: number;
   memberCount: number;
@@ -200,7 +228,12 @@ export type CommunityLiveRoom = {
   squadId: string;
   targetMinutes: number;
   color: string;
+  description: string;
   focusPrompt: string;
+  nextSessionAt: string;
+  recentlyActiveAt?: string | null;
+  activityPreview: string;
+  emptyCta: string;
   weeklyMinutes: number;
   weeklyGoalMinutes: number;
   goalProgress: number;
@@ -225,16 +258,21 @@ export type CommunityQuestionWallAnswer = {
 export type CommunityQuestionWallItem = {
   id: string;
   subjectName?: string | null;
+  questionType: string;
   message: string;
   createdAt: string;
   answerCount: number;
   isCurrentUser: boolean;
   answeredByViewer: boolean;
   lastActivityAt: string;
+  status: "Open" | "Answered" | "Needs explanation";
+  helpfulScore: number;
   answers: CommunityQuestionWallAnswer[];
 };
 
 export type CommunityPulse = {
+  snapshot: CommunitySnapshot;
+  activityFeed: CommunityActivityItem[];
   weeklyMinutes: number;
   activeNow: number;
   openQuestions: number;
@@ -259,7 +297,15 @@ export type CommunityMission = {
     target: number;
     progress: number;
     complete: boolean;
+    action: "study" | "questions" | "notes" | "practice";
+    actionLabel: string;
+    helper: string;
   }[];
+  nextAction?: {
+    id: string;
+    label: string;
+    action: "study" | "questions" | "notes" | "practice";
+  } | null;
 };
 
 export type CommunityLeaderboardEntry = LeaderboardEntry & {
@@ -268,6 +314,8 @@ export type CommunityLeaderboardEntry = LeaderboardEntry & {
   previousMinutes: number;
   improvementMinutes: number;
   currentStreak: number;
+  helpfulAnswers: number;
+  challengeScore: number;
 };
 
 export type CommunityBoards = {
@@ -277,6 +325,8 @@ export type CommunityBoards = {
   today: CommunityLeaderboardEntry[];
   improved: CommunityLeaderboardEntry[];
   streaks: CommunityLeaderboardEntry[];
+  helpful: CommunityLeaderboardEntry[];
+  challenge: CommunityLeaderboardEntry[];
 };
 
 export type CommunityUserSummary = {

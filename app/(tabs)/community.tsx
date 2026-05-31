@@ -1,6 +1,6 @@
 import { type ComponentProps, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Dialog, IconButton, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -34,11 +34,51 @@ import type {
 } from "@/types";
 
 type Mode = "squads" | "rooms" | "questions" | "chat" | "leaderboard" | "feedback" | "users" | "analytics";
-type BoardScope = "week" | "today" | "improved" | "streaks";
+type BoardScope = "week" | "today" | "improved" | "streaks" | "helpful" | "challenge";
 type FeedbackCategory = UserFeedback["category"];
+type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 const SUBJECT_ROOM_INTRO_KEY = "vce_subject_rooms_intro_seen_v1";
 const JOINED_SUBJECT_ROOMS_KEY = "vce_joined_subject_rooms_v1";
+const COMMUNITY_GUIDE_KEY = "vce_community_guide_seen_v1";
+const QUESTION_TYPES = ["Homework help", "SAC prep", "Exam revision", "Concept help", "Motivation"] as const;
+const CHESS_ARENA_MINUTES = 90;
+
+const genericRoomPrompts = [
+  "Ask a question",
+  "Share a study tip",
+  "Share a win",
+  "Start a revision thread",
+  "Ask for feedback",
+  "Drop a resource"
+];
+
+const subjectStarterPrompts: Record<string, string[]> = {
+  software: [
+    "What part of your SAT are you working on?",
+    "Need help with your SRS?",
+    "Share one bug you fixed today.",
+    "What criterion are you stuck on?"
+  ],
+  business: [
+    "Which command term is costing marks?",
+    "Drop a case study link you can use.",
+    "Ask for help with a 10-marker.",
+    "What dot point are you revising?"
+  ],
+  english: [
+    "Share one quote you are using.",
+    "Ask for feedback on a contention.",
+    "What essay paragraph is weak?",
+    "Drop a language analysis question."
+  ],
+  maths: [
+    "Which method keeps breaking?",
+    "Share a worked step you fixed.",
+    "Ask about a finance model.",
+    "What SAC topic needs reps?"
+  ]
+};
 
 const categoryCopy: Record<FeedbackCategory, string> = {
   bug: "Bug",
@@ -138,12 +178,18 @@ function ChatBubble({
   item,
   canDelete,
   deleting,
-  onDelete
+  onDelete,
+  onReply,
+  onReact,
+  onReport
 }: {
   item: CommunityChatMessage;
   canDelete?: boolean;
   deleting?: boolean;
   onDelete?: (id: string) => void;
+  onReply?: (item: CommunityChatMessage) => void;
+  onReact?: (item: CommunityChatMessage) => void;
+  onReport?: (item: CommunityChatMessage) => void;
 }) {
   return (
     <View style={[styles.chatBubble, item.isCurrentUser && styles.chatBubbleMine]}>
@@ -167,6 +213,17 @@ function ChatBubble({
         </View>
       </View>
       <Text style={styles.chatText}>{item.message}</Text>
+      <View style={styles.chatControls}>
+        <Button mode="text" compact icon="reply-outline" onPress={() => onReply?.(item)}>
+          Reply
+        </Button>
+        <Button mode="text" compact icon="thumb-up-outline" onPress={() => onReact?.(item)}>
+          Helpful
+        </Button>
+        <Button mode="text" compact icon="flag-outline" onPress={() => onReport?.(item)}>
+          Report
+        </Button>
+      </View>
     </View>
   );
 }
@@ -268,21 +325,27 @@ const boardMetricLabel = (entry: CommunityLeaderboardEntry, scope: BoardScope) =
   if (scope === "week") return `${entry.score} XP`;
   if (scope === "today") return `${entry.score} min`;
   if (scope === "improved") return `+${entry.score} min`;
-  return `${entry.score} day${entry.score === 1 ? "" : "s"}`;
+  if (scope === "streaks") return `${entry.score} day${entry.score === 1 ? "" : "s"}`;
+  if (scope === "helpful") return `${entry.score} help${entry.score === 1 ? "" : "s"}`;
+  return `${entry.score}/7`;
 };
 
 const boardDetailLabel = (entry: CommunityLeaderboardEntry, scope: BoardScope) => {
   if (scope === "week") return `${entry.weekMinutes} min - ${entry.sessionCount} sessions`;
   if (scope === "today") return `${entry.weekXp} XP this week - ${entry.sessionCount} sessions`;
   if (scope === "improved") return `${entry.weekMinutes} min this week - ${entry.previousMinutes} min last week`;
-  return `${entry.weekMinutes} min this week - ${entry.weekXp} XP`;
+  if (scope === "streaks") return `${entry.weekMinutes} min this week - ${entry.weekXp} XP`;
+  if (scope === "helpful") return `${entry.weekMinutes} min - ${entry.helpfulAnswers} helpful answers`;
+  return `${entry.challengeScore} mission points - ${entry.weekMinutes} min`;
 };
 
 const boardGapLabel = (scope: BoardScope, gap: number) => {
   if (scope === "week") return `${gap} XP`;
   if (scope === "today") return `${gap} min`;
   if (scope === "improved") return `${gap} more min`;
-  return `${gap} day${gap === 1 ? "" : "s"}`;
+  if (scope === "streaks") return `${gap} day${gap === 1 ? "" : "s"}`;
+  if (scope === "helpful") return `${gap} helpful answer${gap === 1 ? "" : "s"}`;
+  return `${gap} mission point${gap === 1 ? "" : "s"}`;
 };
 
 function CommunityBoardRow({ entry, scope }: { entry: CommunityLeaderboardEntry; scope: BoardScope }) {
@@ -358,7 +421,150 @@ function CommunityPulseStrip({ pulse }: { pulse: CommunityPulse | null }) {
   );
 }
 
-function SquadCard({ squad }: { squad: CommunitySquad }) {
+function CommunityGuideCard({ hidden, onDismiss }: { hidden: boolean; onDismiss: () => void }) {
+  if (hidden) return null;
+
+  const steps: { icon: IconName; title: string; body: string; color: string }[] = [
+    { icon: "account-group-outline", title: "Join squads", body: "Your subjects become weekly teams.", color: palette.primary },
+    { icon: "door-open", title: "Use rooms", body: "Study beside people without needing to chat.", color: palette.success },
+    { icon: "comment-question-outline", title: "Ask safely", body: "Anonymous Q&A keeps stuck points moving.", color: palette.info },
+    { icon: "shield-check-outline", title: "Stay private", body: "Opt out, report and delete your own messages.", color: palette.warning }
+  ];
+
+  return (
+    <AppCard style={styles.guideCard}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>How Community works</Text>
+          <Text style={styles.muted}>Study earns XP, XP helps squads, helping others earns recognition.</Text>
+        </View>
+        <IconButton icon="close" size={18} iconColor={palette.muted} accessibilityLabel="Hide community guide" onPress={onDismiss} />
+      </View>
+      <View style={styles.guideGrid}>
+        {steps.map((step) => (
+          <View key={step.title} style={styles.guideStep}>
+            <View style={[styles.guideIcon, { backgroundColor: `${step.color}18` }]}>
+              <MaterialCommunityIcons name={step.icon} color={step.color} size={18} />
+            </View>
+            <View style={styles.flexText}>
+              <Text style={styles.guideTitle}>{step.title}</Text>
+              <Text style={styles.mutedSmall}>{step.body}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </AppCard>
+  );
+}
+
+function CommunitySnapshotCard({ pulse }: { pulse: CommunityPulse | null }) {
+  if (!pulse) return null;
+  const rankLabel = pulse.snapshot.bestSquadRank ? `#${pulse.snapshot.bestSquadRank}` : "Start";
+  const tiles = [
+    { label: "your minutes", value: `${pulse.snapshot.weeklyStudyMinutes}m`, icon: "timer-outline" as IconName },
+    { label: "best squad rank", value: rankLabel, icon: "podium" as IconName },
+    { label: "questions helped", value: pulse.snapshot.questionsHelped, icon: "hand-heart-outline" as IconName },
+    { label: "badges earned", value: pulse.snapshot.badgesEarned, icon: "medal-outline" as IconName },
+    { label: "current streak", value: pulse.snapshot.currentStreak, icon: "fire" as IconName },
+    { label: "joined squads", value: pulse.snapshot.joinedSquads, icon: "account-multiple-check-outline" as IconName }
+  ];
+
+  return (
+    <AppCard style={styles.snapshotCard}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>Your community snapshot</Text>
+          <Text style={styles.muted}>A quick read on where you fit this week.</Text>
+        </View>
+      </View>
+      <View style={styles.snapshotGrid}>
+        {tiles.map((tile) => (
+          <View key={tile.label} style={styles.snapshotTile}>
+            <MaterialCommunityIcons name={tile.icon} color={palette.info} size={18} />
+            <Text style={styles.metricValue}>{tile.value}</Text>
+            <Text style={styles.mutedSmall}>{tile.label}</Text>
+          </View>
+        ))}
+      </View>
+    </AppCard>
+  );
+}
+
+function ActivityFeedCard({ pulse }: { pulse: CommunityPulse | null }) {
+  const items = pulse?.activityFeed ?? [];
+  return (
+    <AppCard style={styles.listCard}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>People are working on</Text>
+          <Text style={styles.muted}>Privacy-safe signals from the last few days.</Text>
+        </View>
+        <Text style={styles.mutedSmall}>{items.length ? "Live-ish" : "Waiting"}</Text>
+      </View>
+      {items.length ? (
+        <View style={styles.activityList}>
+          {items.slice(0, 6).map((item) => (
+            <View key={item.id} style={styles.activityRow}>
+              <View style={[styles.activityIcon, { backgroundColor: `${item.color}18` }]}>
+                <MaterialCommunityIcons name={item.icon as IconName} color={item.color} size={18} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.activityTitle}>{item.title}</Text>
+                <Text style={styles.mutedSmall}>{item.detail}</Text>
+              </View>
+              <Text style={styles.mutedSmall}>{formatRelativeTime(item.createdAt)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <EmptyState title="No public activity yet" body="The first study session, answered question or room start will appear here." />
+      )}
+    </AppCard>
+  );
+}
+
+function CommunityLoopCard() {
+  const loop = [
+    "Study session",
+    "Squad progress",
+    "Mission reward",
+    "Helpful answers",
+    "Board recognition"
+  ];
+  return (
+    <AppCard style={styles.loopCard}>
+      <View style={styles.roomHubHeader}>
+        <View style={styles.loopIcon}>
+          <MaterialCommunityIcons name="sync" color={palette.success} size={20} />
+        </View>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>The community loop</Text>
+          <Text style={styles.muted}>Work turns into progress, progress turns into recognition, recognition pulls people back.</Text>
+        </View>
+      </View>
+      <View style={styles.loopRow}>
+        {loop.map((item, index) => (
+          <View key={item} style={styles.loopStep}>
+            <Text style={styles.loopNumber}>{index + 1}</Text>
+            <Text style={styles.loopText}>{item}</Text>
+          </View>
+        ))}
+      </View>
+    </AppCard>
+  );
+}
+
+function SquadCard({
+  squad,
+  onStart,
+  onAsk,
+  onRoom
+}: {
+  squad: CommunitySquad;
+  onStart: (squad: CommunitySquad) => void;
+  onAsk: (squad: CommunitySquad) => void;
+  onRoom: (squad: CommunitySquad) => void;
+}) {
   const viewerLine = squad.viewerJoined
     ? squad.viewerMinutes > 0
       ? `You: ${squad.viewerMinutes}m${squad.viewerRank ? ` - #${squad.viewerRank}` : ""}`
@@ -378,6 +584,9 @@ function SquadCard({ squad }: { squad: CommunitySquad }) {
           <Text style={styles.mutedSmall}>
             {squad.memberCount} members {squad.viewerJoined ? "- your squad" : ""}
           </Text>
+          <Text style={styles.mutedSmall} numberOfLines={2}>
+            {squad.identity}
+          </Text>
         </View>
         <View style={[styles.pulsePill, { backgroundColor: `${squad.color}18` }]}>
           <Text style={[styles.pulseText, { color: squad.color }]}>{squad.momentum}</Text>
@@ -396,6 +605,9 @@ function SquadCard({ squad }: { squad: CommunitySquad }) {
         <Text style={styles.squadNudge} numberOfLines={2}>
           {squad.nextNudge}
         </Text>
+        {squad.weeklyMinutes === 0 ? (
+          <Text style={styles.mutedSmall}>No pressure: first session makes this squad feel alive.</Text>
+        ) : null}
       </View>
       <View style={styles.squadStatGrid}>
         <View style={styles.squadStat}>
@@ -411,14 +623,33 @@ function SquadCard({ squad }: { squad: CommunitySquad }) {
           <Text style={styles.mutedSmall}>on streak</Text>
         </View>
       </View>
-      <Text style={styles.userThemeText} numberOfLines={1}>
-        Top: {squad.topContributor ? `${squad.topContributor.displayName} - ${squad.topContributor.minutes} min` : "waiting for first session"}
-      </Text>
+      <View style={styles.squadRecognitionGrid}>
+        <Text style={styles.userThemeText} numberOfLines={1}>
+          Top minutes: {squad.topContributor ? `${squad.topContributor.displayName} - ${squad.topContributor.minutes}m` : "open"}
+        </Text>
+        <Text style={styles.userThemeText} numberOfLines={1}>
+          Top helper: {squad.topHelper ? `${squad.topHelper.displayName} - ${squad.topHelper.answers}` : "open"}
+        </Text>
+        <Text style={styles.userThemeText} numberOfLines={1}>
+          Most improved: {squad.mostImproved ? `${squad.mostImproved.displayName} +${squad.mostImproved.minutesGained}m` : "open"}
+        </Text>
+      </View>
+      <View style={styles.cardActionRow}>
+        <Button mode="contained" compact icon="timer-outline" onPress={() => onStart(squad)}>
+          Join sprint
+        </Button>
+        <Button mode="outlined" compact icon="comment-question-outline" onPress={() => onAsk(squad)}>
+          Ask squad
+        </Button>
+        <Button mode="outlined" compact icon="door-open" onPress={() => onRoom(squad)}>
+          View room
+        </Button>
+      </View>
     </View>
   );
 }
 
-function MissionCard({ mission }: { mission: CommunityMission | null }) {
+function MissionCard({ mission, onAction }: { mission: CommunityMission | null; onAction: (action: CommunityMission["items"][number]["action"]) => void }) {
   if (!mission) return null;
   return (
     <AppCard style={styles.missionCard}>
@@ -427,9 +658,14 @@ function MissionCard({ mission }: { mission: CommunityMission | null }) {
           <MaterialCommunityIcons name={mission.complete ? "check-decagram" : "flag-checkered"} color={palette.warning} size={22} />
         </View>
         <View style={styles.flexText}>
-          <Text style={styles.cardTitle}>This week's mission</Text>
+          <Text style={styles.cardTitle}>{mission.title}</Text>
           <Text style={styles.muted}>{mission.reward}</Text>
         </View>
+        {mission.nextAction ? (
+          <Button mode="contained" compact icon="arrow-right" onPress={() => onAction(mission.nextAction?.action ?? "study")}>
+            {mission.nextAction.label}
+          </Button>
+        ) : null}
       </View>
       <View style={styles.missionList}>
         {mission.items.map((item) => (
@@ -441,6 +677,7 @@ function MissionCard({ mission }: { mission: CommunityMission | null }) {
             />
             <View style={styles.flexText}>
               <Text style={styles.missionLabel}>{item.label}</Text>
+              <Text style={styles.mutedSmall}>{item.helper}</Text>
               <View style={styles.missionTrack}>
                 <View style={[styles.missionFill, { width: `${Math.min(100, (item.progress / item.target) * 100)}%` }]} />
               </View>
@@ -448,6 +685,9 @@ function MissionCard({ mission }: { mission: CommunityMission | null }) {
             <Text style={styles.mutedSmall}>
               {item.progress}/{item.target}
             </Text>
+            <Button mode={item.complete ? "outlined" : "text"} compact onPress={() => onAction(item.action)}>
+              {item.complete ? "Done" : item.actionLabel}
+            </Button>
           </View>
         ))}
       </View>
@@ -485,6 +725,9 @@ function LiveRoomCard({
           <Text style={styles.mutedSmall}>
             {room.subjectHint} - {room.weeklyMinutes}/{room.weeklyGoalMinutes}m room goal
           </Text>
+          <Text style={styles.mutedSmall} numberOfLines={2}>
+            {room.description}
+          </Text>
         </View>
         <View style={[styles.pulsePill, { backgroundColor: `${room.color}18` }]}>
           <Text style={[styles.pulseText, { color: room.color }]}>{roomStateCopy}</Text>
@@ -497,6 +740,22 @@ function LiveRoomCard({
         <View style={[styles.squadProgressFill, { width: `${progress}%`, backgroundColor: room.color }]} />
       </View>
       <Text style={styles.roomPrompt}>{room.focusPrompt}</Text>
+      <View style={styles.roomInfoGrid}>
+        <View style={styles.roomInfoTile}>
+          <Text style={styles.mutedSmall}>Next session</Text>
+          <Text style={styles.userThemeText}>{formatHour(room.nextSessionAt)}</Text>
+        </View>
+        <View style={styles.roomInfoTile}>
+          <Text style={styles.mutedSmall}>Recently active</Text>
+          <Text style={styles.userThemeText}>{formatRelativeTime(room.recentlyActiveAt)}</Text>
+        </View>
+        <View style={styles.roomInfoTile}>
+          <Text style={styles.mutedSmall}>Room signal</Text>
+          <Text style={styles.userThemeText} numberOfLines={1}>
+            {room.activityPreview}
+          </Text>
+        </View>
+      </View>
       <View style={styles.liveRoomFooter}>
         <Text style={styles.userThemeText}>
           {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder} / ${room.targetMinutes}:00` : `${room.activeCount} studying now`}
@@ -504,7 +763,7 @@ function LiveRoomCard({
         <Text style={styles.mutedSmall} numberOfLines={1}>
           {room.activeStudents.length
             ? room.activeStudents.map((student) => student.displayName).slice(0, 3).join(", ")
-            : "No one inside yet"}
+            : room.emptyCta}
         </Text>
       </View>
     </View>
@@ -516,28 +775,39 @@ function QuestionWallItem({
   answerDraft,
   onAnswerDraft,
   onAnswer,
+  onReport,
+  onSave,
   sending
 }: {
   item: CommunityQuestionWallItem;
   answerDraft: string;
   onAnswerDraft: (value: string) => void;
   onAnswer: (item: CommunityQuestionWallItem) => void;
+  onReport: (item: CommunityQuestionWallItem) => void;
+  onSave: (item: CommunityQuestionWallItem) => void;
   sending: boolean;
 }) {
   const canAnswer = !item.isCurrentUser && !item.answeredByViewer;
+  const statusHot = item.status !== "Answered";
 
   return (
     <View style={styles.questionItem}>
       <View style={styles.feedbackHeader}>
         <View style={styles.feedbackMeta}>
           <Text style={styles.feedbackCategory}>{item.subjectName ?? "General"}</Text>
-          <Text style={[styles.feedbackStatus, item.answerCount ? styles.feedbackStatusCalm : styles.feedbackStatusHot]}>
-            {item.answerCount ? `${item.answerCount} answer${item.answerCount === 1 ? "" : "s"}` : "Needs help"}
+          <Text style={styles.questionType}>{item.questionType}</Text>
+          <Text style={[styles.feedbackStatus, statusHot ? styles.feedbackStatusHot : styles.feedbackStatusCalm]}>
+            {item.status}
           </Text>
         </View>
         <Text style={styles.mutedSmall}>{formatTime(item.lastActivityAt)}</Text>
       </View>
       <Text style={styles.feedbackMessage}>{item.message}</Text>
+      <View style={styles.questionMetaRow}>
+        <Text style={styles.userStat}>{item.answerCount} answer{item.answerCount === 1 ? "" : "s"}</Text>
+        <Text style={styles.userStat}>{item.helpfulScore} helpful score</Text>
+        {item.answeredByViewer ? <Text style={styles.userStat}>helped by you</Text> : null}
+      </View>
       {item.answers.length ? (
         <View style={styles.answerList}>
           {item.answers.map((answer) => (
@@ -570,6 +840,14 @@ function QuestionWallItem({
       ) : (
         <Text style={styles.mutedSmall}>{item.isCurrentUser ? "Waiting for another student to answer." : "You have already helped on this one."}</Text>
       )}
+      <View style={styles.cardActionRow}>
+        <Button mode="outlined" compact icon="bookmark-outline" onPress={() => onSave(item)}>
+          Save
+        </Button>
+        <Button mode="text" compact icon="flag-outline" onPress={() => onReport(item)}>
+          Report
+        </Button>
+      </View>
     </View>
   );
 }
@@ -867,12 +1145,14 @@ export default function CommunityScreen() {
   const [chatMessage, setChatMessage] = useState("");
   const [roomMessage, setRoomMessage] = useState("");
   const [questionSubject, setQuestionSubject] = useState("");
+  const [questionType, setQuestionType] = useState<(typeof QUESTION_TYPES)[number]>("Concept help");
   const [questionMessage, setQuestionMessage] = useState("");
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [activeLiveRoomId, setActiveLiveRoomId] = useState<string | null>(null);
   const [liveRoomStartedAt, setLiveRoomStartedAt] = useState<number | null>(null);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const [roomIntroOpen, setRoomIntroOpen] = useState(false);
+  const [communityGuideHidden, setCommunityGuideHidden] = useState(true);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [resendingLeaderboardInvite, setResendingLeaderboardInvite] = useState(false);
@@ -944,6 +1224,24 @@ export default function CommunityScreen() {
     () => questionWall.filter((item) => item.answeredByViewer).length,
     [questionWall]
   );
+  const questionSubjects = useMemo(() => {
+    const subjectNames = Array.from(new Set(subjects.map((subject) => subject.subjectName))).sort((a, b) => a.localeCompare(b));
+    return ["General", ...subjectNames];
+  }, [subjects]);
+  const selectedRoomPrompts = useMemo(() => {
+    if (!selectedRoom) return genericRoomPrompts;
+    const normalised = selectedRoom.subjectName.toLowerCase();
+    const key = normalised.includes("software")
+      ? "software"
+      : normalised.includes("business")
+        ? "business"
+        : normalised.includes("english")
+          ? "english"
+          : normalised.includes("math")
+            ? "maths"
+            : "";
+    return [...(key ? subjectStarterPrompts[key] ?? [] : []), ...genericRoomPrompts].slice(0, 8);
+  }, [selectedRoom]);
 
   useEffect(() => {
     let active = true;
@@ -962,6 +1260,14 @@ export default function CommunityScreen() {
         if (active && !value) setRoomIntroOpen(true);
       })
       .catch(() => undefined);
+
+    AsyncStorage.getItem(COMMUNITY_GUIDE_KEY)
+      .then((value) => {
+        if (active) setCommunityGuideHidden(Boolean(value));
+      })
+      .catch(() => {
+        if (active) setCommunityGuideHidden(false);
+      });
 
     return () => {
       active = false;
@@ -1178,6 +1484,81 @@ export default function CommunityScreen() {
     setNotice("Left the live study room.");
   };
 
+  const dismissCommunityGuide = async () => {
+    setCommunityGuideHidden(true);
+    await AsyncStorage.setItem(COMMUNITY_GUIDE_KEY, "seen");
+  };
+
+  const runMissionAction = (action: CommunityMission["items"][number]["action"]) => {
+    if (action === "study") {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "timer", targetMinutes: "45" } });
+      return;
+    }
+    if (action === "notes") {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "notes" } });
+      return;
+    }
+    if (action === "practice") {
+      router.push("/(tabs)/questions");
+      return;
+    }
+    setMode("questions");
+  };
+
+  const startSquadSprint = (squad: CommunitySquad) => {
+    const subject = subjects.find((item) => item.subjectName.toLowerCase().includes(squad.shortName.toLowerCase().split(" ")[0]));
+    router.push({
+      pathname: "/(tabs)/study",
+      params: {
+        mode: "timer",
+        targetMinutes: "25",
+        ...(subject ? { subjectId: subject.id } : {})
+      }
+    });
+  };
+
+  const askSquad = (squad: CommunitySquad) => {
+    setQuestionSubject(squad.shortName);
+    setQuestionType("Concept help");
+    setMode("questions");
+  };
+
+  const viewSquadRoom = (squad: CommunitySquad) => {
+    const room = liveRooms.find((item) => item.squadId === squad.id);
+    setMode("rooms");
+    if (room) {
+      void joinLiveRoom(room);
+    }
+  };
+
+  const applyRoomPrompt = (prompt: string) => {
+    setRoomMessage((current) => (current.trim() ? `${current.trim()}\n${prompt}` : prompt));
+  };
+
+  const reportCommunityItem = (label: string, detail: string) => {
+    setCategory("other");
+    setFeedbackMessage(`[Community report] ${label}\n\n${detail}`);
+    setMode("feedback");
+    setNotice("Report drafted. Add context and send it to admin.");
+  };
+
+  const replyToChat = (item: CommunityChatMessage) => {
+    const reply = `@${item.user.displayName} `;
+    if (item.subjectRoomId) {
+      setRoomMessage((current) => (current.trim() ? `${current.trim()}\n${reply}` : reply));
+    } else {
+      setChatMessage((current) => (current.trim() ? `${current.trim()}\n${reply}` : reply));
+    }
+  };
+
+  const reactToChat = () => {
+    setNotice("Helpful reaction noted locally. Persistent reaction counts need a small database table later.");
+  };
+
+  const saveQuestionWallItem = (item: CommunityQuestionWallItem) => {
+    setNotice(`Saved idea: ${item.subjectName ?? "General"} question. Full saved-question sync can come next.`);
+  };
+
   const sendQuestion = async () => {
     if (!questionMessage.trim()) return;
     setSending(true);
@@ -1186,11 +1567,13 @@ export default function CommunityScreen() {
     try {
       const data = await studyApi.sendQuestionWallQuestion({
         subjectName: questionSubject.trim() || null,
+        questionType,
         message: questionMessage.trim()
       });
       setQuestionWall(data.questionWall);
       setQuestionMessage("");
       setQuestionSubject("");
+      setQuestionType("Concept help");
       setNotice("Posted anonymously to the question wall.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not post question");
@@ -1366,7 +1749,9 @@ export default function CommunityScreen() {
     week: { title: "This week", empty: "No weekly study yet." },
     today: { title: "Today", empty: "No one has logged study today yet." },
     improved: { title: "Most improved", empty: "Improvement appears once students beat last week." },
-    streaks: { title: "Longest active streaks", empty: "No active streaks yet." }
+    streaks: { title: "Longest active streaks", empty: "No active streaks yet." },
+    helpful: { title: "Most helpful", empty: "Helpful answers appear once students support Q&A." },
+    challenge: { title: "Challenge leaders", empty: "Mission points appear as students complete weekly actions." }
   };
   const selectedBoardCopy = boardCopy[boardScope];
   const spotlightEntries = boardEntries.slice(0, 3);
@@ -1405,6 +1790,7 @@ export default function CommunityScreen() {
           <Text variant="headlineLarge" style={styles.title}>
             Community
           </Text>
+          <Text style={styles.muted}>Squads, rooms, questions and recognition without derailing study.</Text>
         </View>
         <View style={styles.headerIcon}>
           <MaterialCommunityIcons name="message-text-outline" color={palette.primary} size={22} />
@@ -1431,7 +1817,10 @@ export default function CommunityScreen() {
 
       {mode === "squads" ? (
         <>
-          <MissionCard mission={mission} />
+          <CommunityGuideCard hidden={communityGuideHidden} onDismiss={dismissCommunityGuide} />
+          <CommunitySnapshotCard pulse={pulse} />
+          <MissionCard mission={mission} onAction={runMissionAction} />
+          <CommunityLoopCard />
 
           <AppCard style={styles.leaderboardStatusCard}>
             <View style={styles.allowanceTop}>
@@ -1453,14 +1842,19 @@ export default function CommunityScreen() {
             <CommunityPulseStrip pulse={pulse} />
           </AppCard>
 
+          <ActivityFeedCard pulse={pulse} />
+
           <AppCard style={styles.listCard}>
             <View style={styles.feedbackHeader}>
-              <Text style={styles.cardTitle}>Weekly subject squads</Text>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Weekly subject squads</Text>
+                <Text style={styles.muted}>Mini teams for each subject. Minutes matter, but helping and improvement count too.</Text>
+              </View>
               <Text style={styles.muted}>{formatWeekRange(boards?.weekStart ?? leaderboard?.weekStart, boards?.weekEnd ?? leaderboard?.weekEnd)}</Text>
             </View>
             <View style={styles.squadGrid}>
               {squads.map((squad) => (
-                <SquadCard key={squad.id} squad={squad} />
+                <SquadCard key={squad.id} squad={squad} onStart={startSquadSprint} onAsk={askSquad} onRoom={viewSquadRoom} />
               ))}
             </View>
           </AppCard>
@@ -1473,6 +1867,11 @@ export default function CommunityScreen() {
                 <Text style={styles.cardTitle}>Live study rooms</Text>
                 <Text style={styles.muted}>Join a room, keep your timer running, and let others see someone is working.</Text>
               </View>
+              {!activeLiveRoomId ? (
+                <Button mode="contained" compact icon="door-open" onPress={() => liveRooms[0] && joinLiveRoom(liveRooms[0])}>
+                  Start public session
+                </Button>
+              ) : null}
               {activeLiveRoomId ? (
                 <Button mode="outlined" compact icon="exit-to-app" onPress={leaveLiveRoom}>
                   Leave
@@ -1491,6 +1890,35 @@ export default function CommunityScreen() {
                 />
               ))}
             </View>
+          </AppCard>
+
+          <AppCard style={styles.chessArenaCard}>
+            <View style={styles.roomHubHeader}>
+              <View style={styles.chessIcon}>
+                <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Weekly chess arena</Text>
+                <Text style={styles.muted}>
+                  A study-first tournament idea: unlock entry after {CHESS_ARENA_MINUTES} minutes this week.
+                </Text>
+              </View>
+              <View style={styles.minutePill}>
+                <Text style={styles.minuteText}>{pulse?.snapshot.weeklyStudyMinutes ?? 0}/{CHESS_ARENA_MINUTES}m</Text>
+              </View>
+            </View>
+            <Text style={styles.muted}>
+              Chess stays a break, not the main event. Study enough, then play a quick bracket without derailing the night.
+            </Text>
+            <Button
+              mode="outlined"
+              compact
+              icon="chess-king"
+              disabled={(pulse?.snapshot.weeklyStudyMinutes ?? 0) < CHESS_ARENA_MINUTES}
+              onPress={() => router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } })}
+            >
+              {(pulse?.snapshot.weeklyStudyMinutes ?? 0) >= CHESS_ARENA_MINUTES ? "Open chess" : "Study to unlock"}
+            </Button>
           </AppCard>
 
           <AppCard style={styles.roomHubCard}>
@@ -1575,18 +2003,28 @@ export default function CommunityScreen() {
                       <ChatBubble
                         key={item.id}
                         item={item}
-                        canDelete={isAdmin}
+                        canDelete={isAdmin || item.isCurrentUser}
                         deleting={deletingChatId === item.id}
                         onDelete={deleteChatMessage}
+                        onReply={replyToChat}
+                        onReact={reactToChat}
+                        onReport={(message) => reportCommunityItem("Room chat", message.message)}
                       />
                     ))}
                   </View>
                 ) : (
-                  <EmptyState title="Room is quiet" body="Start with a question, a resource, or a quick study win." />
+                  <EmptyState title="Room is quiet" body="Pick a starter prompt or drop the question you wish someone asked first." />
                 )}
               </AppCard>
 
               <AppCard style={styles.formCard}>
+                <View style={styles.promptGrid}>
+                  {selectedRoomPrompts.map((prompt) => (
+                    <Pressable key={prompt} style={styles.promptChip} onPress={() => applyRoomPrompt(prompt)}>
+                      <Text style={styles.promptChipText}>{prompt}</Text>
+                    </Pressable>
+                  ))}
+                </View>
                 <TextInput
                   mode="outlined"
                   label={`${selectedRoom.subjectName} room message`}
@@ -1619,17 +2057,43 @@ export default function CommunityScreen() {
               </View>
               <View style={styles.flexText}>
                 <Text style={styles.cardTitle}>Anonymous question wall</Text>
-                <Text style={styles.muted}>Ask the thing you are stuck on without putting your name on the question.</Text>
+                <Text style={styles.muted}>Ask the thing you are stuck on without putting your name on the question. Anonymous still has rules and moderation.</Text>
               </View>
             </View>
-            <TextInput
-              mode="outlined"
-              label="Subject"
-              value={questionSubject}
-              onChangeText={setQuestionSubject}
-              placeholder="Business Management, General Maths..."
-              style={styles.input}
-            />
+            <View style={styles.choiceBlock}>
+              <Text style={styles.roomSectionLabel}>Subject</Text>
+              <View style={styles.promptGrid}>
+                {questionSubjects.map((subjectName) => {
+                  const selected = (questionSubject || "General") === subjectName;
+                  return (
+                    <Pressable
+                      key={subjectName}
+                      style={[styles.promptChip, selected && styles.promptChipActive]}
+                      onPress={() => setQuestionSubject(subjectName === "General" ? "" : subjectName)}
+                    >
+                      <Text style={[styles.promptChipText, selected && styles.promptChipTextActive]}>{subjectName}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.choiceBlock}>
+              <Text style={styles.roomSectionLabel}>Question type</Text>
+              <View style={styles.promptGrid}>
+                {QUESTION_TYPES.map((type) => {
+                  const selected = questionType === type;
+                  return (
+                    <Pressable
+                      key={type}
+                      style={[styles.promptChip, selected && styles.promptChipActive]}
+                      onPress={() => setQuestionType(type)}
+                    >
+                      <Text style={[styles.promptChipText, selected && styles.promptChipTextActive]}>{type}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <TextInput
               mode="outlined"
               label="What are you stuck on?"
@@ -1647,7 +2111,10 @@ export default function CommunityScreen() {
 
           <AppCard style={styles.listCard}>
             <View style={styles.feedbackHeader}>
-              <Text style={styles.cardTitle}>Open questions</Text>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Questions waiting for help</Text>
+                <Text style={styles.muted}>Helpful answers give XP, bonus messages and Board recognition.</Text>
+              </View>
               <Text style={styles.muted}>
                 {unansweredQuestionCount} need help - {helpedQuestionCount} helped by you
               </Text>
@@ -1661,12 +2128,22 @@ export default function CommunityScreen() {
                     answerDraft={answerDrafts[item.id] ?? ""}
                     onAnswerDraft={(value) => setAnswerDrafts((current) => ({ ...current, [item.id]: value }))}
                     onAnswer={sendQuestionAnswer}
+                    onReport={(question) => reportCommunityItem("Question wall", question.message)}
+                    onSave={saveQuestionWallItem}
                     sending={sending}
                   />
                 ))}
               </View>
             ) : (
-              <EmptyState title="No questions yet" body="When someone posts a stuck point, helpful answers appear here." />
+              <View style={styles.exampleQuestionBox}>
+                <EmptyState title="No questions yet" body="Be the first to ask a clean stuck point." />
+                {["Can someone explain depreciation?", "What command term means evaluate?", "How do I structure Criterion 2?"].map((example) => (
+                  <Pressable key={example} style={styles.exampleQuestion} onPress={() => setQuestionMessage(example)}>
+                    <MaterialCommunityIcons name="comment-question-outline" color={palette.info} size={16} />
+                    <Text style={styles.userThemeText}>{example}</Text>
+                  </Pressable>
+                ))}
+              </View>
             )}
           </AppCard>
         </>
@@ -1781,12 +2258,39 @@ export default function CommunityScreen() {
                 { value: "week", label: "Week", icon: "calendar-week" },
                 { value: "today", label: "Today", icon: "clock-outline" },
                 { value: "improved", label: "Improved", icon: "trending-up" },
-                { value: "streaks", label: "Streaks", icon: "fire" }
+                { value: "streaks", label: "Streaks", icon: "fire" },
+                { value: "helpful", label: "Helpful", icon: "hand-heart-outline" },
+                { value: "challenge", label: "Missions", icon: "flag-checkered" }
               ]}
             />
             <Text style={styles.muted}>
-              Weekly reset, daily sprint, improvement and streak boards give new students a real shot at showing up.
+              Everyone starts fresh each week. Consistency counts. Helping others counts too.
             </Text>
+          </AppCard>
+
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Squad leaders</Text>
+                <Text style={styles.muted}>Subject squads recognise minutes, helpers and improvement separately.</Text>
+              </View>
+            </View>
+            <View style={styles.squadLeaderGrid}>
+              {squads.map((squad) => (
+                <View key={`leader-${squad.id}`} style={styles.squadLeaderTile}>
+                  <View style={[styles.roomDot, { backgroundColor: squad.color }]} />
+                  <View style={styles.flexText}>
+                    <Text style={styles.leaderboardName}>{squad.shortName}</Text>
+                    <Text style={styles.mutedSmall} numberOfLines={1}>
+                      Minutes: {squad.topContributor ? `${squad.topContributor.displayName} ${squad.topContributor.minutes}m` : "open"}
+                    </Text>
+                    <Text style={styles.mutedSmall} numberOfLines={1}>
+                      Helper: {squad.topHelper ? `${squad.topHelper.displayName} ${squad.topHelper.answers}` : "open"}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
           </AppCard>
 
           {spotlightEntries.length ? (
@@ -1922,6 +2426,23 @@ export default function CommunityScreen() {
               Study {allowance?.unlockStudyMinutes ?? 10} minutes to unlock {allowance?.unlockedMessages ?? 5} messages.
               Study {allowance?.roomUnlimitedStudyMinutes ?? 30} minutes for unlimited chat today. Helpful Q&A answers add bonus messages.
             </Text>
+            {!allowance?.remainingMinutes ? (
+              <Button mode="outlined" compact icon="timer-outline" onPress={() => router.push({ pathname: "/(tabs)/study", params: { mode: "timer", targetMinutes: "10" } })}>
+                Study to unlock more messages
+              </Button>
+            ) : null}
+          </AppCard>
+
+          <AppCard style={styles.rulesCard}>
+            <View style={styles.roomHubHeader}>
+              <View style={styles.privacyIcon}>
+                <MaterialCommunityIcons name="shield-check-outline" color={palette.info} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Community rules</Text>
+                <Text style={styles.muted}>No personal info, no piling on, keep help specific, report anything off.</Text>
+              </View>
+            </View>
           </AppCard>
 
           <AppCard style={styles.chatCard}>
@@ -1931,14 +2452,17 @@ export default function CommunityScreen() {
                   <ChatBubble
                     key={item.id}
                     item={item}
-                    canDelete={isAdmin}
+                    canDelete={isAdmin || item.isCurrentUser}
                     deleting={deletingChatId === item.id}
                     onDelete={deleteChatMessage}
+                    onReply={replyToChat}
+                    onReact={reactToChat}
+                    onReport={(message) => reportCommunityItem("Main chat", message.message)}
                   />
                 ))}
               </View>
             ) : (
-              <EmptyState title="No chat yet" body="The main chat appears here once someone sends the first message." />
+              <EmptyState title="No chat yet" body="Main chat stays calm. Try a subject room if you want a smaller conversation." />
             )}
           </AppCard>
 
@@ -2186,6 +2710,61 @@ const styles = StyleSheet.create({
     gap: 12,
     borderColor: "rgba(96,165,250,0.24)",
     backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  guideCard: {
+    gap: 12,
+    borderColor: "rgba(124,110,255,0.28)",
+    backgroundColor: "rgba(124,110,255,0.08)"
+  },
+  guideGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  guideStep: {
+    flexGrow: 1,
+    flexBasis: 190,
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  guideIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  guideTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  snapshotCard: {
+    gap: 12,
+    borderColor: "rgba(56,189,248,0.24)",
+    backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  snapshotGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  snapshotTile: {
+    flexGrow: 1,
+    flexBasis: 126,
+    minHeight: 88,
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(0,0,0,0.12)"
   },
   privacyHeader: {
     flexDirection: "row",
@@ -2466,6 +3045,81 @@ const styles = StyleSheet.create({
   list: {
     gap: 10
   },
+  activityList: {
+    gap: 8
+  },
+  activityRow: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  activityIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  activityTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  loopCard: {
+    gap: 12,
+    borderColor: "rgba(74,222,128,0.2)",
+    backgroundColor: "rgba(74,222,128,0.06)"
+  },
+  loopIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(74,222,128,0.12)"
+  },
+  loopRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  loopStep: {
+    flexGrow: 1,
+    flexBasis: 135,
+    minHeight: 58,
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.14)"
+  },
+  loopNumber: {
+    color: palette.success,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  loopText: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  squadLeaderGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  squadLeaderTile: {
+    flexGrow: 1,
+    flexBasis: 210,
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
   squadGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2570,6 +3224,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "rgba(0,0,0,0.14)"
   },
+  squadRecognitionGrid: {
+    gap: 4,
+    paddingTop: 2
+  },
+  cardActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
   missionCard: {
     gap: 14,
     borderColor: "rgba(245,158,11,0.28)",
@@ -2619,6 +3282,19 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingLeft: 56
   },
+  roomInfoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  roomInfoTile: {
+    flexGrow: 1,
+    flexBasis: 150,
+    gap: 3,
+    padding: 9,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.14)"
+  },
   roomPrompt: {
     color: palette.text,
     lineHeight: 20
@@ -2638,6 +3314,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  questionType: {
+    color: palette.info,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(96,165,250,0.12)",
+    overflow: "hidden"
+  },
+  questionMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   answerList: {
     gap: 8,
@@ -2755,6 +3446,24 @@ const styles = StyleSheet.create({
   chatSwitchCard: {
     gap: 12
   },
+  chessArenaCard: {
+    gap: 12,
+    borderColor: "rgba(245,158,11,0.24)",
+    backgroundColor: "rgba(245,158,11,0.07)"
+  },
+  chessIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,158,11,0.14)"
+  },
+  rulesCard: {
+    gap: 10,
+    borderColor: "rgba(96,165,250,0.2)",
+    backgroundColor: "rgba(96,165,250,0.06)"
+  },
   roomHubCard: {
     gap: 14
   },
@@ -2827,6 +3536,48 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: "Outfit_700Bold"
   },
+  promptGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  promptChip: {
+    minHeight: 34,
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  promptChipActive: {
+    borderColor: palette.primary,
+    backgroundColor: `${palette.primary}18`
+  },
+  promptChipText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  promptChipTextActive: {
+    color: palette.text
+  },
+  choiceBlock: {
+    gap: 8
+  },
+  exampleQuestionBox: {
+    gap: 8
+  },
+  exampleQuestion: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(96,165,250,0.08)",
+    padding: 10
+  },
   roomStatusCard: {
     gap: 12,
     borderColor: "rgba(96,165,250,0.22)",
@@ -2890,6 +3641,14 @@ const styles = StyleSheet.create({
   chatText: {
     color: palette.text,
     lineHeight: 20
+  },
+  chatControls: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    paddingTop: 4
   },
   themePicker: {
     maxHeight: 380
