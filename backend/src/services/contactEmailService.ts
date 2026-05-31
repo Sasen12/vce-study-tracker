@@ -39,6 +39,8 @@ const loadNodemailer = async () => {
 
 const recipientEmail = () => process.env.CONTACT_RECIPIENT_EMAIL?.trim() || "techsavvy356@gmail.com";
 
+export const smtpPassword = () => (process.env.CONTACT_SMTP_PASS || process.env.SMTP_PASS || "").replace(/\s/g, "");
+
 export const smtpTransport = async () => {
   const mailer = await loadNodemailer();
   if (!mailer) return null;
@@ -53,7 +55,7 @@ export const smtpTransport = async () => {
 
   const port = Number(process.env.CONTACT_SMTP_PORT ?? process.env.SMTP_PORT ?? 587);
   const user = process.env.CONTACT_SMTP_USER?.trim() || process.env.SMTP_USER?.trim();
-  const pass = process.env.CONTACT_SMTP_PASS || process.env.SMTP_PASS;
+  const pass = smtpPassword();
   const secureSetting = process.env.CONTACT_SMTP_SECURE ?? process.env.SMTP_SECURE;
   const secure = secureSetting ? secureSetting.toLowerCase() === "true" : port === 465;
 
