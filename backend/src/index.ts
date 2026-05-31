@@ -88,20 +88,24 @@ cron.schedule(
   }
 );
 
-cron.schedule(
-  weeklyDigestCronExpression(),
-  async () => {
-    try {
-      const result = await sendWeeklyDigestToAllUsers();
-      console.log(`Weekly digest job completed. Sent ${result.sent}, skipped ${result.skipped}, failed ${result.failed}.`);
-    } catch (error) {
-      console.error("Weekly digest job failed", error);
+try {
+  cron.schedule(
+    weeklyDigestCronExpression(),
+    async () => {
+      try {
+        const result = await sendWeeklyDigestToAllUsers();
+        console.log(`Weekly digest job completed. Sent ${result.sent}, skipped ${result.skipped}, failed ${result.failed}.`);
+      } catch (error) {
+        console.error("Weekly digest job failed", error);
+      }
+    },
+    {
+      timezone: APP_TIME_ZONE
     }
-  },
-  {
-    timezone: APP_TIME_ZONE
-  }
-);
+  );
+} catch (error) {
+  console.error("Weekly digest cron could not be scheduled. The API will still start.", error);
+}
 
 const start = async () => {
   await ensureDatabaseSchema();

@@ -18,7 +18,46 @@ type SendWeeklyDigestSummary = {
   reason?: "disabled" | "smtp_missing";
 };
 
-export const weeklyDigestCronExpression = () => process.env.WEEKLY_DIGEST_CRON?.trim() || "0 18 * * SUN";
+const DEFAULT_WEEKLY_DIGEST_CRON = "0 0 18 * * 0";
+const dayNameMap: Record<string, string> = {
+  sun: "0",
+  sunday: "0",
+  mon: "1",
+  monday: "1",
+  tue: "2",
+  tuesday: "2",
+  wed: "3",
+  wednesday: "3",
+  thu: "4",
+  thursday: "4",
+  fri: "5",
+  friday: "5",
+  sat: "6",
+  saturday: "6"
+};
+
+const normalizeDayField = (value: string) =>
+  value.replace(/[a-z]+/gi, (match) => dayNameMap[match.toLowerCase()] ?? match);
+
+const cleanCronExpression = (value?: string) => {
+  const trimmed = value?.trim().replace(/^['"]|['"]$/g, "") ?? "";
+  if (!trimmed) return DEFAULT_WEEKLY_DIGEST_CRON;
+
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 5) {
+    parts[4] = normalizeDayField(parts[4]);
+    return `0 ${parts.join(" ")}`;
+  }
+  if (parts.length === 6) {
+    parts[5] = normalizeDayField(parts[5]);
+    return parts.join(" ");
+  }
+
+  console.warn(`Invalid WEEKLY_DIGEST_CRON "${trimmed}". Falling back to ${DEFAULT_WEEKLY_DIGEST_CRON}.`);
+  return DEFAULT_WEEKLY_DIGEST_CRON;
+};
+
+export const weeklyDigestCronExpression = () => cleanCronExpression(process.env.WEEKLY_DIGEST_CRON);
 
 export const isWeeklyDigestEnabled = () => process.env.WEEKLY_DIGEST_ENABLED?.toLowerCase() !== "false";
 
