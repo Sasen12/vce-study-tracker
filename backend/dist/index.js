@@ -42,7 +42,6 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
 };
 app.use(cors(corsOptions));
-app.options("/api/*", cors(corsOptions));
 app.use(express.json({ limit: "8mb" }));
 app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "vce-study-tracker-api" });

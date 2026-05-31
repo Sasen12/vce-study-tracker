@@ -47,7 +47,6 @@ const corsOptions: CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("/api/*", cors(corsOptions));
 
 app.use(express.json({ limit: "8mb" }));
 
