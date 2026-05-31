@@ -22,11 +22,14 @@ import type {
   CommunityLeaderboardEntry,
   CommunityLiveRoom,
   CommunityMission,
+  CommunityMutedUserSummary,
   CommunityPulse,
   CommunityQuestionWallItem,
+  CommunityReportSummary,
   CommunitySquad,
   CommunitySubjectRoom,
   CommunityUserSummary,
+  CommunityChessTournament,
   PublicContactSubmission,
   UsageScreen,
   UserSubject,
@@ -181,7 +184,8 @@ function ChatBubble({
   onDelete,
   onReply,
   onReact,
-  onReport
+  onReport,
+  onMute
 }: {
   item: CommunityChatMessage;
   canDelete?: boolean;
@@ -190,6 +194,7 @@ function ChatBubble({
   onReply?: (item: CommunityChatMessage) => void;
   onReact?: (item: CommunityChatMessage) => void;
   onReport?: (item: CommunityChatMessage) => void;
+  onMute?: (item: CommunityChatMessage) => void;
 }) {
   return (
     <View style={[styles.chatBubble, item.isCurrentUser && styles.chatBubbleMine]}>
@@ -223,6 +228,11 @@ function ChatBubble({
         <Button mode="text" compact icon="flag-outline" onPress={() => onReport?.(item)}>
           Report
         </Button>
+        {!item.isCurrentUser ? (
+          <Button mode="text" compact icon="volume-off" onPress={() => onMute?.(item)}>
+            Mute
+          </Button>
+        ) : null}
       </View>
     </View>
   );
@@ -316,6 +326,67 @@ function LandingContactItem({
             Reopen
           </Button>
         ) : null}
+      </View>
+    </View>
+  );
+}
+
+function CommunityReportItem({
+  item,
+  updating,
+  onStatus,
+  onDeleteMessage
+}: {
+  item: CommunityReportSummary;
+  updating?: boolean;
+  onStatus: (id: string, status: CommunityReportSummary["status"]) => void;
+  onDeleteMessage: (item: CommunityReportSummary) => void;
+}) {
+  const reportStatusTone = item.status === "new" || item.status === "reviewing" ? styles.feedbackStatusHot : styles.feedbackStatusCalm;
+
+  return (
+    <View style={styles.feedbackItem}>
+      <View style={styles.feedbackHeader}>
+        <View style={styles.feedbackMeta}>
+          <Text style={styles.feedbackCategory}>{item.contentType}</Text>
+          <Text style={[styles.feedbackStatus, reportStatusTone]}>{item.status}</Text>
+        </View>
+        <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+      </View>
+      <Text style={styles.feedbackMessage}>{item.reason}</Text>
+      <View style={styles.senderRow}>
+        <MaterialCommunityIcons name="account-alert-outline" color={palette.warning} size={18} />
+        <View style={styles.flexText}>
+          <Text style={styles.feedbackSender} numberOfLines={1}>
+            Reported by {item.reporter.displayName}
+          </Text>
+          <Text style={styles.mutedSmall} numberOfLines={1}>
+            {item.reporter.email}
+          </Text>
+        </View>
+      </View>
+      {item.reportedUser ? (
+        <Text style={styles.mutedSmall} numberOfLines={1}>
+          About {item.reportedUser.displayName} - {item.reportedUser.email}
+        </Text>
+      ) : null}
+      <View style={styles.contactActions}>
+        {item.status !== "reviewing" ? (
+          <Button mode="outlined" compact icon="eye-outline" disabled={updating} onPress={() => onStatus(item.id, "reviewing")}>
+            Review
+          </Button>
+        ) : null}
+        {item.messageId ? (
+          <Button mode="outlined" compact icon="delete-outline" disabled={updating} onPress={() => onDeleteMessage(item)}>
+            Delete content
+          </Button>
+        ) : null}
+        <Button mode={item.status === "resolved" ? "contained" : "outlined"} compact icon="check-circle-outline" disabled={updating} onPress={() => onStatus(item.id, "resolved")}>
+          Resolve
+        </Button>
+        <Button mode="text" compact icon="close-circle-outline" disabled={updating} onPress={() => onStatus(item.id, "ignored")}>
+          Ignore
+        </Button>
       </View>
     </View>
   );
@@ -776,7 +847,9 @@ function QuestionWallItem({
   onAnswerDraft,
   onAnswer,
   onReport,
+  onReportAnswer,
   onSave,
+  onHelpfulAnswer,
   sending
 }: {
   item: CommunityQuestionWallItem;
@@ -784,7 +857,9 @@ function QuestionWallItem({
   onAnswerDraft: (value: string) => void;
   onAnswer: (item: CommunityQuestionWallItem) => void;
   onReport: (item: CommunityQuestionWallItem) => void;
+  onReportAnswer: (item: CommunityQuestionWallItem, answerId: string, message: string) => void;
   onSave: (item: CommunityQuestionWallItem) => void;
+  onHelpfulAnswer: (item: CommunityQuestionWallItem, answerId: string) => void;
   sending: boolean;
 }) {
   const canAnswer = !item.isCurrentUser && !item.answeredByViewer;
@@ -815,6 +890,20 @@ function QuestionWallItem({
               <Text style={styles.feedbackSender}>{answer.user.displayName}</Text>
               <Text style={styles.mutedSmall}>{formatTime(answer.createdAt)}</Text>
               <Text style={styles.feedbackMessage}>{answer.message}</Text>
+              <View style={styles.cardActionRow}>
+                <Button
+                  mode={answer.votedHelpfulByViewer ? "contained" : "outlined"}
+                  compact
+                  icon="thumb-up-outline"
+                  disabled={answer.isCurrentUser || sending}
+                  onPress={() => onHelpfulAnswer(item, answer.id)}
+                >
+                  Helpful{answer.helpfulVotes ? ` ${answer.helpfulVotes}` : ""}
+                </Button>
+                <Button mode="text" compact icon="flag-outline" onPress={() => onReportAnswer(item, answer.id, answer.message)}>
+                  Report
+                </Button>
+              </View>
             </View>
           ))}
         </View>
@@ -841,8 +930,8 @@ function QuestionWallItem({
         <Text style={styles.mutedSmall}>{item.isCurrentUser ? "Waiting for another student to answer." : "You have already helped on this one."}</Text>
       )}
       <View style={styles.cardActionRow}>
-        <Button mode="outlined" compact icon="bookmark-outline" onPress={() => onSave(item)}>
-          Save
+        <Button mode={item.savedByViewer ? "contained" : "outlined"} compact icon={item.savedByViewer ? "bookmark-check-outline" : "bookmark-outline"} disabled={sending} onPress={() => onSave(item)}>
+          {item.savedByViewer ? "Saved" : "Save"}
         </Button>
         <Button mode="text" compact icon="flag-outline" onPress={() => onReport(item)}>
           Report
@@ -1118,12 +1207,15 @@ export default function CommunityScreen() {
   const [boardScope, setBoardScope] = useState<BoardScope>("week");
   const [feedback, setFeedback] = useState<UserFeedback[]>([]);
   const [landingContacts, setLandingContacts] = useState<PublicContactSubmission[]>([]);
+  const [communityReports, setCommunityReports] = useState<CommunityReportSummary[]>([]);
+  const [mutedUsers, setMutedUsers] = useState<CommunityMutedUserSummary[]>([]);
   const [chat, setChat] = useState<CommunityChatMessage[]>([]);
   const [squads, setSquads] = useState<CommunitySquad[]>([]);
   const [liveRooms, setLiveRooms] = useState<CommunityLiveRoom[]>([]);
   const [questionWall, setQuestionWall] = useState<CommunityQuestionWallItem[]>([]);
   const [mission, setMission] = useState<CommunityMission | null>(null);
   const [boards, setBoards] = useState<CommunityBoards | null>(null);
+  const [chessTournament, setChessTournament] = useState<CommunityChessTournament | null>(null);
   const [roomChat, setRoomChat] = useState<Record<string, CommunityChatMessage[]>>({});
   const [joinedRoomIds, setJoinedRoomIds] = useState<string[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -1137,6 +1229,7 @@ export default function CommunityScreen() {
   const [roomLoading, setRoomLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1175,6 +1268,8 @@ export default function CommunityScreen() {
       const data = await studyApi.community();
       setFeedback(data.feedback);
       setLandingContacts(data.landingContacts ?? []);
+      setCommunityReports(data.reports ?? []);
+      setMutedUsers(data.mutedUsers ?? []);
       setChat(data.chat);
       setUsers(data.users ?? []);
       setAllowance(data.allowance);
@@ -1185,6 +1280,7 @@ export default function CommunityScreen() {
       setQuestionWall(data.questionWall ?? []);
       setMission(data.mission ?? null);
       setBoards(data.boards ?? null);
+      setChessTournament(data.chessTournament ?? null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load feedback");
     } finally {
@@ -1222,6 +1318,10 @@ export default function CommunityScreen() {
   );
   const helpedQuestionCount = useMemo(
     () => questionWall.filter((item) => item.answeredByViewer).length,
+    [questionWall]
+  );
+  const savedQuestionWallItems = useMemo(
+    () => questionWall.filter((item) => item.savedByViewer),
     [questionWall]
   );
   const questionSubjects = useMemo(() => {
@@ -1389,6 +1489,38 @@ export default function CommunityScreen() {
     }
   };
 
+  const updateReportStatus = async (id: string, status: CommunityReportSummary["status"]) => {
+    setUpdatingReportId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.updateCommunityReportStatus(id, status);
+      setCommunityReports((current) => current.map((item) => (item.id === id ? data.report : item)));
+      setNotice(`Report marked ${status}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update report");
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
+  const deleteReportedMessage = async (item: CommunityReportSummary) => {
+    if (!item.messageId) return;
+    setUpdatingReportId(item.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.deleteCommunityChat(item.messageId);
+      await studyApi.updateCommunityReportStatus(item.id, "resolved");
+      await loadCommunity();
+      setNotice("Content deleted and report resolved.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not delete reported content");
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
   const deleteChatMessage = async (id: string) => {
     setDeletingChatId(id);
     setError(null);
@@ -1535,11 +1667,77 @@ export default function CommunityScreen() {
     setRoomMessage((current) => (current.trim() ? `${current.trim()}\n${prompt}` : prompt));
   };
 
-  const reportCommunityItem = (label: string, detail: string) => {
-    setCategory("other");
-    setFeedbackMessage(`[Community report] ${label}\n\n${detail}`);
-    setMode("feedback");
-    setNotice("Report drafted. Add context and send it to admin.");
+  const reportCommunityItem = async (
+    contentType: "chat" | "room-chat" | "question" | "answer",
+    contentId: string,
+    reason: string,
+    messageId?: string | null,
+    reportedUserId?: string | null
+  ) => {
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.reportCommunityItem({
+        contentType,
+        contentId,
+        reason: reason.slice(0, 600),
+        messageId,
+        reportedUserId
+      });
+      setNotice("Reported. Admin can review it from the community inbox.");
+      if (isAdmin) {
+        await loadCommunity();
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not report that item");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const muteCommunityUser = async (item: CommunityChatMessage) => {
+    if (item.isCurrentUser) return;
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.muteCommunityUser(item.userId);
+      setMutedUsers((current) => [
+        {
+          mutedUserId: item.userId,
+          displayName: item.user.displayName,
+          email: "",
+          createdAt: new Date().toISOString()
+        },
+        ...current.filter((user) => user.mutedUserId !== item.userId)
+      ]);
+      setChat((current) => current.filter((message) => message.userId !== item.userId));
+      setRoomChat((current) =>
+        Object.fromEntries(Object.entries(current).map(([roomId, messages]) => [roomId, messages.filter((message) => message.userId !== item.userId)]))
+      );
+      setNotice(`${item.user.displayName} is muted for you.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not mute that student");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const unmuteCommunityUser = async (mutedUserId: string) => {
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.unmuteCommunityUser(mutedUserId);
+      setMutedUsers((current) => current.filter((user) => user.mutedUserId !== mutedUserId));
+      await loadCommunity();
+      setNotice("Student unmuted.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not unmute that student");
+    } finally {
+      setSending(false);
+    }
   };
 
   const replyToChat = (item: CommunityChatMessage) => {
@@ -1552,11 +1750,39 @@ export default function CommunityScreen() {
   };
 
   const reactToChat = () => {
-    setNotice("Helpful reaction noted locally. Persistent reaction counts need a small database table later.");
+    setNotice("Reaction noted. Q&A helpful votes are tracked on the Board.");
   };
 
-  const saveQuestionWallItem = (item: CommunityQuestionWallItem) => {
-    setNotice(`Saved idea: ${item.subjectName ?? "General"} question. Full saved-question sync can come next.`);
+  const saveQuestionWallItem = async (item: CommunityQuestionWallItem) => {
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = item.savedByViewer
+        ? await studyApi.unsaveQuestionWallQuestion(item.id)
+        : await studyApi.saveQuestionWallQuestion(item.id);
+      setQuestionWall(data.questionWall);
+      setNotice(item.savedByViewer ? "Question removed from saved." : "Question saved. It will stay marked for you.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update saved question");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const markAnswerHelpful = async (_item: CommunityQuestionWallItem, answerId: string) => {
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.helpfulQuestionWallAnswer(answerId);
+      setQuestionWall(data.questionWall);
+      setNotice("Helpful vote updated. Good answers now count on the Board.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not mark that answer helpful");
+    } finally {
+      setSending(false);
+    }
   };
 
   const sendQuestion = async () => {
@@ -1596,6 +1822,29 @@ export default function CommunityScreen() {
       setNotice("Answer posted. You earned XP and bonus chat energy.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not answer that question");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const joinChessArena = async () => {
+    if (chessTournament?.joined) {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } });
+      return;
+    }
+    if (!chessTournament?.eligible) {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "timer", targetMinutes: "25" } });
+      return;
+    }
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await studyApi.joinChessTournament();
+      setChessTournament(data.chessTournament);
+      setNotice("You are in the weekly chess arena. Keep study first, then play.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not join the chess arena");
     } finally {
       setSending(false);
     }
@@ -1900,24 +2149,28 @@ export default function CommunityScreen() {
               <View style={styles.flexText}>
                 <Text style={styles.cardTitle}>Weekly chess arena</Text>
                 <Text style={styles.muted}>
-                  A study-first tournament idea: unlock entry after {CHESS_ARENA_MINUTES} minutes this week.
+                  A study-first tournament: unlock entry after {chessTournament?.requiredMinutes ?? CHESS_ARENA_MINUTES} minutes this week.
                 </Text>
               </View>
               <View style={styles.minutePill}>
-                <Text style={styles.minuteText}>{pulse?.snapshot.weeklyStudyMinutes ?? 0}/{CHESS_ARENA_MINUTES}m</Text>
+                <Text style={styles.minuteText}>
+                  {chessTournament?.viewerMinutes ?? pulse?.snapshot.weeklyStudyMinutes ?? 0}/{chessTournament?.requiredMinutes ?? CHESS_ARENA_MINUTES}m
+                </Text>
               </View>
             </View>
             <Text style={styles.muted}>
-              Chess stays a break, not the main event. Study enough, then play a quick bracket without derailing the night.
+              {chessTournament?.joined
+                ? `${chessTournament.joinedCount} joined. Next round ${formatHour(chessTournament.nextRoundAt)}.`
+                : "Chess stays a break, not the main event. Study enough, then play a quick bracket without derailing the night."}
             </Text>
             <Button
               mode="outlined"
               compact
               icon="chess-king"
-              disabled={(pulse?.snapshot.weeklyStudyMinutes ?? 0) < CHESS_ARENA_MINUTES}
-              onPress={() => router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } })}
+              loading={sending}
+              onPress={joinChessArena}
             >
-              {(pulse?.snapshot.weeklyStudyMinutes ?? 0) >= CHESS_ARENA_MINUTES ? "Open chess" : "Study to unlock"}
+              {chessTournament?.joined ? "Open chess" : chessTournament?.eligible ? "Join arena" : "Study to unlock"}
             </Button>
           </AppCard>
 
@@ -2008,7 +2261,8 @@ export default function CommunityScreen() {
                         onDelete={deleteChatMessage}
                         onReply={replyToChat}
                         onReact={reactToChat}
-                        onReport={(message) => reportCommunityItem("Room chat", message.message)}
+                        onReport={(message) => reportCommunityItem("room-chat", message.id, message.message, message.id, message.userId)}
+                        onMute={muteCommunityUser}
                       />
                     ))}
                   </View>
@@ -2109,6 +2363,36 @@ export default function CommunityScreen() {
             </Button>
           </AppCard>
 
+          {savedQuestionWallItems.length ? (
+            <AppCard style={styles.listCard}>
+              <View style={styles.feedbackHeader}>
+                <View style={styles.flexText}>
+                  <Text style={styles.cardTitle}>Saved questions</Text>
+                  <Text style={styles.muted}>Quick return points for useful explanations.</Text>
+                </View>
+                <Text style={styles.muted}>{savedQuestionWallItems.length} saved</Text>
+              </View>
+              <View style={styles.list}>
+                {savedQuestionWallItems.slice(0, 4).map((item) => (
+                  <View key={`saved-${item.id}`} style={styles.savedQuestionRow}>
+                    <View style={styles.flexText}>
+                      <Text style={styles.feedbackCategory}>{item.subjectName ?? "General"}</Text>
+                      <Text style={styles.userThemeText} numberOfLines={2}>
+                        {item.message}
+                      </Text>
+                      <Text style={styles.mutedSmall}>
+                        {item.answerCount} answer{item.answerCount === 1 ? "" : "s"} - {item.helpfulScore} helpful score
+                      </Text>
+                    </View>
+                    <Button mode="outlined" compact icon="bookmark-off-outline" disabled={sending} onPress={() => saveQuestionWallItem(item)}>
+                      Unsave
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            </AppCard>
+          ) : null}
+
           <AppCard style={styles.listCard}>
             <View style={styles.feedbackHeader}>
               <View style={styles.flexText}>
@@ -2128,8 +2412,10 @@ export default function CommunityScreen() {
                     answerDraft={answerDrafts[item.id] ?? ""}
                     onAnswerDraft={(value) => setAnswerDrafts((current) => ({ ...current, [item.id]: value }))}
                     onAnswer={sendQuestionAnswer}
-                    onReport={(question) => reportCommunityItem("Question wall", question.message)}
+                    onReport={(question) => reportCommunityItem("question", question.id, question.message)}
+                    onReportAnswer={(question, answerId, message) => reportCommunityItem("answer", answerId, message, answerId)}
                     onSave={saveQuestionWallItem}
+                    onHelpfulAnswer={markAnswerHelpful}
                     sending={sending}
                   />
                 ))}
@@ -2352,6 +2638,28 @@ export default function CommunityScreen() {
 
             <AppCard style={styles.listCard}>
               <View style={styles.feedbackHeader}>
+                <Text style={styles.cardTitle}>Community reports</Text>
+                <Text style={styles.muted}>{communityReports.length} open signals</Text>
+              </View>
+              {communityReports.length ? (
+                <View style={styles.list}>
+                  {communityReports.map((item) => (
+                    <CommunityReportItem
+                      key={item.id}
+                      item={item}
+                      updating={updatingReportId === item.id}
+                      onStatus={updateReportStatus}
+                      onDeleteMessage={deleteReportedMessage}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <EmptyState title="No reports" body="Student reports from chat, rooms and Q&A will appear here." />
+              )}
+            </AppCard>
+
+            <AppCard style={styles.listCard}>
+              <View style={styles.feedbackHeader}>
                 <Text style={styles.cardTitle}>Feedback inbox</Text>
                 <Text style={styles.muted}>{feedback.length} received</Text>
               </View>
@@ -2445,6 +2753,35 @@ export default function CommunityScreen() {
             </View>
           </AppCard>
 
+          {mutedUsers.length ? (
+            <AppCard style={styles.listCard}>
+              <View style={styles.feedbackHeader}>
+                <View style={styles.flexText}>
+                  <Text style={styles.cardTitle}>Muted students</Text>
+                  <Text style={styles.muted}>Their chat, room and Q&A activity is hidden for you.</Text>
+                </View>
+                <Text style={styles.muted}>{mutedUsers.length} muted</Text>
+              </View>
+              <View style={styles.list}>
+                {mutedUsers.map((user) => (
+                  <View key={user.mutedUserId} style={styles.savedQuestionRow}>
+                    <View style={styles.flexText}>
+                      <Text style={styles.userThemeText} numberOfLines={1}>
+                        {user.displayName}
+                      </Text>
+                      <Text style={styles.mutedSmall} numberOfLines={1}>
+                        {user.schoolName || user.email || `Muted ${formatTime(user.createdAt)}`}
+                      </Text>
+                    </View>
+                    <Button mode="outlined" compact icon="volume-high" disabled={sending} onPress={() => unmuteCommunityUser(user.mutedUserId)}>
+                      Unmute
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            </AppCard>
+          ) : null}
+
           <AppCard style={styles.chatCard}>
             {chat.length ? (
               <View style={styles.chatList}>
@@ -2457,7 +2794,8 @@ export default function CommunityScreen() {
                     onDelete={deleteChatMessage}
                     onReply={replyToChat}
                     onReact={reactToChat}
-                    onReport={(message) => reportCommunityItem("Main chat", message.message)}
+                    onReport={(message) => reportCommunityItem("chat", message.id, message.message, message.id, message.userId)}
+                    onMute={muteCommunityUser}
                   />
                 ))}
               </View>
@@ -3341,6 +3679,16 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     backgroundColor: "rgba(96,165,250,0.08)"
+  },
+  savedQuestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.035)"
   },
   feedbackItem: {
     gap: 8,

@@ -31,6 +31,13 @@ model User {
   plans          AdaptiveStudyPlan[]
   feedbackItems  UserFeedback[]
   chatMessages   CommunityChatMessage[]
+  questionSaves  CommunityQuestionSave[]
+  questionHelpfulVotes CommunityQuestionHelpfulVote[]
+  communityReportsMade CommunityReport[] @relation("CommunityReportsMade")
+  communityReportsReceived CommunityReport[] @relation("CommunityReportsReceived")
+  mutedUsers     CommunityUserMute[] @relation("CommunityMuteOwner")
+  mutedByUsers   CommunityUserMute[] @relation("CommunityMutedUser")
+  chessTournamentEntries CommunityChessTournamentEntry[]
   giftMessages   UserGiftMessage[]
   usageEvents    UserUsageEvent[]
   memoryEvents   StudentMemoryEvent[]
@@ -251,10 +258,84 @@ model CommunityChatMessage {
   message   String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  helpfulVotes CommunityQuestionHelpfulVote[]
+  reports   CommunityReport[]
 
   @@index([createdAt])
   @@index([userId, createdAt])
   @@map("community_chat_messages")
+}
+
+model CommunityQuestionSave {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([questionId])
+  @@map("community_question_saves")
+}
+
+model CommunityQuestionHelpfulVote {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  answerMessageId String               @map("answer_message_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answerMessage   CommunityChatMessage @relation(fields: [answerMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, answerMessageId])
+  @@index([answerMessageId])
+  @@map("community_question_helpful_votes")
+}
+
+model CommunityReport {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId     String                @map("reporter_id") @db.Uuid
+  reportedUserId String?               @map("reported_user_id") @db.Uuid
+  messageId      String?               @map("message_id") @db.Uuid
+  contentType    String                @map("content_type")
+  contentId      String                @map("content_id")
+  reason         String
+  status         String                @default("new")
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  reporter       User                  @relation("CommunityReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User?                 @relation("CommunityReportsReceived", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  message        CommunityChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@index([messageId])
+  @@map("community_reports")
+}
+
+model CommunityUserMute {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  mutedUserId String   @map("muted_user_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User     @relation("CommunityMuteOwner", fields: [userId], references: [id], onDelete: Cascade)
+  mutedUser   User     @relation("CommunityMutedUser", fields: [mutedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mutedUserId])
+  @@index([mutedUserId])
+  @@map("community_user_mutes")
+}
+
+model CommunityChessTournamentEntry {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  weekStart      DateTime @map("week_start") @db.Date
+  minutesAtEntry Int      @map("minutes_at_entry")
+  status         String   @default("joined")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([weekStart, createdAt])
+  @@map("community_chess_tournament_entries")
 }
 
 model UserGiftMessage {

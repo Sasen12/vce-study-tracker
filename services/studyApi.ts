@@ -10,10 +10,13 @@ import type {
   ChatAllowance,
   CommunityBoards,
   CommunityChatMessage,
+  CommunityChessTournament,
   CommunityLiveRoom,
   CommunityMission,
+  CommunityMutedUserSummary,
   CommunityPulse,
   CommunityQuestionWallItem,
+  CommunityReportSummary,
   CommunitySquad,
   CommunitySubjectRoom,
   CommunityUserSummary,
@@ -215,6 +218,9 @@ export const studyApi = {
       questionWall: CommunityQuestionWallItem[];
       mission: CommunityMission;
       boards: CommunityBoards;
+      chessTournament: CommunityChessTournament;
+      reports?: CommunityReportSummary[];
+      mutedUsers?: CommunityMutedUserSummary[];
     }>("/community"),
   updateContactSubmissionStatus: (id: string, adminStatus: PublicContactSubmission["adminStatus"]) =>
     apiFetch<{ submission: PublicContactSubmission }>(`/contact/${id}/status`, {
@@ -265,6 +271,28 @@ export const studyApi = {
         body
       }
     ),
+  saveQuestionWallQuestion: (questionId: string) =>
+    apiFetch<{ questionWall: CommunityQuestionWallItem[] }>(`/community/question-wall/${questionId}/save`, { method: "POST" }),
+  unsaveQuestionWallQuestion: (questionId: string) =>
+    apiFetch<{ questionWall: CommunityQuestionWallItem[] }>(`/community/question-wall/${questionId}/save`, { method: "DELETE" }),
+  helpfulQuestionWallAnswer: (answerId: string) =>
+    apiFetch<{ questionWall: CommunityQuestionWallItem[] }>(`/community/question-wall/answers/${answerId}/helpful`, { method: "POST" }),
+  reportCommunityItem: (body: {
+    contentType: "chat" | "room-chat" | "question" | "answer";
+    contentId: string;
+    reason?: string | null;
+    messageId?: string | null;
+    reportedUserId?: string | null;
+  }) => apiFetch<{ report: CommunityReportSummary }>("/community/reports", { method: "POST", body }),
+  updateCommunityReportStatus: (id: string, status: CommunityReportSummary["status"]) =>
+    apiFetch<{ report: CommunityReportSummary }>(`/community/reports/${id}/status`, {
+      method: "PATCH",
+      body: { status }
+    }),
+  muteCommunityUser: (userId: string) => apiFetch<{ mutedUserId: string }>(`/community/users/${userId}/mute`, { method: "POST" }),
+  unmuteCommunityUser: (userId: string) => apiFetch<void>(`/community/users/${userId}/mute`, { method: "DELETE" }),
+  joinChessTournament: () =>
+    apiFetch<{ chessTournament: CommunityChessTournament }>("/community/chess-tournament/join", { method: "POST" }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
   giftTheme: (userId: string, body: { themeId: string; equip?: boolean }) =>
     apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/theme`, {

@@ -117,6 +117,78 @@ const ensureSubjectLifecycleSchema = async () => {
   await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS user_subjects_user_archived_idx ON user_subjects(user_id, archived_at)");
 };
 
+const ensureCommunityTrustSchema = async () => {
+  await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_question_saves (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      question_id UUID NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (user_id, question_id)
+    )
+  `);
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_question_saves_question_idx ON community_question_saves(question_id)");
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_question_helpful_votes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      answer_message_id UUID NOT NULL REFERENCES community_chat_messages(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (user_id, answer_message_id)
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS community_question_helpful_votes_answer_idx ON community_question_helpful_votes(answer_message_id)"
+  );
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reported_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      message_id UUID REFERENCES community_chat_messages(id) ON DELETE SET NULL,
+      content_type TEXT NOT NULL,
+      content_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_reports_status_created_idx ON community_reports(status, created_at)");
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS community_reports_reported_user_created_idx ON community_reports(reported_user_id, created_at)"
+  );
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_reports_message_idx ON community_reports(message_id)");
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_user_mutes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      muted_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (user_id, muted_user_id)
+    )
+  `);
+  await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_user_mutes_muted_user_idx ON community_user_mutes(muted_user_id)");
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_chess_tournament_entries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      week_start DATE NOT NULL,
+      minutes_at_entry INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'joined',
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (user_id, week_start)
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS community_chess_tournament_entries_week_created_idx ON community_chess_tournament_entries(week_start, created_at)"
+  );
+};
+
 export const ensureDatabaseSchema = async () => {
   await prisma.$executeRaw`ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
   await prisma.$executeRawUnsafe("ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN NOT NULL DEFAULT TRUE");
@@ -132,6 +204,7 @@ export const ensureDatabaseSchema = async () => {
   await ensureSubjectLifecycleSchema();
   await ensureStudentMemorySchema();
   await ensurePublicContactSchema();
+  await ensureCommunityTrustSchema();
 
   const usersMissingSchool = await prisma.user.findMany({
     where: {

@@ -168,6 +168,64 @@ CREATE INDEX user_feedback_created_idx ON user_feedback(created_at);
 CREATE INDEX community_chat_messages_created_idx ON community_chat_messages(created_at);
 CREATE INDEX community_chat_messages_user_created_idx ON community_chat_messages(user_id, created_at);
 
+CREATE TABLE community_question_saves (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, question_id)
+);
+
+CREATE INDEX community_question_saves_question_idx ON community_question_saves(question_id);
+
+CREATE TABLE community_question_helpful_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  answer_message_id UUID NOT NULL REFERENCES community_chat_messages(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, answer_message_id)
+);
+
+CREATE INDEX community_question_helpful_votes_answer_idx ON community_question_helpful_votes(answer_message_id);
+
+CREATE TABLE community_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reported_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  message_id UUID REFERENCES community_chat_messages(id) ON DELETE SET NULL,
+  content_type TEXT NOT NULL,
+  content_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX community_reports_status_created_idx ON community_reports(status, created_at);
+CREATE INDEX community_reports_reported_user_created_idx ON community_reports(reported_user_id, created_at);
+CREATE INDEX community_reports_message_idx ON community_reports(message_id);
+
+CREATE TABLE community_user_mutes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  muted_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, muted_user_id)
+);
+
+CREATE INDEX community_user_mutes_muted_user_idx ON community_user_mutes(muted_user_id);
+
+CREATE TABLE community_chess_tournament_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  minutes_at_entry INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'joined',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, week_start)
+);
+
+CREATE INDEX community_chess_tournament_entries_week_created_idx ON community_chess_tournament_entries(week_start, created_at);
+
 CREATE TABLE user_gift_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,

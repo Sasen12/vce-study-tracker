@@ -60,6 +60,18 @@ const questionAnswerSchema = z.object({
   message: z.string().trim().min(8).max(600)
 });
 
+const reportSchema = z.object({
+  contentType: z.enum(["chat", "room-chat", "question", "answer"]),
+  contentId: z.string().trim().min(1).max(120),
+  messageId: z.string().uuid().optional().nullable(),
+  reportedUserId: z.string().uuid().optional().nullable(),
+  reason: z.string().trim().min(3).max(600).optional().nullable()
+});
+
+const reportStatusSchema = z.object({
+  status: z.enum(["new", "reviewing", "resolved", "ignored"])
+});
+
 const liveRoomHeartbeatSchema = z.object({
   roomId: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/)
 });
@@ -95,6 +107,7 @@ const HELP_BONUS_MESSAGES = 3;
 const MAX_DAILY_CHAT_MESSAGES = 60;
 const WEEKLY_MISSION_BADGE_ID = "weekly_lock_in";
 const WEEKLY_MISSION_XP = 80;
+const CHESS_ARENA_MINUTES = 90;
 const USAGE_EVENT_THROTTLE_MS = 60_000;
 const SUBJECT_ROOM_PREFIX = "[[subject-room:";
 const SUBJECT_ROOM_MESSAGE_PATTERN = /^\[\[subject-room:([a-z0-9-]+)\]\]\s*([\s\S]*)$/;
@@ -429,6 +442,95 @@ const ensureDefaultCommunityVisibility = async (userId: string) => {
   });
 };
 
+const mutedUserIdsFor = async (userId: string) => {
+  const rows = await prisma.communityUserMute.findMany({
+    where: { userId },
+    select: { mutedUserId: true }
+  });
+  return new Set(rows.map((row) => row.mutedUserId));
+};
+
+const mutedUsersFor = async (userId: string) => {
+  const rows = await prisma.communityUserMute.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 60,
+    include: {
+      mutedUser: {
+        select: {
+          displayName: true,
+          email: true,
+          schoolName: true
+        }
+      }
+    }
+  });
+
+  return rows.map((row) => ({
+    mutedUserId: row.mutedUserId,
+    displayName: row.mutedUser.displayName,
+    email: row.mutedUser.email,
+    schoolName: row.mutedUser.schoolName,
+    createdAt: row.createdAt
+  }));
+};
+
+const serialiseCommunityReport = (report: {
+  id: string;
+  contentType: string;
+  contentId: string;
+  messageId: string | null;
+  reason: string;
+  status: string;
+  createdAt: Date;
+  reporter: { displayName: string; email: string };
+  reportedUser?: { displayName: string; email: string } | null;
+}) => ({
+  id: report.id,
+  contentType: report.contentType,
+  contentId: report.contentId,
+  messageId: report.messageId,
+  reason: report.reason,
+  status: ["new", "reviewing", "resolved", "ignored"].includes(report.status) ? report.status : "new",
+  createdAt: report.createdAt,
+  reporter: report.reporter,
+  reportedUser: report.reportedUser ?? null
+});
+
+const communityReportsForAdmin = async () =>
+  prisma.communityReport
+    .findMany({
+      orderBy: { createdAt: "desc" },
+      take: 60,
+      include: {
+        reporter: { select: { displayName: true, email: true } },
+        reportedUser: { select: { displayName: true, email: true } }
+      }
+    })
+    .then((reports) => reports.map(serialiseCommunityReport));
+
+const messageForReport = async (payload: z.infer<typeof reportSchema>) => {
+  const explicitMessageId = payload.messageId ?? (z.string().uuid().safeParse(payload.contentId).success ? payload.contentId : null);
+  if (explicitMessageId) {
+    const message = await prisma.communityChatMessage.findUnique({
+      where: { id: explicitMessageId },
+      select: { id: true, userId: true }
+    });
+    if (message) return message;
+  }
+
+  if (payload.contentType === "question") {
+    return prisma.communityChatMessage.findFirst({
+      where: {
+        message: { startsWith: `${QUESTION_WALL_PREFIX}q:${payload.contentId}]]` }
+      },
+      select: { id: true, userId: true }
+    });
+  }
+
+  return null;
+};
+
 const serialiseChatMessage = (
   item: {
     id: string;
@@ -745,7 +847,7 @@ const chatAllowanceFor = async (userId: string) => {
   };
 };
 
-const buildQuestionWall = async (viewerUserId: string) => {
+const buildQuestionWall = async (viewerUserId: string, mutedUserIds = new Set<string>()) => {
   const rows = await prisma.communityChatMessage.findMany({
     where: { message: { startsWith: QUESTION_WALL_PREFIX } },
     orderBy: { createdAt: "asc" },
@@ -763,25 +865,31 @@ const buildQuestionWall = async (viewerUserId: string) => {
       id: string;
       subjectName: string | null;
       questionType: string;
+      userId: string;
       message: string;
       createdAt: Date;
       answerCount: number;
       isCurrentUser: boolean;
       answeredByViewer: boolean;
+      savedByViewer: boolean;
       lastActivityAt: Date;
       status: "Open" | "Answered" | "Needs explanation";
       helpfulScore: number;
       answers: {
         id: string;
+        userId: string;
         message: string;
         createdAt: Date;
         user: { displayName: string };
         isCurrentUser: boolean;
+        helpfulVotes: number;
+        votedHelpfulByViewer: boolean;
       }[];
     }
   >();
 
   for (const row of rows) {
+    if (mutedUserIds.has(row.userId) && row.userId !== viewerUserId) continue;
     const parsed = parseQuestionWallMessage(row.message);
     if (!parsed) continue;
 
@@ -791,11 +899,13 @@ const buildQuestionWall = async (viewerUserId: string) => {
         id: parsed.questionId,
         subjectName: parsed.subjectName,
         questionType: typed.questionType,
+        userId: row.userId,
         message: typed.message,
         createdAt: row.createdAt,
         answerCount: 0,
         isCurrentUser: row.userId === viewerUserId,
         answeredByViewer: false,
+        savedByViewer: false,
         lastActivityAt: row.createdAt,
         status: "Open",
         helpfulScore: 0,
@@ -808,10 +918,13 @@ const buildQuestionWall = async (viewerUserId: string) => {
     if (!question) continue;
     question.answers.push({
       id: row.id,
+      userId: row.userId,
       message: parsed.message,
       createdAt: row.createdAt,
       user: publicUser(row.user),
-      isCurrentUser: row.userId === viewerUserId
+      isCurrentUser: row.userId === viewerUserId,
+      helpfulVotes: 0,
+      votedHelpfulByViewer: false
     });
     question.answerCount = question.answers.length;
     question.answeredByViewer = question.answeredByViewer || row.userId === viewerUserId;
@@ -820,13 +933,50 @@ const buildQuestionWall = async (viewerUserId: string) => {
     }
   }
 
+  const questionIds = Array.from(questions.keys());
+  const answerIds = Array.from(questions.values()).flatMap((question) => question.answers.map((answer) => answer.id));
+  const [saves, votes] = await Promise.all([
+    questionIds.length
+      ? prisma.communityQuestionSave.findMany({
+          where: { userId: viewerUserId, questionId: { in: questionIds } },
+          select: { questionId: true }
+        })
+      : Promise.resolve([]),
+    answerIds.length
+      ? prisma.communityQuestionHelpfulVote.findMany({
+          where: { answerMessageId: { in: answerIds } },
+          select: { answerMessageId: true, userId: true }
+        })
+      : Promise.resolve([])
+  ]);
+  const savedQuestionIds = new Set(saves.map((save) => save.questionId));
+  const helpfulVotesByAnswer = new Map<string, { count: number; votedByViewer: boolean }>();
+  for (const vote of votes) {
+    const current = helpfulVotesByAnswer.get(vote.answerMessageId) ?? { count: 0, votedByViewer: false };
+    current.count += 1;
+    current.votedByViewer = current.votedByViewer || vote.userId === viewerUserId;
+    helpfulVotesByAnswer.set(vote.answerMessageId, current);
+  }
+
   return Array.from(questions.values())
-    .map((question) => ({
-      ...question,
-      status: question.answerCount > 0 ? "Answered" : Date.now() - question.createdAt.getTime() > 12 * 60 * 60 * 1000 ? "Needs explanation" : "Open",
-      helpfulScore: question.answers.length * 2 + (question.answeredByViewer ? 1 : 0),
-      answers: question.answers.slice(-4)
-    }))
+    .map((question) => {
+      const answers = question.answers.map((answer) => {
+        const helpful = helpfulVotesByAnswer.get(answer.id);
+        return {
+          ...answer,
+          helpfulVotes: helpful?.count ?? 0,
+          votedHelpfulByViewer: helpful?.votedByViewer ?? false
+        };
+      });
+      const { userId: _userId, ...publicQuestion } = question;
+      return {
+        ...publicQuestion,
+        savedByViewer: savedQuestionIds.has(question.id),
+        status: question.answerCount > 0 ? "Answered" : Date.now() - question.createdAt.getTime() > 12 * 60 * 60 * 1000 ? "Needs explanation" : "Open",
+        helpfulScore: answers.reduce((sum, answer) => sum + answer.helpfulVotes, 0) + answers.length * 2 + (question.answeredByViewer ? 1 : 0),
+        answers: answers.slice(-4).map(({ userId, ...answer }) => answer)
+      };
+    })
     .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())
     .slice(0, 30);
 };
@@ -878,7 +1028,7 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
       },
       chatMessages: {
         where: { createdAt: { gte: weekStart, lt: weekEnd }, message: { startsWith: `${QUESTION_WALL_PREFIX}a:` } },
-        select: { id: true }
+        select: { id: true, helpfulVotes: { select: { id: true } } }
       }
     }
   });
@@ -891,7 +1041,7 @@ const buildCommunityLeaderboards = async (viewerUserId: string) => {
     const previousMinutes = Math.round(previousSessions.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
     const todayMinutes = Math.round(todaySessions.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
     const weekXp = weekSessions.reduce((sum, session) => sum + session.xpEarned, 0);
-    const helpfulAnswers = participant.chatMessages.length;
+    const helpfulAnswers = participant.chatMessages.length + participant.chatMessages.reduce((sum, answer) => sum + answer.helpfulVotes.length, 0);
     const deepSessions = weekSessions.filter((session) => session.durationSeconds >= 45 * 60).length;
     const challengeScore =
       Math.min(3, deepSessions) +
@@ -1404,10 +1554,61 @@ const buildPublicMission = async (viewerUserId: string) => {
   };
 };
 
+const buildChessTournament = async (viewerUserId: string) => {
+  const now = new Date();
+  const weekStart = startOfWeek(now);
+  const nextRoundAt = new Date(weekStart);
+  nextRoundAt.setDate(nextRoundAt.getDate() + 5);
+  nextRoundAt.setHours(19, 30, 0, 0);
+  if (nextRoundAt < now) {
+    nextRoundAt.setDate(nextRoundAt.getDate() + 7);
+  }
+
+  const [study, viewerEntry, joinedCount] = await Promise.all([
+    prisma.studySession.aggregate({
+      where: { userId: viewerUserId, createdAt: { gte: weekStart } },
+      _sum: { durationSeconds: true }
+    }),
+    prisma.communityChessTournamentEntry.findUnique({
+      where: { userId_weekStart: { userId: viewerUserId, weekStart } }
+    }),
+    prisma.communityChessTournamentEntry.count({
+      where: { weekStart }
+    })
+  ]);
+  const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
+
+  return {
+    weekStart: weekStart.toISOString(),
+    requiredMinutes: CHESS_ARENA_MINUTES,
+    viewerMinutes,
+    eligible: viewerMinutes >= CHESS_ARENA_MINUTES,
+    joined: Boolean(viewerEntry),
+    joinedCount,
+    nextRoundAt: nextRoundAt.toISOString()
+  };
+};
+
 const communityPayload = async (user: AuthenticatedRequest["user"]) => {
   const isAdmin = isAdminEmail(user.email);
   const gamification = await ensureDefaultCommunityVisibility(user.id);
-  const [feedback, chatDesc, allowance, users, landingContacts, squads, liveRooms, questionWall, mission, boards, activityFeed] = await Promise.all([
+  const mutedUserIds = await mutedUserIdsFor(user.id);
+  const [
+    feedback,
+    chatDesc,
+    allowance,
+    users,
+    landingContacts,
+    reports,
+    mutedUsers,
+    squads,
+    liveRooms,
+    questionWall,
+    mission,
+    boards,
+    activityFeed,
+    chessTournament
+  ] = await Promise.all([
     prisma.userFeedback.findMany({
       where: isAdmin ? {} : { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -1433,16 +1634,20 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     chatAllowanceFor(user.id),
     isAdmin ? adminUsers() : Promise.resolve([]),
     isAdmin ? publicContactsForAdmin() : Promise.resolve([]),
+    isAdmin ? communityReportsForAdmin() : Promise.resolve([]),
+    mutedUsersFor(user.id),
     buildWeeklySubjectSquads(user.id),
     buildLiveStudyRooms(),
-    buildQuestionWall(user.id),
+    buildQuestionWall(user.id, mutedUserIds),
     buildPublicMission(user.id),
     buildCommunityLeaderboards(user.id),
-    buildCommunityActivityFeed()
+    buildCommunityActivityFeed(),
+    buildChessTournament(user.id)
   ]);
 
   const chat = chatDesc
     .filter((message) => !isCommunitySystemMessage(message.message))
+    .filter((message) => message.userId === user.id || !mutedUserIds.has(message.userId))
     .slice(0, 80)
     .reverse()
     .map((message) => serialiseChatMessage(message, user.id));
@@ -1451,6 +1656,8 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     isAdmin,
     feedback: feedback.map((item) => serialiseFeedback(item, isAdmin)),
     landingContacts: landingContacts.map(serialisePublicContact),
+    reports,
+    mutedUsers,
     chat,
     allowance,
     users,
@@ -1459,7 +1666,8 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     liveRooms,
     questionWall,
     mission,
-    boards
+    boards,
+    chessTournament
   };
 };
 
@@ -1807,7 +2015,7 @@ communityRouter.post(
       }
     });
 
-    const questionWall = await buildQuestionWall(authReq.user.id);
+    const questionWall = await buildQuestionWall(authReq.user.id, await mutedUserIdsFor(authReq.user.id));
     res.status(201).json({ questionWall });
   })
 );
@@ -1850,8 +2058,204 @@ communityRouter.post(
     });
     await addXp(authReq.user.id, 10);
 
-    const [questionWall, allowance] = await Promise.all([buildQuestionWall(authReq.user.id), chatAllowanceFor(authReq.user.id)]);
+    const [questionWall, allowance] = await Promise.all([
+      buildQuestionWall(authReq.user.id, await mutedUserIdsFor(authReq.user.id)),
+      chatAllowanceFor(authReq.user.id)
+    ]);
     res.status(201).json({ questionWall, allowance });
+  })
+);
+
+communityRouter.post(
+  "/question-wall/:questionId/save",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const questionId = z.string().uuid().parse(req.params.questionId);
+    const question = await prisma.communityChatMessage.findFirst({
+      where: {
+        message: { startsWith: `${QUESTION_WALL_PREFIX}q:${questionId}]]` }
+      },
+      select: { id: true }
+    });
+    if (!question) {
+      throw new HttpError(404, "Question not found");
+    }
+
+    await prisma.communityQuestionSave.upsert({
+      where: { userId_questionId: { userId: authReq.user.id, questionId } },
+      create: { userId: authReq.user.id, questionId },
+      update: {}
+    });
+
+    const questionWall = await buildQuestionWall(authReq.user.id, await mutedUserIdsFor(authReq.user.id));
+    res.json({ questionWall });
+  })
+);
+
+communityRouter.delete(
+  "/question-wall/:questionId/save",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const questionId = z.string().uuid().parse(req.params.questionId);
+    await prisma.communityQuestionSave
+      .delete({
+        where: { userId_questionId: { userId: authReq.user.id, questionId } }
+      })
+      .catch(() => undefined);
+
+    const questionWall = await buildQuestionWall(authReq.user.id, await mutedUserIdsFor(authReq.user.id));
+    res.json({ questionWall });
+  })
+);
+
+communityRouter.post(
+  "/question-wall/answers/:answerId/helpful",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const answerId = z.string().uuid().parse(req.params.answerId);
+    const answer = await prisma.communityChatMessage.findUnique({
+      where: { id: answerId },
+      select: { id: true, userId: true, message: true }
+    });
+    const parsed = answer ? parseQuestionWallMessage(answer.message) : null;
+    if (!answer || parsed?.kind !== "a") {
+      throw new HttpError(404, "Answer not found");
+    }
+    if (answer.userId === authReq.user.id) {
+      throw new HttpError(400, "Let another student mark your answer helpful.");
+    }
+
+    const existing = await prisma.communityQuestionHelpfulVote.findUnique({
+      where: { userId_answerMessageId: { userId: authReq.user.id, answerMessageId: answer.id } }
+    });
+    if (existing) {
+      await prisma.communityQuestionHelpfulVote.delete({ where: { id: existing.id } });
+    } else {
+      await prisma.communityQuestionHelpfulVote.create({
+        data: {
+          userId: authReq.user.id,
+          answerMessageId: answer.id
+        }
+      });
+      await addXp(answer.userId, 4);
+    }
+
+    const questionWall = await buildQuestionWall(authReq.user.id, await mutedUserIdsFor(authReq.user.id));
+    res.json({ questionWall });
+  })
+);
+
+communityRouter.post(
+  "/reports",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const payload = reportSchema.parse(req.body);
+    const message = await messageForReport(payload);
+    const report = await prisma.communityReport.create({
+      data: {
+        reporterId: authReq.user.id,
+        reportedUserId: payload.reportedUserId ?? message?.userId ?? null,
+        messageId: message?.id ?? null,
+        contentType: payload.contentType,
+        contentId: payload.contentId,
+        reason: payload.reason?.trim() || "Reported from Community"
+      },
+      include: {
+        reporter: { select: { displayName: true, email: true } },
+        reportedUser: { select: { displayName: true, email: true } }
+      }
+    });
+
+    res.status(201).json({ report: serialiseCommunityReport(report) });
+  })
+);
+
+communityRouter.patch(
+  "/reports/:id/status",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    requireAdmin(authReq.user);
+    const id = z.string().uuid().parse(req.params.id);
+    const payload = reportStatusSchema.parse(req.body);
+    const report = await prisma.communityReport.update({
+      where: { id },
+      data: { status: payload.status },
+      include: {
+        reporter: { select: { displayName: true, email: true } },
+        reportedUser: { select: { displayName: true, email: true } }
+      }
+    });
+
+    res.json({ report: serialiseCommunityReport(report) });
+  })
+);
+
+communityRouter.post(
+  "/users/:id/mute",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const mutedUserId = z.string().uuid().parse(req.params.id);
+    if (mutedUserId === authReq.user.id) {
+      throw new HttpError(400, "You cannot mute yourself.");
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: mutedUserId }, select: { id: true } });
+    if (!user) {
+      throw new HttpError(404, "User not found");
+    }
+
+    await prisma.communityUserMute.upsert({
+      where: { userId_mutedUserId: { userId: authReq.user.id, mutedUserId } },
+      create: { userId: authReq.user.id, mutedUserId },
+      update: {}
+    });
+
+    res.status(201).json({ mutedUserId });
+  })
+);
+
+communityRouter.delete(
+  "/users/:id/mute",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const mutedUserId = z.string().uuid().parse(req.params.id);
+    await prisma.communityUserMute
+      .delete({
+        where: { userId_mutedUserId: { userId: authReq.user.id, mutedUserId } }
+      })
+      .catch(() => undefined);
+    res.status(204).send();
+  })
+);
+
+communityRouter.post(
+  "/chess-tournament/join",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const weekStart = startOfWeek(new Date());
+    const study = await prisma.studySession.aggregate({
+      where: { userId: authReq.user.id, createdAt: { gte: weekStart } },
+      _sum: { durationSeconds: true }
+    });
+    const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
+    if (viewerMinutes < CHESS_ARENA_MINUTES) {
+      throw new HttpError(403, `Study ${CHESS_ARENA_MINUTES - viewerMinutes} more minutes this week to join chess arena.`);
+    }
+
+    await prisma.communityChessTournamentEntry.upsert({
+      where: { userId_weekStart: { userId: authReq.user.id, weekStart } },
+      create: {
+        userId: authReq.user.id,
+        weekStart,
+        minutesAtEntry: viewerMinutes
+      },
+      update: {
+        minutesAtEntry: viewerMinutes
+      }
+    });
+
+    const chessTournament = await buildChessTournament(authReq.user.id);
+    res.status(201).json({ chessTournament });
   })
 );
 
@@ -1894,8 +2298,10 @@ communityRouter.get(
         }
       }
     });
+    const mutedUserIds = await mutedUserIdsFor(authReq.user.id);
 
     const chat = chatDesc
+      .filter((message) => message.userId === authReq.user.id || !mutedUserIds.has(message.userId))
       .reverse()
       .map((message) => serialiseChatMessage(message, authReq.user.id));
 

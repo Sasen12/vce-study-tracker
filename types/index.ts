@@ -253,6 +253,8 @@ export type CommunityQuestionWallAnswer = {
     displayName: string;
   };
   isCurrentUser: boolean;
+  helpfulVotes: number;
+  votedHelpfulByViewer: boolean;
 };
 
 export type CommunityQuestionWallItem = {
@@ -264,10 +266,47 @@ export type CommunityQuestionWallItem = {
   answerCount: number;
   isCurrentUser: boolean;
   answeredByViewer: boolean;
+  savedByViewer: boolean;
   lastActivityAt: string;
   status: "Open" | "Answered" | "Needs explanation";
   helpfulScore: number;
   answers: CommunityQuestionWallAnswer[];
+};
+
+export type CommunityChessTournament = {
+  weekStart: string;
+  requiredMinutes: number;
+  viewerMinutes: number;
+  eligible: boolean;
+  joined: boolean;
+  joinedCount: number;
+  nextRoundAt: string;
+};
+
+export type CommunityReportSummary = {
+  id: string;
+  contentType: string;
+  contentId: string;
+  messageId?: string | null;
+  reason: string;
+  status: "new" | "reviewing" | "resolved" | "ignored";
+  createdAt: string;
+  reporter: {
+    displayName: string;
+    email: string;
+  };
+  reportedUser?: {
+    displayName: string;
+    email: string;
+  } | null;
+};
+
+export type CommunityMutedUserSummary = {
+  mutedUserId: string;
+  displayName: string;
+  email: string;
+  schoolName?: string | null;
+  createdAt: string;
 };
 
 export type CommunityPulse = {
