@@ -14,6 +14,7 @@ import { studyApi } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type {
+  AdminEmailAudience,
   AdminUsageAnalytics,
   ChatAllowance,
   CommunityBoards,
@@ -470,11 +471,13 @@ function QuestionWallItem({
 function UserRow({
   item,
   onGiftTheme,
-  onGiftCoins
+  onGiftCoins,
+  onEmail
 }: {
   item: CommunityUserSummary;
   onGiftTheme: (user: CommunityUserSummary) => void;
   onGiftCoins: (user: CommunityUserSummary) => void;
+  onEmail: (user: CommunityUserSummary) => void;
 }) {
   const unlockedThemeCount = themeShopItems.filter((theme) => item.unlockedCosmetics.includes(theme.id)).length;
 
@@ -508,6 +511,9 @@ function UserRow({
           </Text>
         </View>
         <View style={styles.giftActions}>
+          <Button mode="outlined" compact icon="email-outline" onPress={() => onEmail(item)}>
+            Email
+          </Button>
           <Button mode="outlined" compact icon="cash-multiple" onPress={() => onGiftCoins(item)}>
             Gift coins
           </Button>
@@ -769,6 +775,12 @@ export default function CommunityScreen() {
   const [coinGiftAmount, setCoinGiftAmount] = useState("120");
   const [coinGiftMessage, setCoinGiftMessage] = useState("");
   const [gifting, setGifting] = useState(false);
+  const [adminEmailOpen, setAdminEmailOpen] = useState(false);
+  const [adminEmailTarget, setAdminEmailTarget] = useState<CommunityUserSummary | null>(null);
+  const [adminEmailAudience, setAdminEmailAudience] = useState<AdminEmailAudience>("opted_in");
+  const [adminEmailSubject, setAdminEmailSubject] = useState("");
+  const [adminEmailMessage, setAdminEmailMessage] = useState("");
+  const [adminEmailSending, setAdminEmailSending] = useState(false);
 
   const loadCommunity = useCallback(async () => {
     setError(null);
@@ -1141,6 +1153,15 @@ export default function CommunityScreen() {
     setCoinGiftMessage(`A little boost from Sasen. Spend these coins on something that makes study feel sharper.`);
   };
 
+  const openAdminEmail = (user?: CommunityUserSummary) => {
+    setError(null);
+    setNotice(null);
+    setAdminEmailTarget(user ?? null);
+    setAdminEmailAudience(user ? "single" : "opted_in");
+    setAdminEmailSubject((current) => current || "VCE Forge update");
+    setAdminEmailOpen(true);
+  };
+
   const sendThemeGift = async () => {
     if (!giftUser) return;
     setGifting(true);
@@ -1181,6 +1202,46 @@ export default function CommunityScreen() {
       setError(error instanceof Error ? error.message : "Could not gift coins");
     } finally {
       setGifting(false);
+    }
+  };
+
+  const sendAdminEmail = async () => {
+    const subject = adminEmailSubject.trim();
+    const message = adminEmailMessage.trim();
+    if (subject.length < 4) {
+      setError("Add a clear email subject.");
+      return;
+    }
+    if (message.length < 10) {
+      setError("Write a real message before sending.");
+      return;
+    }
+    if (adminEmailAudience === "single" && !adminEmailTarget) {
+      setError("Choose a user before sending a direct email.");
+      return;
+    }
+
+    setAdminEmailSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await studyApi.sendAdminEmail({
+        audience: adminEmailAudience,
+        userId: adminEmailAudience === "single" ? adminEmailTarget?.id : null,
+        subject,
+        message
+      });
+      setAdminEmailOpen(false);
+      setAdminEmailMessage("");
+      setNotice(
+        result.failed
+          ? `Email sent to ${result.sent}/${result.attempted} users. ${result.failed} failed.`
+          : `Email sent to ${result.sent} user${result.sent === 1 ? "" : "s"}.`
+      );
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not send admin email");
+    } finally {
+      setAdminEmailSending(false);
     }
   };
 
@@ -1481,21 +1542,44 @@ export default function CommunityScreen() {
           </AppCard>
         </>
       ) : mode === "users" && isAdmin ? (
-        <AppCard style={styles.listCard}>
-          <View style={styles.feedbackHeader}>
-            <Text style={styles.cardTitle}>Users</Text>
-            <Text style={styles.muted}>{users.length} total</Text>
-          </View>
-          {users.length ? (
-            <View style={styles.list}>
-              {users.map((item) => (
-                <UserRow key={item.id} item={item} onGiftTheme={openGiftTheme} onGiftCoins={openGiftCoins} />
-              ))}
+        <>
+          <AppCard style={styles.leaderboardPrivacyCard}>
+            <View style={styles.privacyHeader}>
+              <View style={styles.privacyIcon}>
+                <MaterialCommunityIcons name="email-fast-outline" color={palette.info} size={20} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.cardTitle}>Admin email</Text>
+                <Text style={styles.muted}>Send a short VCE Forge update through the backend SMTP account.</Text>
+              </View>
+              <Button mode="contained" compact icon="email-send-outline" onPress={() => openAdminEmail()}>
+                Compose
+              </Button>
             </View>
-          ) : (
-            <EmptyState title="No users yet" body="Registered students will appear here." />
-          )}
-        </AppCard>
+          </AppCard>
+
+          <AppCard style={styles.listCard}>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.cardTitle}>Users</Text>
+              <Text style={styles.muted}>{users.length} total</Text>
+            </View>
+            {users.length ? (
+              <View style={styles.list}>
+                {users.map((item) => (
+                  <UserRow
+                    key={item.id}
+                    item={item}
+                    onGiftTheme={openGiftTheme}
+                    onGiftCoins={openGiftCoins}
+                    onEmail={openAdminEmail}
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState title="No users yet" body="Registered students will appear here." />
+            )}
+          </AppCard>
+        </>
       ) : mode === "analytics" && isAdmin ? (
         <AnalyticsPanel analytics={analytics} loading={analyticsLoading} onRefresh={loadAnalytics} />
       ) : mode === "leaderboard" ? (
@@ -1857,6 +1941,59 @@ export default function CommunityScreen() {
             </Button>
             <Button mode="contained" icon="cash-multiple" loading={gifting} disabled={gifting || !coinGiftUser} onPress={sendCoinGift}>
               Gift coins
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={adminEmailOpen} onDismiss={() => !adminEmailSending && setAdminEmailOpen(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Send admin email</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.muted}>
+              {adminEmailTarget
+                ? `Target selected: ${adminEmailTarget.displayName} (${adminEmailTarget.email})`
+                : "Send an announcement without leaving the app. Opt-in is the safest default."}
+            </Text>
+            <SegmentedButtons
+              value={adminEmailAudience}
+              onValueChange={(value) => setAdminEmailAudience(value as AdminEmailAudience)}
+              buttons={[
+                { value: "opted_in", label: "Opt-in" },
+                { value: "all", label: "All" },
+                ...(adminEmailTarget ? [{ value: "single", label: "User" }] : [])
+              ]}
+            />
+            <TextInput
+              mode="outlined"
+              label="Subject"
+              value={adminEmailSubject}
+              maxLength={120}
+              onChangeText={setAdminEmailSubject}
+            />
+            <TextInput
+              mode="outlined"
+              label="Message"
+              value={adminEmailMessage}
+              multiline
+              numberOfLines={6}
+              maxLength={5000}
+              onChangeText={setAdminEmailMessage}
+            />
+            <Text style={styles.mutedSmall}>
+              {adminEmailMessage.length}/5000 characters. All emails include an Open VCE Forge button and weekly email unsubscribe link.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={adminEmailSending} onPress={() => setAdminEmailOpen(false)}>
+              Close
+            </Button>
+            <Button
+              mode="contained"
+              icon="email-send-outline"
+              loading={adminEmailSending}
+              disabled={adminEmailSending || adminEmailSubject.trim().length < 4 || adminEmailMessage.trim().length < 10}
+              onPress={sendAdminEmail}
+            >
+              Send
             </Button>
           </Dialog.Actions>
         </Dialog>

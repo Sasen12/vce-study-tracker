@@ -1,6 +1,8 @@
 import { apiFetch, apiUpload } from "./api";
 import type {
   AdaptiveStudyPlan,
+  AdminEmailAudience,
+  AdminEmailResult,
   AdminUsageAnalytics,
   AnswerFeedback,
   ClassNoteChunk,
@@ -269,6 +271,16 @@ export const studyApi = {
     }),
   giftCoins: (userId: string, body: { amount: number; message?: string | null }) =>
     apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/coins`, {
+      method: "POST",
+      body
+    }),
+  sendAdminEmail: (body: {
+    audience: AdminEmailAudience;
+    userId?: string | null;
+    subject: string;
+    message: string;
+  }) =>
+    apiFetch<AdminEmailResult>("/community/admin-email", {
       method: "POST",
       body
     }),

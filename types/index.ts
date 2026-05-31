@@ -270,6 +270,14 @@ export type CommunityUserSummary = {
   chatMessageCount: number;
 };
 
+export type AdminEmailAudience = "opted_in" | "all" | "single";
+
+export type AdminEmailResult = {
+  attempted: number;
+  sent: number;
+  failed: number;
+};
+
 export type UserGiftMessage = {
   id: string;
   title: string;

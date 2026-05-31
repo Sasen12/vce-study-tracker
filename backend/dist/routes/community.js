@@ -4,7 +4,9 @@ import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
+import { defaultFromEmail, escapeHtml, smtpTransport } from "../services/contactEmailService.js";
 import { addXp, DEFAULT_TITLE_ID, ensureGamification, grantThemeToUser, levelFromXp, THEME_SHOP_ITEMS } from "../services/gamificationService.js";
+import { createWeeklyDigestUnsubscribeToken } from "../services/weeklyDigestService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 export const communityRouter = Router();
 communityRouter.use(requireAuth);
@@ -23,6 +25,12 @@ const giftThemeSchema = z.object({
 const giftCoinsSchema = z.object({
     amount: z.coerce.number().int().min(1).max(5000),
     message: z.string().trim().min(3).max(180).optional().nullable()
+});
+const adminEmailSchema = z.object({
+    audience: z.enum(["opted_in", "all", "single"]).default("opted_in"),
+    userId: z.string().uuid().optional().nullable(),
+    subject: z.string().trim().min(4).max(120),
+    message: z.string().trim().min(10).max(5000)
 });
 const questionWallSchema = z.object({
     subjectName: z.string().trim().min(2).max(80).optional().nullable(),
@@ -384,6 +392,47 @@ const adminUserById = async (id) => {
         select: adminUserSelect
     });
     return user ? serialiseAdminUser(user) : null;
+};
+const appBaseUrl = () => (process.env.PUBLIC_APP_URL || process.env.APP_URL || "https://www.vceforge.space").trim().replace(/\/$/, "");
+const adminEmailReplyTo = () => process.env.ADMIN_REPLY_EMAIL?.trim() ||
+    process.env.CONTACT_RECIPIENT_EMAIL?.trim() ||
+    process.env.CONTACT_SMTP_USER?.trim() ||
+    process.env.SMTP_USER?.trim() ||
+    undefined;
+const messageHtml = (message) => message
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 14px;">${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+const buildAdminEmail = (recipient, subject, message) => {
+    const appUrl = appBaseUrl();
+    const unsubscribeUrl = `${appUrl}/api/digest/unsubscribe/${createWeeklyDigestUnsubscribeToken(recipient)}`;
+    const greeting = `Hey ${recipient.displayName},`;
+    const text = [
+        greeting,
+        "",
+        message,
+        "",
+        `Open VCE Forge: ${appUrl}`,
+        "",
+        "You are receiving this because you created a VCE Forge account.",
+        `Turn off weekly emails: ${unsubscribeUrl}`
+    ].join("\n");
+    const html = `
+    <div style="margin:0;background:#07111d;color:#f4f7ff;font-family:Arial,sans-serif;line-height:1.5;padding:28px;">
+      <div style="max-width:640px;margin:0 auto;background:#0f1d2d;border:1px solid #1f4260;border-radius:8px;padding:28px;">
+        <p style="margin:0 0 8px;color:#38bdf8;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">VCE Forge admin update</p>
+        <h1 style="margin:0 0 18px;font-size:28px;line-height:1.08;">${escapeHtml(subject)}</h1>
+        <p style="margin:0 0 14px;">${escapeHtml(greeting)}</p>
+        ${messageHtml(message)}
+        <a href="${escapeHtml(appUrl)}" style="display:inline-block;background:#38bdf8;color:#07111d;text-decoration:none;font-weight:800;border-radius:6px;padding:12px 18px;margin-top:8px;">Open VCE Forge</a>
+        <p style="margin:24px 0 0;color:#8fa2bd;font-size:12px;">
+          You are receiving this because you created a VCE Forge account.
+          <a href="${escapeHtml(unsubscribeUrl)}" style="color:#8bdcff;">Turn off weekly emails</a>.
+        </p>
+      </div>
+    </div>
+  `;
+    return { text, html };
 };
 const resendLeaderboardInvite = async () => {
     const users = await prisma.user.findMany({
@@ -1269,6 +1318,72 @@ communityRouter.delete("/chat/:id", asyncHandler(async (req, res) => {
     }
     await prisma.communityChatMessage.delete({ where: { id } });
     res.status(204).send();
+}));
+communityRouter.post("/admin-email", asyncHandler(async (req, res) => {
+    const authReq = req;
+    requireAdmin(authReq.user);
+    const payload = adminEmailSchema.parse(req.body);
+    if (payload.audience === "single" && !payload.userId) {
+        throw new HttpError(400, "Choose a user before sending a direct email.");
+    }
+    const where = payload.audience === "single"
+        ? { id: payload.userId ?? "" }
+        : payload.audience === "opted_in"
+            ? { weeklyDigestOptIn: true, weeklyDigestUnsubscribedAt: null }
+            : {};
+    const users = await prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 1000,
+        select: {
+            id: true,
+            email: true,
+            displayName: true
+        }
+    });
+    if (payload.audience === "single" && !users.length) {
+        throw new HttpError(404, "User not found");
+    }
+    const recipients = Array.from(new Map(users
+        .filter((user) => payload.audience === "single" || !isAdminEmail(user.email))
+        .map((user) => [user.email.trim().toLowerCase(), user])).values());
+    if (!recipients.length) {
+        throw new HttpError(400, "No recipients matched that audience.");
+    }
+    const transport = await smtpTransport();
+    if (!transport) {
+        throw new HttpError(503, "SMTP is not configured on the backend.");
+    }
+    const from = defaultFromEmail("VCE Forge <no-reply@vceforge.space>");
+    const replyTo = adminEmailReplyTo();
+    let sent = 0;
+    let failed = 0;
+    for (const recipient of recipients) {
+        const email = buildAdminEmail(recipient, payload.subject, payload.message);
+        try {
+            await transport.sendMail({
+                to: recipient.email,
+                from,
+                replyTo,
+                subject: payload.subject,
+                text: email.text,
+                html: email.html
+            });
+            sent += 1;
+        }
+        catch (error) {
+            failed += 1;
+            console.error(`Admin email failed for ${recipient.email}`, error);
+        }
+    }
+    if (!sent && failed) {
+        throw new HttpError(502, "Email delivery failed for every recipient. Check SMTP auth on the backend.");
+    }
+    res.json({
+        attempted: recipients.length,
+        sent,
+        failed
+    });
 }));
 communityRouter.post("/users/:id/gifts/theme", asyncHandler(async (req, res) => {
     const authReq = req;
