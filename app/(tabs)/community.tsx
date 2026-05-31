@@ -96,23 +96,36 @@ const contactStatusCopy: Record<PublicContactSubmission["adminStatus"], string> 
   archived: "Archived"
 };
 
-const formatTime = (value: string) =>
-  new Intl.DateTimeFormat("en-AU", {
+const safeDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatTime = (value?: string | null) => {
+  const date = safeDate(value);
+  if (!date) return "Not yet";
+  return new Intl.DateTimeFormat("en-AU", {
     day: "numeric",
     month: "short",
     hour: "numeric",
     minute: "2-digit"
-  }).format(new Date(value));
+  }).format(date);
+};
 
-const formatHour = (value: string) =>
-  new Intl.DateTimeFormat("en-AU", {
+const formatHour = (value?: string | null) => {
+  const date = safeDate(value);
+  if (!date) return "Soon";
+  return new Intl.DateTimeFormat("en-AU", {
     hour: "numeric",
     minute: "2-digit"
-  }).format(new Date(value));
+  }).format(date);
+};
 
 const formatRelativeTime = (value?: string | null) => {
-  if (!value) return "No visits yet";
-  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  const date = safeDate(value);
+  if (!date) return "No visits yet";
+  const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
   if (diffMinutes < 1) return "just now";
   if (diffMinutes < 60) return `${diffMinutes} min ago`;
   const diffHours = Math.round(diffMinutes / 60);
@@ -781,36 +794,47 @@ function LiveRoomCard({
 }) {
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const elapsedRemainder = `${elapsedSeconds % 60}`.padStart(2, "0");
-  const progress = active ? Math.min(100, Math.round((elapsedMinutes / room.targetMinutes) * 100)) : room.goalProgress;
+  const targetMinutes = Math.max(1, room.targetMinutes ?? 25);
+  const weeklyMinutes = room.weeklyMinutes ?? 0;
+  const weeklyGoalMinutes = room.weeklyGoalMinutes ?? targetMinutes * 8;
+  const activeStudents = room.activeStudents ?? [];
+  const activeCount = room.activeCount ?? activeStudents.length;
+  const roomColor = room.color ?? palette.primary;
+  const goalProgress =
+    typeof room.goalProgress === "number"
+      ? room.goalProgress
+      : Math.min(100, Math.round((weeklyMinutes / Math.max(1, weeklyGoalMinutes)) * 100));
+  const progress = active ? Math.min(100, Math.round((elapsedMinutes / targetMinutes) * 100)) : goalProgress;
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
   const roomStateCopy = room.roomState === "live" ? "Live now" : room.roomState === "warming" ? "Warming up" : "Quiet";
   return (
-    <View style={[styles.liveRoomCard, active && { borderColor: `${room.color}cc`, backgroundColor: `${room.color}12` }]}>
+    <View style={[styles.liveRoomCard, active && { borderColor: `${roomColor}cc`, backgroundColor: `${roomColor}12` }]}>
       <View style={styles.squadTop}>
-        <View style={[styles.squadMark, { backgroundColor: `${room.color}20` }]}>
-          <MaterialCommunityIcons name={active ? "timer-outline" : "door-open"} color={room.color} size={22} />
+        <View style={[styles.squadMark, { backgroundColor: `${roomColor}20` }]}>
+          <MaterialCommunityIcons name={active ? "timer-outline" : "door-open"} color={roomColor} size={22} />
         </View>
         <View style={styles.flexText}>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {room.title}
+            {room.title ?? "Study room"}
           </Text>
           <Text style={styles.mutedSmall}>
-            {room.subjectHint} - {room.weeklyMinutes}/{room.weeklyGoalMinutes}m room goal
+            {room.subjectHint ?? "VCE"} - {weeklyMinutes}/{weeklyGoalMinutes}m room goal
           </Text>
           <Text style={styles.mutedSmall} numberOfLines={2}>
-            {room.description}
+            {room.description ?? "Join a focused public study room when you want quiet pressure."}
           </Text>
         </View>
-        <View style={[styles.pulsePill, { backgroundColor: `${room.color}18` }]}>
-          <Text style={[styles.pulseText, { color: room.color }]}>{roomStateCopy}</Text>
+        <View style={[styles.pulsePill, { backgroundColor: `${roomColor}18` }]}>
+          <Text style={[styles.pulseText, { color: roomColor }]}>{roomStateCopy}</Text>
         </View>
         <Button mode={active ? "outlined" : "contained"} compact onPress={() => (active ? onLeave() : onJoin(room))}>
           {active ? "Leave" : "Join"}
         </Button>
       </View>
       <View style={styles.squadProgressTrack}>
-        <View style={[styles.squadProgressFill, { width: `${progress}%`, backgroundColor: room.color }]} />
+        <View style={[styles.squadProgressFill, { width: `${safeProgress}%`, backgroundColor: roomColor }]} />
       </View>
-      <Text style={styles.roomPrompt}>{room.focusPrompt}</Text>
+      <Text style={styles.roomPrompt}>{room.focusPrompt ?? "Start with one clear task and keep the room moving."}</Text>
       <View style={styles.roomInfoGrid}>
         <View style={styles.roomInfoTile}>
           <Text style={styles.mutedSmall}>Next session</Text>
@@ -823,18 +847,18 @@ function LiveRoomCard({
         <View style={styles.roomInfoTile}>
           <Text style={styles.mutedSmall}>Room signal</Text>
           <Text style={styles.userThemeText} numberOfLines={1}>
-            {room.activityPreview}
+            {room.activityPreview ?? "No signal yet. You can start the room."}
           </Text>
         </View>
       </View>
       <View style={styles.liveRoomFooter}>
         <Text style={styles.userThemeText}>
-          {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder} / ${room.targetMinutes}:00` : `${room.activeCount} studying now`}
+          {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder} / ${targetMinutes}:00` : `${activeCount} studying now`}
         </Text>
         <Text style={styles.mutedSmall} numberOfLines={1}>
-          {room.activeStudents.length
-            ? room.activeStudents.map((student) => student.displayName).slice(0, 3).join(", ")
-            : room.emptyCta}
+          {activeStudents.length
+            ? activeStudents.map((student) => student.displayName).slice(0, 3).join(", ")
+            : room.emptyCta ?? `Start ${targetMinutes}m room`}
         </Text>
       </View>
     </View>
