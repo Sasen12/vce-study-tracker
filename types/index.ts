@@ -174,6 +174,15 @@ export type CommunitySquad = {
   shortName: string;
   color: string;
   weeklyMinutes: number;
+  weeklyGoalMinutes: number;
+  goalProgress: number;
+  todayMinutes: number;
+  viewerMinutes: number;
+  viewerRank?: number | null;
+  momentum: string;
+  openQuestionCount: number;
+  activeTodayCount: number;
+  nextNudge: string;
   topContributor?: {
     displayName: string;
     minutes: number;
@@ -191,7 +200,11 @@ export type CommunityLiveRoom = {
   squadId: string;
   targetMinutes: number;
   color: string;
+  focusPrompt: string;
   weeklyMinutes: number;
+  weeklyGoalMinutes: number;
+  goalProgress: number;
+  roomState: "live" | "warming" | "quiet";
   activeCount: number;
   activeStudents: {
     displayName: string;
@@ -216,7 +229,22 @@ export type CommunityQuestionWallItem = {
   createdAt: string;
   answerCount: number;
   isCurrentUser: boolean;
+  answeredByViewer: boolean;
+  lastActivityAt: string;
   answers: CommunityQuestionWallAnswer[];
+};
+
+export type CommunityPulse = {
+  weeklyMinutes: number;
+  activeNow: number;
+  openQuestions: number;
+  helpfulAnswers: number;
+  topSquad?: {
+    id: string;
+    name: string;
+    minutes: number;
+    color: string;
+  } | null;
 };
 
 export type CommunityMission = {

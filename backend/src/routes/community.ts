@@ -150,7 +150,8 @@ const LIVE_STUDY_ROOMS = [
     subjectHint: "General Mathematics",
     squadId: "general-maths",
     targetMinutes: 35,
-    color: "#FF6B6B"
+    color: "#FF6B6B",
+    focusPrompt: "One question. One clean method. No wandering."
   },
   {
     id: "english-essay-lock-in",
@@ -158,7 +159,8 @@ const LIVE_STUDY_ROOMS = [
     subjectHint: "English",
     squadId: "english",
     targetMinutes: 45,
-    color: "#60A5FA"
+    color: "#60A5FA",
+    focusPrompt: "One paragraph, one quote, one sharper contention."
   },
   {
     id: "business-40-mark-rescue",
@@ -166,7 +168,8 @@ const LIVE_STUDY_ROOMS = [
     subjectHint: "Business Management",
     squadId: "business",
     targetMinutes: 40,
-    color: "#F59E0B"
+    color: "#F59E0B",
+    focusPrompt: "One command term, one case link, one mark saved."
   },
   {
     id: "software-dev-sat-sprint",
@@ -174,7 +177,8 @@ const LIVE_STUDY_ROOMS = [
     subjectHint: "Software Development",
     squadId: "software-dev",
     targetMinutes: 50,
-    color: "#34D399"
+    color: "#34D399",
+    focusPrompt: "One SAT section, one commit, one clean explanation."
   }
 ] as const;
 
@@ -696,6 +700,8 @@ const buildQuestionWall = async (viewerUserId: string) => {
       createdAt: Date;
       answerCount: number;
       isCurrentUser: boolean;
+      answeredByViewer: boolean;
+      lastActivityAt: Date;
       answers: {
         id: string;
         message: string;
@@ -718,6 +724,8 @@ const buildQuestionWall = async (viewerUserId: string) => {
         createdAt: row.createdAt,
         answerCount: 0,
         isCurrentUser: row.userId === viewerUserId,
+        answeredByViewer: false,
+        lastActivityAt: row.createdAt,
         answers: []
       });
       continue;
@@ -733,6 +741,10 @@ const buildQuestionWall = async (viewerUserId: string) => {
       isCurrentUser: row.userId === viewerUserId
     });
     question.answerCount = question.answers.length;
+    question.answeredByViewer = question.answeredByViewer || row.userId === viewerUserId;
+    if (row.createdAt > question.lastActivityAt) {
+      question.lastActivityAt = row.createdAt;
+    }
   }
 
   return Array.from(questions.values())
@@ -740,11 +752,7 @@ const buildQuestionWall = async (viewerUserId: string) => {
       ...question,
       answers: question.answers.slice(-4)
     }))
-    .sort((a, b) => {
-      const aLatest = a.answers[a.answers.length - 1]?.createdAt ?? a.createdAt;
-      const bLatest = b.answers[b.answers.length - 1]?.createdAt ?? b.createdAt;
-      return bLatest.getTime() - aLatest.getTime();
-    })
+    .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())
     .slice(0, 30);
 };
 
@@ -862,6 +870,7 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       select: {
         userId: true,
         durationSeconds: true,
+        createdAt: true,
         subject: { select: { subjectName: true } },
         user: { select: { displayName: true } }
       }
@@ -882,10 +891,14 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
     const memberRows = subjects.filter((subject) => squadForSubjectName(subject.subjectName)?.id === squad.id);
     const memberIds = new Set(memberRows.map((subject) => subject.userId));
     const sessionRows = sessions.filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === squad.id);
+    const todayRows = sessionRows.filter((session) => session.createdAt >= startOfDay(now));
     const questionCount = savedQuestions.filter((question) => squadForSubjectName(question.subject?.subjectName)?.id === squad.id).length;
     const wallAnswerCount = wall
       .filter((question) => squadForSubjectName(question.subjectName)?.id === squad.id)
       .reduce((sum, question) => sum + question.answerCount, 0);
+    const openQuestionCount = wall.filter(
+      (question) => squadForSubjectName(question.subjectName)?.id === squad.id && question.answerCount === 0
+    ).length;
 
     const contributorMinutes = new Map<string, { displayName: string; minutes: number }>();
     for (const session of sessionRows) {
@@ -893,16 +906,58 @@ const buildWeeklySubjectSquads = async (viewerUserId: string) => {
       current.minutes += Math.round(session.durationSeconds / 60);
       contributorMinutes.set(session.userId, current);
     }
+
     const topContributor = Array.from(contributorMinutes.values()).sort(
       (a, b) => b.minutes - a.minutes || a.displayName.localeCompare(b.displayName)
     )[0];
+    const rankedContributors = Array.from(contributorMinutes.entries()).sort(
+      ([, a], [, b]) => b.minutes - a.minutes || a.displayName.localeCompare(b.displayName)
+    );
+    const viewerRankIndex = rankedContributors.findIndex(([userId]) => userId === viewerUserId);
+    const viewerMinutes = contributorMinutes.get(viewerUserId)?.minutes ?? 0;
+    const weeklyMinutes = Math.round(sessionRows.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
+    const todayMinutes = Math.round(todayRows.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
+    const weeklyGoalMinutes = Math.max(180, memberIds.size * 90);
+    const goalProgress = Math.min(100, Math.round((weeklyMinutes / weeklyGoalMinutes) * 100));
+    const activeTodayCount = new Set(todayRows.map((session) => session.userId)).size;
+    const remainingMinutes = Math.max(0, weeklyGoalMinutes - weeklyMinutes);
+    const pushMinutes = Math.min(25, remainingMinutes || 25);
+    const momentum =
+      todayMinutes > 0
+        ? "Active today"
+        : goalProgress >= 75
+          ? "Closing goal"
+          : questionCount + wallAnswerCount > 0
+            ? "Question energy"
+            : "Waiting for work";
+    let nextNudge = `Goal hit. Keep ${squad.shortName} moving.`;
+    if (memberIds.has(viewerUserId) && viewerMinutes === 0) {
+      nextNudge = `Log ${pushMinutes}m so ${squad.shortName} has your name on the board.`;
+    } else if (openQuestionCount > 0) {
+      nextNudge = `${openQuestionCount} open question${openQuestionCount === 1 ? "" : "s"} need${
+        openQuestionCount === 1 ? "s" : ""
+      } a clean answer.`;
+    } else if (activeTodayCount === 0) {
+      nextNudge = `First ${pushMinutes}m today wakes ${squad.shortName} up.`;
+    } else if (remainingMinutes > 0) {
+      nextNudge = `${pushMinutes}m pushes ${squad.shortName} closer to the squad goal.`;
+    }
 
     return {
       id: squad.id,
       name: squad.name,
       shortName: squad.shortName,
       color: squad.color,
-      weeklyMinutes: Math.round(sessionRows.reduce((sum, session) => sum + session.durationSeconds, 0) / 60),
+      weeklyMinutes,
+      weeklyGoalMinutes,
+      goalProgress,
+      todayMinutes,
+      viewerMinutes,
+      viewerRank: viewerRankIndex >= 0 ? viewerRankIndex + 1 : null,
+      momentum,
+      openQuestionCount,
+      activeTodayCount,
+      nextNudge,
       topContributor: topContributor ? { displayName: topContributor.displayName, minutes: topContributor.minutes } : null,
       questionsAnswered: questionCount + wallAnswerCount,
       streakCount: new Set(
@@ -964,14 +1019,43 @@ const buildLiveStudyRooms = async () => {
         .filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === room.squadId)
         .reduce((sum, session) => sum + session.durationSeconds, 0) / 60
     );
+    const weeklyGoalMinutes = room.targetMinutes * 8;
+    const goalProgress = Math.min(100, Math.round((weeklyMinutes / weeklyGoalMinutes) * 100));
+    const roomState = activeStudents.length ? "live" : weeklyMinutes > 0 ? "warming" : "quiet";
 
     return {
       ...room,
       weeklyMinutes,
+      weeklyGoalMinutes,
+      goalProgress,
+      roomState,
       activeCount: activeStudents.length,
       activeStudents
     };
   });
+};
+
+const buildCommunityPulse = (
+  squads: Awaited<ReturnType<typeof buildWeeklySubjectSquads>>,
+  liveRooms: Awaited<ReturnType<typeof buildLiveStudyRooms>>,
+  questionWall: Awaited<ReturnType<typeof buildQuestionWall>>
+) => {
+  const topSquad = [...squads].sort((a, b) => b.weeklyMinutes - a.weeklyMinutes)[0];
+  return {
+    weeklyMinutes: squads.reduce((sum, squad) => sum + squad.weeklyMinutes, 0),
+    activeNow: liveRooms.reduce((sum, room) => sum + room.activeCount, 0),
+    openQuestions: questionWall.filter((question) => question.answerCount === 0).length,
+    helpfulAnswers: questionWall.reduce((sum, question) => sum + question.answerCount, 0),
+    topSquad:
+      topSquad && topSquad.weeklyMinutes > 0
+        ? {
+            id: topSquad.id,
+            name: topSquad.shortName,
+            minutes: topSquad.weeklyMinutes,
+            color: topSquad.color
+          }
+        : null
+  };
 };
 
 const awardPublicMissionIfReady = async (userId: string, complete: boolean) => {
@@ -1085,6 +1169,7 @@ const communityPayload = async (user: AuthenticatedRequest["user"]) => {
     chat,
     allowance,
     users,
+    pulse: buildCommunityPulse(squads, liveRooms, questionWall),
     squads,
     liveRooms,
     questionWall,

@@ -12,6 +12,7 @@ import type {
   CommunityChatMessage,
   CommunityLiveRoom,
   CommunityMission,
+  CommunityPulse,
   CommunityQuestionWallItem,
   CommunitySquad,
   CommunitySubjectRoom,
@@ -208,6 +209,7 @@ export const studyApi = {
       chat: CommunityChatMessage[];
       allowance: ChatAllowance;
       users: CommunityUserSummary[];
+      pulse: CommunityPulse;
       squads: CommunitySquad[];
       liveRooms: CommunityLiveRoom[];
       questionWall: CommunityQuestionWallItem[];

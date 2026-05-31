@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,6 +22,7 @@ import type {
   CommunityLeaderboardEntry,
   CommunityLiveRoom,
   CommunityMission,
+  CommunityPulse,
   CommunityQuestionWallItem,
   CommunitySquad,
   CommunitySubjectRoom,
@@ -277,6 +278,13 @@ const boardDetailLabel = (entry: CommunityLeaderboardEntry, scope: BoardScope) =
   return `${entry.weekMinutes} min this week - ${entry.weekXp} XP`;
 };
 
+const boardGapLabel = (scope: BoardScope, gap: number) => {
+  if (scope === "week") return `${gap} XP`;
+  if (scope === "today") return `${gap} min`;
+  if (scope === "improved") return `${gap} more min`;
+  return `${gap} day${gap === 1 ? "" : "s"}`;
+};
+
 function CommunityBoardRow({ entry, scope }: { entry: CommunityLeaderboardEntry; scope: BoardScope }) {
   return (
     <View style={[styles.leaderboardRow, entry.isCurrentUser && styles.leaderboardRowActive]}>
@@ -294,7 +302,69 @@ function CommunityBoardRow({ entry, scope }: { entry: CommunityLeaderboardEntry;
   );
 }
 
+function CommunityPulseStrip({ pulse }: { pulse: CommunityPulse | null }) {
+  if (!pulse) return null;
+
+  const tiles: {
+    icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
+    value: string;
+    label: string;
+    color: string;
+  }[] = [
+    {
+      icon: "timer-sand",
+      value: `${pulse.weeklyMinutes}m`,
+      label: "squad study this week",
+      color: palette.info
+    },
+    {
+      icon: "radio-tower",
+      value: `${pulse.activeNow}`,
+      label: "live now",
+      color: palette.success
+    },
+    {
+      icon: "comment-question-outline",
+      value: `${pulse.openQuestions}`,
+      label: "questions need help",
+      color: palette.secondary
+    },
+    {
+      icon: "trophy-outline",
+      value: pulse.topSquad ? pulse.topSquad.name : "No leader",
+      label: pulse.topSquad ? `${pulse.topSquad.minutes}m top squad` : "top squad waiting",
+      color: pulse.topSquad?.color ?? palette.warning
+    }
+  ];
+
+  return (
+    <View style={styles.pulseGrid}>
+      {tiles.map((tile) => (
+        <View key={tile.label} style={styles.pulseTile}>
+          <View style={[styles.pulseIcon, { backgroundColor: `${tile.color}18` }]}>
+            <MaterialCommunityIcons name={tile.icon} color={tile.color} size={18} />
+          </View>
+          <View style={styles.flexText}>
+            <Text style={styles.pulseValue} numberOfLines={1}>
+              {tile.value}
+            </Text>
+            <Text style={styles.mutedSmall} numberOfLines={1}>
+              {tile.label}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function SquadCard({ squad }: { squad: CommunitySquad }) {
+  const viewerLine = squad.viewerJoined
+    ? squad.viewerMinutes > 0
+      ? `You: ${squad.viewerMinutes}m${squad.viewerRank ? ` - #${squad.viewerRank}` : ""}`
+      : "You: no minutes yet"
+    : `${squad.todayMinutes}m today`;
+
   return (
     <View style={[styles.squadCard, squad.viewerJoined && { borderColor: `${squad.color}aa` }]}>
       <View style={styles.squadTop}>
@@ -309,15 +379,32 @@ function SquadCard({ squad }: { squad: CommunitySquad }) {
             {squad.memberCount} members {squad.viewerJoined ? "- your squad" : ""}
           </Text>
         </View>
+        <View style={[styles.pulsePill, { backgroundColor: `${squad.color}18` }]}>
+          <Text style={[styles.pulseText, { color: squad.color }]}>{squad.momentum}</Text>
+        </View>
+      </View>
+      <View style={styles.squadGoalBlock}>
+        <View style={styles.squadGoalHeader}>
+          <Text style={styles.mutedSmall}>
+            Squad goal {squad.weeklyMinutes}/{squad.weeklyGoalMinutes}m
+          </Text>
+          <Text style={styles.mutedSmall}>{viewerLine}</Text>
+        </View>
+        <View style={styles.squadProgressTrack}>
+          <View style={[styles.squadProgressFill, { width: `${squad.goalProgress}%`, backgroundColor: squad.color }]} />
+        </View>
+        <Text style={styles.squadNudge} numberOfLines={2}>
+          {squad.nextNudge}
+        </Text>
       </View>
       <View style={styles.squadStatGrid}>
         <View style={styles.squadStat}>
-          <Text style={styles.metricValue}>{squad.weeklyMinutes}</Text>
-          <Text style={styles.mutedSmall}>weekly min</Text>
+          <Text style={styles.metricValue}>{squad.activeTodayCount}</Text>
+          <Text style={styles.mutedSmall}>active today</Text>
         </View>
         <View style={styles.squadStat}>
           <Text style={styles.metricValue}>{squad.questionsAnswered}</Text>
-          <Text style={styles.mutedSmall}>answers</Text>
+          <Text style={styles.mutedSmall}>Q&A helped</Text>
         </View>
         <View style={styles.squadStat}>
           <Text style={styles.metricValue}>{squad.streakCount}</Text>
@@ -383,6 +470,8 @@ function LiveRoomCard({
 }) {
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const elapsedRemainder = `${elapsedSeconds % 60}`.padStart(2, "0");
+  const progress = active ? Math.min(100, Math.round((elapsedMinutes / room.targetMinutes) * 100)) : room.goalProgress;
+  const roomStateCopy = room.roomState === "live" ? "Live now" : room.roomState === "warming" ? "Warming up" : "Quiet";
   return (
     <View style={[styles.liveRoomCard, active && { borderColor: `${room.color}cc`, backgroundColor: `${room.color}12` }]}>
       <View style={styles.squadTop}>
@@ -394,16 +483,23 @@ function LiveRoomCard({
             {room.title}
           </Text>
           <Text style={styles.mutedSmall}>
-            {room.subjectHint} - {room.targetMinutes}m target - {room.weeklyMinutes}m this week
+            {room.subjectHint} - {room.weeklyMinutes}/{room.weeklyGoalMinutes}m room goal
           </Text>
+        </View>
+        <View style={[styles.pulsePill, { backgroundColor: `${room.color}18` }]}>
+          <Text style={[styles.pulseText, { color: room.color }]}>{roomStateCopy}</Text>
         </View>
         <Button mode={active ? "outlined" : "contained"} compact onPress={() => (active ? onLeave() : onJoin(room))}>
           {active ? "Leave" : "Join"}
         </Button>
       </View>
+      <View style={styles.squadProgressTrack}>
+        <View style={[styles.squadProgressFill, { width: `${progress}%`, backgroundColor: room.color }]} />
+      </View>
+      <Text style={styles.roomPrompt}>{room.focusPrompt}</Text>
       <View style={styles.liveRoomFooter}>
         <Text style={styles.userThemeText}>
-          {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder}` : `${room.activeCount} studying now`}
+          {active ? `Your room timer ${elapsedMinutes}:${elapsedRemainder} / ${room.targetMinutes}:00` : `${room.activeCount} studying now`}
         </Text>
         <Text style={styles.mutedSmall} numberOfLines={1}>
           {room.activeStudents.length
@@ -428,14 +524,18 @@ function QuestionWallItem({
   onAnswer: (item: CommunityQuestionWallItem) => void;
   sending: boolean;
 }) {
+  const canAnswer = !item.isCurrentUser && !item.answeredByViewer;
+
   return (
     <View style={styles.questionItem}>
       <View style={styles.feedbackHeader}>
         <View style={styles.feedbackMeta}>
           <Text style={styles.feedbackCategory}>{item.subjectName ?? "General"}</Text>
-          <Text style={styles.feedbackStatus}>Anonymous</Text>
+          <Text style={[styles.feedbackStatus, item.answerCount ? styles.feedbackStatusCalm : styles.feedbackStatusHot]}>
+            {item.answerCount ? `${item.answerCount} answer${item.answerCount === 1 ? "" : "s"}` : "Needs help"}
+          </Text>
         </View>
-        <Text style={styles.mutedSmall}>{formatTime(item.createdAt)}</Text>
+        <Text style={styles.mutedSmall}>{formatTime(item.lastActivityAt)}</Text>
       </View>
       <Text style={styles.feedbackMessage}>{item.message}</Text>
       {item.answers.length ? (
@@ -451,19 +551,25 @@ function QuestionWallItem({
       ) : (
         <Text style={styles.mutedSmall}>No answers yet. Be useful, earn XP and bonus messages.</Text>
       )}
-      <TextInput
-        mode="outlined"
-        label="Helpful answer"
-        value={answerDraft}
-        onChangeText={onAnswerDraft}
-        multiline
-        numberOfLines={2}
-        maxLength={600}
-        style={styles.input}
-      />
-      <Button mode="outlined" compact icon="reply-outline" disabled={!answerDraft.trim() || sending} loading={sending} onPress={() => onAnswer(item)}>
-        Answer
-      </Button>
+      {canAnswer ? (
+        <>
+          <TextInput
+            mode="outlined"
+            label="Helpful answer"
+            value={answerDraft}
+            onChangeText={onAnswerDraft}
+            multiline
+            numberOfLines={2}
+            maxLength={600}
+            style={styles.input}
+          />
+          <Button mode="outlined" compact icon="reply-outline" disabled={!answerDraft.trim() || sending} loading={sending} onPress={() => onAnswer(item)}>
+            Answer
+          </Button>
+        </>
+      ) : (
+        <Text style={styles.mutedSmall}>{item.isCurrentUser ? "Waiting for another student to answer." : "You have already helped on this one."}</Text>
+      )}
     </View>
   );
 }
@@ -746,6 +852,7 @@ export default function CommunityScreen() {
   const [users, setUsers] = useState<CommunityUserSummary[]>([]);
   const [analytics, setAnalytics] = useState<AdminUsageAnalytics | null>(null);
   const [allowance, setAllowance] = useState<ChatAllowance | null>(null);
+  const [pulse, setPulse] = useState<CommunityPulse | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -791,6 +898,7 @@ export default function CommunityScreen() {
       setChat(data.chat);
       setUsers(data.users ?? []);
       setAllowance(data.allowance);
+      setPulse(data.pulse ?? null);
       setIsAdmin(Boolean(data.isAdmin));
       setSquads(data.squads ?? []);
       setLiveRooms(data.liveRooms ?? []);
@@ -828,6 +936,14 @@ export default function CommunityScreen() {
   );
   const selectedRoom = joinedRooms.find((room) => room.id === selectedRoomId) ?? joinedRooms[0] ?? null;
   const selectedRoomMessages = selectedRoom ? roomChat[selectedRoom.id] ?? [] : [];
+  const unansweredQuestionCount = useMemo(
+    () => questionWall.filter((item) => item.answerCount === 0).length,
+    [questionWall]
+  );
+  const helpedQuestionCount = useMemo(
+    () => questionWall.filter((item) => item.answeredByViewer).length,
+    [questionWall]
+  );
 
   useEffect(() => {
     let active = true;
@@ -1254,7 +1370,17 @@ export default function CommunityScreen() {
   };
   const selectedBoardCopy = boardCopy[boardScope];
   const spotlightEntries = boardEntries.slice(0, 3);
-  const viewerBoardRank = boardEntries.find((entry) => entry.isCurrentUser)?.rank;
+  const viewerBoardEntry = boardEntries.find((entry) => entry.isCurrentUser);
+  const viewerBoardRank = viewerBoardEntry?.rank;
+  const nextBoardEntry = viewerBoardEntry ? boardEntries.find((entry) => entry.rank === viewerBoardEntry.rank - 1) : null;
+  const nextBoardGap =
+    viewerBoardEntry && nextBoardEntry ? Math.max(1, nextBoardEntry.score - viewerBoardEntry.score + 1) : null;
+  const nextBoardMove =
+    viewerBoardEntry && viewerBoardEntry.rank === 1
+      ? "You are holding #1 on this board."
+      : nextBoardGap
+        ? `${boardGapLabel(boardScope, nextBoardGap)} to climb one spot.`
+        : null;
   const chooseMode = (value: string) => {
     const nextMode = value as Mode;
     setMode(nextMode);
@@ -1324,6 +1450,7 @@ export default function CommunityScreen() {
                 {gamification?.leaderboardOptIn ? "Opt out" : "Join"}
               </Button>
             </View>
+            <CommunityPulseStrip pulse={pulse} />
           </AppCard>
 
           <AppCard style={styles.listCard}>
@@ -1521,7 +1648,9 @@ export default function CommunityScreen() {
           <AppCard style={styles.listCard}>
             <View style={styles.feedbackHeader}>
               <Text style={styles.cardTitle}>Open questions</Text>
-              <Text style={styles.muted}>{questionWall.length} active</Text>
+              <Text style={styles.muted}>
+                {unansweredQuestionCount} need help - {helpedQuestionCount} helped by you
+              </Text>
             </View>
             {questionWall.length ? (
               <View style={styles.list}>
@@ -1624,6 +1753,7 @@ export default function CommunityScreen() {
               {formatWeekRange(leaderboard?.weekStart, leaderboard?.weekEnd)} - the board only includes students who
               choose Join.
             </Text>
+            {nextBoardMove ? <Text style={styles.userThemeText}>{nextBoardMove}</Text> : null}
           </AppCard>
 
           <AppCard style={styles.leaderboardPrivacyCard}>
@@ -2355,7 +2485,48 @@ const styles = StyleSheet.create({
   squadTop: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 12
+  },
+  pulsePill: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    overflow: "hidden"
+  },
+  pulseGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  pulseTile: {
+    flexGrow: 1,
+    flexBasis: 150,
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)"
+  },
+  pulseIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  pulseValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 15
+  },
+  pulseText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11
   },
   squadMark: {
     width: 44,
@@ -2363,6 +2534,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center"
+  },
+  squadGoalBlock: {
+    gap: 6
+  },
+  squadGoalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  squadProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  squadProgressFill: {
+    height: "100%",
+    borderRadius: 999
+  },
+  squadNudge: {
+    color: palette.text,
+    lineHeight: 19
   },
   squadStatGrid: {
     flexDirection: "row",
@@ -2426,6 +2619,10 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingLeft: 56
   },
+  roomPrompt: {
+    color: palette.text,
+    lineHeight: 20
+  },
   questionIcon: {
     width: 44,
     height: 44,
@@ -2486,6 +2683,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(74,222,128,0.12)",
     overflow: "hidden",
     textTransform: "uppercase"
+  },
+  feedbackStatusCalm: {
+    color: palette.success,
+    backgroundColor: "rgba(74,222,128,0.12)"
+  },
+  feedbackStatusHot: {
+    color: palette.secondary,
+    backgroundColor: "rgba(255,107,107,0.12)"
   },
   senderRow: {
     flexDirection: "row",
