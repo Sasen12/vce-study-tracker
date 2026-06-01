@@ -95,6 +95,43 @@ const contactStatusCopy: Record<PublicContactSubmission["adminStatus"], string> 
   archived: "Archived"
 };
 
+const adminEmailTemplates = [
+  {
+    id: "service_update",
+    label: "Service update",
+    icon: "server-network",
+    subject: "VCE Forge service update",
+    message:
+      "Quick update from VCE Forge.\n\nThe app is running again and I have tightened the backend setup so this should be more stable. Thanks for sticking with it while I keep improving the site.\n\nIf something looks off, reply with the page and what happened so I can fix it fast."
+  },
+  {
+    id: "weekly_push",
+    label: "Weekly push",
+    icon: "calendar-star",
+    subject: "Your VCE Forge week starts now",
+    message:
+      "New week, clean slate.\n\nYour best move is simple: add the next deadline, run one focused timer, then check your weak areas. Small sessions still count when they create evidence.\n\nCommunity squads and chess signups are open if you want some pressure around you."
+  },
+  {
+    id: "community_event",
+    label: "Community event",
+    icon: "account-group",
+    subject: "This week's VCE Forge community event",
+    message:
+      "This week's community event is live.\n\nJoin your subject squad, start a study room, or sign up for the chess tournament from Home or Community. You do not need to be top of the leaderboard. Showing up is enough to move the room."
+  },
+  {
+    id: "outage_apology",
+    label: "Outage note",
+    icon: "heart-outline",
+    subject: "Sorry VCE Forge was down",
+    message:
+      "Hey, quick apology from me.\n\nVCE Forge was unavailable for longer than it should have been. That is frustrating, especially when people are using it around SACs and real study pressure.\n\nI have fixed the issue I found and I am adding better admin tools so I can respond faster next time. Thanks for being early and helping shape this."
+  }
+] as const;
+
+type AdminEmailTemplateId = (typeof adminEmailTemplates)[number]["id"];
+
 const safeDate = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -1291,6 +1328,7 @@ export default function CommunityScreen() {
   const [adminEmailAudience, setAdminEmailAudience] = useState<AdminEmailAudience>("opted_in");
   const [adminEmailSubject, setAdminEmailSubject] = useState("");
   const [adminEmailMessage, setAdminEmailMessage] = useState("");
+  const [adminEmailTemplateId, setAdminEmailTemplateId] = useState<AdminEmailTemplateId>("service_update");
   const [adminEmailSending, setAdminEmailSending] = useState(false);
 
   const loadCommunity = useCallback(async () => {
@@ -1935,10 +1973,21 @@ export default function CommunityScreen() {
   const openAdminEmail = (user?: CommunityUserSummary) => {
     setError(null);
     setNotice(null);
+    const defaultTemplate = adminEmailTemplates.find((item) => item.id === "service_update") ?? adminEmailTemplates[0];
     setAdminEmailTarget(user ?? null);
     setAdminEmailAudience(user ? "single" : "opted_in");
-    setAdminEmailSubject((current) => current || "VCE Forge update");
+    setAdminEmailTemplateId(defaultTemplate.id);
+    setAdminEmailSubject((current) => current || defaultTemplate.subject);
+    setAdminEmailMessage((current) => current || defaultTemplate.message);
     setAdminEmailOpen(true);
+  };
+
+  const applyAdminEmailTemplate = (templateId: AdminEmailTemplateId) => {
+    const template = adminEmailTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setAdminEmailTemplateId(templateId);
+    setAdminEmailSubject(template.subject);
+    setAdminEmailMessage(template.message);
   };
 
   const sendThemeGift = async () => {
@@ -2011,6 +2060,7 @@ export default function CommunityScreen() {
         message
       });
       setAdminEmailOpen(false);
+      setAdminEmailSubject("");
       setAdminEmailMessage("");
       setNotice(
         result.failed
@@ -2106,6 +2156,34 @@ export default function CommunityScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      {isAdmin ? (
+        <AppCard style={styles.adminCommandCard}>
+          <View style={styles.privacyHeader}>
+            <View style={styles.adminCommandIcon}>
+              <MaterialCommunityIcons name="shield-account-outline" color={palette.info} size={20} />
+            </View>
+            <View style={styles.flexText}>
+              <Text style={styles.cardTitle}>Admin command</Text>
+              <Text style={styles.muted}>Email users, check reports and keep the community clean without leaving the app.</Text>
+            </View>
+          </View>
+          <View style={styles.adminCommandActions}>
+            <Button mode="contained-tonal" compact icon="email-send-outline" onPress={() => openAdminEmail()}>
+              Email users
+            </Button>
+            <Button mode="outlined" compact icon="inbox-arrow-up" onPress={() => chooseMode("feedback")}>
+              Inbox
+            </Button>
+            <Button mode="outlined" compact icon="account-group-outline" onPress={() => chooseMode("users")}>
+              Users
+            </Button>
+            <Button mode="outlined" compact icon="chart-line" onPress={() => chooseMode("analytics")}>
+              Analytics
+            </Button>
+          </View>
+        </AppCard>
+      ) : null}
 
       {mode === "squads" ? (
         <>
@@ -3031,6 +3109,29 @@ export default function CommunityScreen() {
                 ...(adminEmailTarget ? [{ value: "single", label: "User" }] : [])
               ]}
             />
+            <View style={styles.adminTemplateGrid}>
+              {adminEmailTemplates.map((template) => {
+                const active = adminEmailTemplateId === template.id;
+                return (
+                  <Pressable
+                    key={template.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.adminTemplateChip, active && styles.adminTemplateChipActive]}
+                    onPress={() => applyAdminEmailTemplate(template.id)}
+                  >
+                    <MaterialCommunityIcons
+                      name={template.icon as IconName}
+                      color={active ? palette.text : palette.info}
+                      size={16}
+                    />
+                    <Text style={[styles.adminTemplateText, active && styles.adminTemplateTextActive]} numberOfLines={1}>
+                      {template.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <TextInput
               mode="outlined"
               label="Subject"
@@ -3048,7 +3149,8 @@ export default function CommunityScreen() {
               onChangeText={setAdminEmailMessage}
             />
             <Text style={styles.mutedSmall}>
-              {adminEmailMessage.length}/5000 characters. All emails include an Open VCE Forge button and weekly email unsubscribe link.
+              {adminEmailMessage.length}/5000 characters. Opt-in reaches students who have not turned weekly emails off.
+              All emails include an Open VCE Forge button and unsubscribe link.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -3110,6 +3212,53 @@ const styles = StyleSheet.create({
   },
   dialogContent: {
     gap: 12
+  },
+  adminCommandCard: {
+    gap: 12,
+    borderColor: "rgba(56,189,248,0.26)",
+    backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  adminCommandIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(56,189,248,0.14)"
+  },
+  adminCommandActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  adminTemplateGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  adminTemplateChip: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  adminTemplateChipActive: {
+    borderColor: "rgba(56,189,248,0.55)",
+    backgroundColor: "rgba(56,189,248,0.14)"
+  },
+  adminTemplateText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  adminTemplateTextActive: {
+    color: palette.text
   },
   formCard: {
     gap: 12

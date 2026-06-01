@@ -31,6 +31,11 @@ export const smtpTransport = async () => {
     const pass = smtpPassword();
     const secureSetting = process.env.CONTACT_SMTP_SECURE ?? process.env.SMTP_SECURE;
     const secure = secureSetting ? secureSetting.toLowerCase() === "true" : port === 465;
+    const gmailHost = /(^|\.)gmail\.com$/i.test(host) || host.toLowerCase().includes("gmail");
+    if ((user && !pass) || (!user && pass) || (gmailHost && (!user || !pass))) {
+        console.warn("SMTP credentials are incomplete. Gmail SMTP needs both CONTACT_SMTP_USER/SMTP_USER and CONTACT_SMTP_PASS/SMTP_PASS.");
+        return null;
+    }
     return mailer.createTransport({
         host,
         port,
