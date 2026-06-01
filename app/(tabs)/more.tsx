@@ -278,6 +278,8 @@ export default function MoreScreen() {
   const checklistProgress = checkedSacItems.length;
   const folioProgress = checkedFolioItems.length;
   const autopsyProgress = checkedAutopsyItems.length;
+  const toolboxCount = 14;
+  const checkedToolItems = checklistProgress + folioProgress + autopsyProgress;
   const suggestedMinutes = Math.max(3, Math.round(markTarget * 1.5));
   const activeMemoryPrompt = memoryPrompts[memoryPromptIndex] ?? memoryPrompts[0];
   useTrackScreen("more");
@@ -329,11 +331,37 @@ export default function MoreScreen() {
 
   return (
     <Screen>
-      <Animated.View entering={motion.card(0)} style={styles.header}>
-        <Text style={styles.eyebrow}>More</Text>
-        <Text variant="headlineLarge" style={styles.title}>
-          Extra tools
-        </Text>
+      <Animated.View entering={motion.card(0)}>
+        <AppCard style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.toolCopy}>
+              <Text style={styles.eyebrow}>More</Text>
+              <Text variant="headlineLarge" style={styles.title}>
+                Study toolbox
+              </Text>
+              <Text style={[styles.heroBody, { color: activePalette.muted }]}>
+                Small, sharp utilities for pressure moments. Use one, then get back to the main study flow.
+              </Text>
+            </View>
+            <View style={styles.heroIcon}>
+              <MaterialCommunityIcons name="tools" color={palette.primary} size={26} />
+            </View>
+          </View>
+          <View style={styles.heroStats}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>{toolboxCount}</Text>
+              <Text style={styles.heroStatLabel}>tools</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>{checkedToolItems}</Text>
+              <Text style={styles.heroStatLabel}>checks</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>{contractLocked ? "on" : "ready"}</Text>
+              <Text style={styles.heroStatLabel}>contract</Text>
+            </View>
+          </View>
+        </AppCard>
       </Animated.View>
 
       <Animated.View entering={motion.card(20)}>
@@ -803,9 +831,14 @@ export default function MoreScreen() {
         </Animated.View>
       </View>
 
+      <Animated.View entering={motion.card(495)} style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Core app links</Text>
+        <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>The bigger rooms, kept here so the main nav stays calm.</Text>
+      </Animated.View>
+
       <View style={styles.grid}>
         {moreItems.map((item, index) => (
-          <Animated.View key={item.title} entering={motion.card(index * 35)} style={styles.gridItem}>
+          <Animated.View key={item.title} entering={motion.card(520 + index * 25)} style={styles.gridItem}>
             <Pressable
               accessibilityRole="button"
               onPress={() =>
@@ -839,6 +872,55 @@ const styles = StyleSheet.create({
   header: {
     gap: 4
   },
+  heroCard: {
+    gap: 14,
+    borderColor: "rgba(124,110,255,0.32)",
+    backgroundColor: "rgba(124,110,255,0.1)"
+  },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14
+  },
+  heroBody: {
+    maxWidth: 720,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(124,110,255,0.18)"
+  },
+  heroStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  heroStat: {
+    minWidth: 96,
+    minHeight: 50,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(0,0,0,0.14)",
+    justifyContent: "center",
+    paddingHorizontal: 10
+  },
+  heroStatValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18,
+    lineHeight: 22
+  },
+  heroStatLabel: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11
+  },
   eyebrow: {
     color: palette.primary,
     fontFamily: "Outfit_700Bold",
@@ -855,9 +937,9 @@ const styles = StyleSheet.create({
     gap: 12
   },
   studyDiceCard: {
-    gap: 14,
+    gap: 12,
     borderWidth: 1,
-    backgroundColor: "rgba(124,110,255,0.08)"
+    backgroundColor: "rgba(8,20,38,0.48)"
   },
   studyDiceTop: {
     flexDirection: "row",
@@ -888,7 +970,11 @@ const styles = StyleSheet.create({
     gap: 8
   },
   sectionHeader: {
-    gap: 3
+    gap: 3,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 14,
+    marginTop: 2
   },
   sectionTitle: {
     color: palette.text,
@@ -907,13 +993,15 @@ const styles = StyleSheet.create({
   featureItem: {
     flexGrow: 1,
     flexBasis: 280,
-    minWidth: 0
+    minWidth: 260,
+    maxWidth: 430
   },
   featureCard: {
-    minHeight: 224,
+    minHeight: 214,
+    height: "100%",
     gap: 12,
     borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.035)"
+    backgroundColor: "rgba(255,255,255,0.032)"
   },
   featureTop: {
     flexDirection: "row",
@@ -1091,22 +1179,26 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   gridItem: {
-    width: "100%",
-    maxWidth: 460
+    flexGrow: 1,
+    flexBasis: 260,
+    minWidth: 240,
+    maxWidth: 420
   },
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.995 }]
   },
   toolCard: {
-    minHeight: 88,
+    minHeight: 76,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14
+    gap: 12,
+    paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.034)"
   },
   iconBox: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center"
@@ -1118,7 +1210,8 @@ const styles = StyleSheet.create({
   toolTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold",
-    fontSize: 18
+    fontSize: 16,
+    lineHeight: 20
   },
   toolDetail: {
     fontSize: 14,
