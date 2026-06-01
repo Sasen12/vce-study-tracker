@@ -148,9 +148,21 @@ type WeakTopicMemory = {
   fixed: boolean;
 };
 
+type StarterPathStep = {
+  id: string;
+  label: string;
+  body: string;
+  actionLabel: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  accent: string;
+  complete: boolean;
+  onPress: () => void;
+};
+
 const parkingLotKeyFor = (userId?: string) => `vce_quiet_parking_lot_${userId ?? "guest"}`;
 const commandChecklistKeyFor = (userId?: string, date = new Date()) =>
   `vce_command_checklist_${userId ?? "guest"}_${date.toISOString().slice(0, 10)}`;
+const starterPathDismissedKeyFor = (userId?: string) => `vce_starter_path_dismissed_${userId ?? "guest"}`;
 
 const weekStartDate = () => {
   const date = new Date();
@@ -468,12 +480,14 @@ export default function DashboardScreen() {
   const [chessTournament, setChessTournament] = useState<CommunityChessTournament | null>(null);
   const [joiningChessTournament, setJoiningChessTournament] = useState(false);
   const [chessNotice, setChessNotice] = useState<string | null>(null);
+  const [starterPathDismissed, setStarterPathDismissed] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const parkingKey = parkingLotKeyFor(user?.id);
       const commandKey = commandChecklistKeyFor(user?.id);
+      const starterPathKey = starterPathDismissedKeyFor(user?.id);
       fetchAll();
       loadStudyPreferences(user?.id)
         .then((preferences) => {
@@ -539,6 +553,13 @@ export default function DashboardScreen() {
         })
         .catch(() => {
           if (active) setCommandDoneIds([]);
+        });
+      AsyncStorage.getItem(starterPathKey)
+        .then((value) => {
+          if (active) setStarterPathDismissed(value === "1");
+        })
+        .catch(() => {
+          if (active) setStarterPathDismissed(false);
         });
 
       return () => {
@@ -872,6 +893,65 @@ export default function DashboardScreen() {
     { label: "Profile", icon: "account-circle-outline", accent: "#60A5FA", route: "/(tabs)/profile" },
     { label: "Study dice", icon: "dice-d20-outline", accent: palette.warning, route: "/(tabs)/more" }
   ];
+  const hasAssessmentDeadline = events.some(isAssessmentDeadline);
+  const hasFirstStudyBlock = sessions.length > 0;
+  const hasFirstMemory = notes.length > 0 || savedQuestions.length > 0 || resources.length > 0;
+  const hasTouchedCommunity = Boolean(gamification?.leaderboardOptIn || gamification?.leaderboardPromptedAt || chessTournament?.joined);
+  const starterPathSteps: StarterPathStep[] = [
+    {
+      id: "subjects",
+      label: "Add subjects",
+      body: subjects.length ? `${subjects.length} active subject${subjects.length === 1 ? "" : "s"}.` : "Tell the app what you actually study.",
+      actionLabel: "Subjects",
+      icon: "book-open-variant",
+      accent: palette.primary,
+      complete: subjects.length > 0,
+      onPress: () => router.push("/(tabs)/profile")
+    },
+    {
+      id: "deadlines",
+      label: "Log a SAC",
+      body: hasAssessmentDeadline ? "Calendar pressure is visible." : "Add one SAC, SAT or exam so Home can plan backwards.",
+      actionLabel: "Calendar",
+      icon: "calendar-alert",
+      accent: palette.warning,
+      complete: hasAssessmentDeadline,
+      onPress: () => router.push("/(tabs)/calendar")
+    },
+    {
+      id: "study",
+      label: "Run a block",
+      body: hasFirstStudyBlock ? "The app has real study evidence." : "Start one timer, even if it is short.",
+      actionLabel: "Timer",
+      icon: "timer-outline",
+      accent: palette.success,
+      complete: hasFirstStudyBlock,
+      onPress: () => (primaryPlan ? openTimerForPlan(primaryPlan) : router.push({ pathname: "/(tabs)/study", params: { mode: "timer" } }))
+    },
+    {
+      id: "memory",
+      label: "Save evidence",
+      body: hasFirstMemory ? "Notes, drills or files are feeding memory." : "Save one note, question or resource so Insights has proof.",
+      actionLabel: "Questions",
+      icon: "brain",
+      accent: palette.info,
+      complete: hasFirstMemory,
+      onPress: () => router.push("/(tabs)/questions")
+    },
+    {
+      id: "community",
+      label: "Join the grind",
+      body: hasTouchedCommunity ? "Community is connected." : "Join squads, rooms or chess when you want momentum around you.",
+      actionLabel: "Community",
+      icon: "account-group",
+      accent: "#A78BFA",
+      complete: hasTouchedCommunity,
+      onPress: () => router.push("/(tabs)/community")
+    }
+  ];
+  const starterPathCompleteCount = starterPathSteps.filter((step) => step.complete).length;
+  const starterPathNext = starterPathSteps.find((step) => !step.complete) ?? null;
+  const showStarterPath = !examWeekMode && !starterPathDismissed && starterPathCompleteCount < starterPathSteps.length;
 
   const openPanicForEvent = (event?: StudyEvent) => {
     const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
@@ -1031,6 +1111,15 @@ export default function DashboardScreen() {
       setChessNotice(error instanceof Error ? error.message : "Could not sign up for chess.");
     } finally {
       setJoiningChessTournament(false);
+    }
+  };
+
+  const dismissStarterPath = async () => {
+    setStarterPathDismissed(true);
+    try {
+      await AsyncStorage.setItem(starterPathDismissedKeyFor(user?.id), "1");
+    } catch {
+      // Local guidance can disappear even if storage is temporarily unavailable.
     }
   };
 
@@ -1752,6 +1841,61 @@ export default function DashboardScreen() {
           ) : null}
         </AppCard>
       </Animated.View>
+
+      {showStarterPath && starterPathNext ? (
+        <Animated.View entering={motion.card(35)}>
+          <AppCard style={styles.starterPathCard}>
+            <View style={styles.starterPathTop}>
+              <View style={styles.flexText}>
+                <Text style={styles.starterPathKicker}>First week path</Text>
+                <Text style={styles.starterPathTitle}>Set up the app by using it.</Text>
+              </View>
+              <View style={styles.starterProgressPill}>
+                <Text style={styles.starterProgressText}>
+                  {starterPathCompleteCount}/{starterPathSteps.length}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.starterTrack}>
+              <View style={[styles.starterTrackFill, { width: `${(starterPathCompleteCount / starterPathSteps.length) * 100}%` }]} />
+            </View>
+            <View style={styles.starterStepRail}>
+              {starterPathSteps.map((step) => (
+                <Pressable
+                  key={step.id}
+                  accessibilityRole="button"
+                  style={[styles.starterStepDot, step.complete && styles.starterStepDotDone, { borderColor: `${step.accent}55` }]}
+                  onPress={step.onPress}
+                >
+                  <MaterialCommunityIcons
+                    name={step.complete ? "check" : step.icon}
+                    color={step.complete ? palette.success : step.accent}
+                    size={15}
+                  />
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.starterNextRow}>
+              <View style={[styles.starterNextIcon, { backgroundColor: `${starterPathNext.accent}18` }]}>
+                <MaterialCommunityIcons name={starterPathNext.icon} color={starterPathNext.accent} size={21} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.starterNextLabel}>{starterPathNext.label}</Text>
+                <Text style={styles.starterNextBody}>{starterPathNext.body}</Text>
+              </View>
+              <Button compact mode="contained" icon="arrow-right" onPress={starterPathNext.onPress}>
+                {starterPathNext.actionLabel}
+              </Button>
+            </View>
+            <View style={styles.starterFooter}>
+              <Text style={styles.starterFooterText}>Short path, no popup. Finish it once and Home gets quieter.</Text>
+              <Button compact mode="text" icon="close" onPress={dismissStarterPath}>
+                Hide
+              </Button>
+            </View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       {showChessSignupCard && chessTournament && !nowView ? (
         <Animated.View entering={motion.card(36)}>
@@ -2655,6 +2799,114 @@ const styles = StyleSheet.create({
     gap: 14,
     borderColor: "rgba(56,189,248,0.3)",
     backgroundColor: "rgba(8,20,38,0.58)"
+  },
+  starterPathCard: {
+    gap: 12,
+    borderColor: "rgba(124,110,255,0.28)",
+    backgroundColor: "rgba(124,110,255,0.08)"
+  },
+  starterPathTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  starterPathKicker: {
+    color: palette.primary,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textTransform: "uppercase"
+  },
+  starterPathTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18,
+    lineHeight: 23
+  },
+  starterProgressPill: {
+    minWidth: 46,
+    minHeight: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(124,110,255,0.35)",
+    backgroundColor: "rgba(124,110,255,0.14)",
+    paddingHorizontal: 9
+  },
+  starterProgressText: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  starterTrack: {
+    height: 7,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)"
+  },
+  starterTrackFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: palette.primary
+  },
+  starterStepRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  starterStepDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  starterStepDotDone: {
+    borderColor: "rgba(74,222,128,0.4)",
+    backgroundColor: "rgba(74,222,128,0.1)"
+  },
+  starterNextRow: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(0,0,0,0.13)",
+    padding: 10
+  },
+  starterNextIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  starterNextLabel: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  starterNextBody: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  starterFooter: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  starterFooterText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.muted,
+    fontSize: 12
   },
   homePulseRail: {
     flexDirection: "row",
