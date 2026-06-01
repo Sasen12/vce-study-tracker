@@ -169,6 +169,88 @@ const memoryPrompts = [
   "Turn one paragraph into three trigger words."
 ] as const;
 
+const deadlinePlans = [
+  {
+    label: "Tomorrow",
+    title: "Damage control",
+    move: "Do one timed question, mark it, then write the rule you keep missing.",
+    accent: palette.secondary
+  },
+  {
+    label: "3 days",
+    title: "Triage week",
+    move: "Pick two weak topics, do one drill for each, then save the correction.",
+    accent: palette.warning
+  },
+  {
+    label: "7 days",
+    title: "Build pressure slowly",
+    move: "Alternate notes, timed practice, and correction so memory survives.",
+    accent: palette.info
+  },
+  {
+    label: "14 days",
+    title: "Calm runway",
+    move: "Map the study design, choose weak areas, and schedule three proof sessions.",
+    accent: palette.success
+  }
+] as const;
+
+const mistakeAutopsy = [
+  "What did the question actually ask?",
+  "Where did marks leak?",
+  "What rule fixes it?",
+  "What similar question proves it?"
+] as const;
+
+const teacherQuestionPrompts = [
+  {
+    label: "Marks",
+    prompt: "Could you show me where this answer loses marks and what one sentence would fix it?",
+    accent: palette.info
+  },
+  {
+    label: "Criteria",
+    prompt: "Which criterion is weakest here, and what evidence would make it stronger?",
+    accent: palette.primary
+  },
+  {
+    label: "SAC prep",
+    prompt: "What topic should I prioritise tonight if I only have 30 minutes before the SAC?",
+    accent: palette.warning
+  },
+  {
+    label: "Folio",
+    prompt: "Is this enough evidence for my decision, or do I need another screenshot/explanation?",
+    accent: "#60A5FA"
+  }
+] as const;
+
+const resourceModes = [
+  {
+    label: "Messy notes",
+    action: "Rewrite one page into five bullet points and one test question.",
+    accent: palette.primary
+  },
+  {
+    label: "Screenshot",
+    action: "Name what it proves, then attach one sentence explaining why it matters.",
+    accent: "#60A5FA"
+  },
+  {
+    label: "Video",
+    action: "Pause after one example. Solve one question before watching more.",
+    accent: palette.secondary
+  },
+  {
+    label: "Feedback",
+    action: "Turn the comment into a rule, then redo the smallest failed part.",
+    accent: palette.warning
+  }
+] as const;
+
+const contractOptions = [12, 25, 45] as const;
+
 export default function MoreScreen() {
   const activePalette = useActivePalette();
   const [missionIndex, setMissionIndex] = useState(0);
@@ -181,11 +263,21 @@ export default function MoreScreen() {
   const [checkedFolioItems, setCheckedFolioItems] = useState<string[]>([]);
   const [confidenceLevel, setConfidenceLevel] = useState(2);
   const [memoryPromptIndex, setMemoryPromptIndex] = useState(0);
+  const [deadlinePlanIndex, setDeadlinePlanIndex] = useState(1);
+  const [checkedAutopsyItems, setCheckedAutopsyItems] = useState<string[]>([]);
+  const [teacherQuestionIndex, setTeacherQuestionIndex] = useState(0);
+  const [resourceModeIndex, setResourceModeIndex] = useState(0);
+  const [contractMinutes, setContractMinutes] = useState<(typeof contractOptions)[number]>(25);
+  const [contractLocked, setContractLocked] = useState(false);
   const activeMission = studyDiceMissions[missionIndex] ?? studyDiceMissions[0];
   const activeCommand = commandTerms[commandIndex] ?? commandTerms[0];
   const activeAnswerFrame = answerFrames[answerFrameIndex] ?? answerFrames[0];
+  const activeDeadlinePlan = deadlinePlans[deadlinePlanIndex] ?? deadlinePlans[0];
+  const activeTeacherQuestion = teacherQuestionPrompts[teacherQuestionIndex] ?? teacherQuestionPrompts[0];
+  const activeResourceMode = resourceModes[resourceModeIndex] ?? resourceModes[0];
   const checklistProgress = checkedSacItems.length;
   const folioProgress = checkedFolioItems.length;
+  const autopsyProgress = checkedAutopsyItems.length;
   const suggestedMinutes = Math.max(3, Math.round(markTarget * 1.5));
   const activeMemoryPrompt = memoryPrompts[memoryPromptIndex] ?? memoryPrompts[0];
   useTrackScreen("more");
@@ -216,6 +308,10 @@ export default function MoreScreen() {
 
   const toggleFolioItem = (item: string) => {
     setCheckedFolioItems((current) => (current.includes(item) ? current.filter((value) => value !== item) : [...current, item]));
+  };
+
+  const toggleAutopsyItem = (item: string) => {
+    setCheckedAutopsyItems((current) => (current.includes(item) ? current.filter((value) => value !== item) : [...current, item]));
   };
 
   const resetBreather = () => {
@@ -531,6 +627,182 @@ export default function MoreScreen() {
         </Animated.View>
       </View>
 
+      <Animated.View entering={motion.card(320)} style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Pressure tools</Text>
+        <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>When the deadline starts looking back at you.</Text>
+      </Animated.View>
+
+      <View style={styles.featureGrid}>
+        <Animated.View entering={motion.card(345)} style={styles.featureItem}>
+          <AppCard style={[styles.featureCard, { borderColor: `${activeDeadlinePlan.accent}35` }]}>
+            <View style={styles.featureTop}>
+              <View style={[styles.smallIconBox, { backgroundColor: `${activeDeadlinePlan.accent}18` }]}>
+                <MaterialCommunityIcons name="calendar-range" color={activeDeadlinePlan.accent} size={20} />
+              </View>
+              <View style={styles.toolCopy}>
+                <Text style={[styles.diceLabel, { color: activeDeadlinePlan.accent }]}>Deadline backplan</Text>
+                <Text style={styles.featureTitle}>{activeDeadlinePlan.title}</Text>
+              </View>
+            </View>
+            <View style={styles.termRail}>
+              {deadlinePlans.map((plan, index) => (
+                <Pressable
+                  key={plan.label}
+                  accessibilityRole="button"
+                  style={[styles.termChip, deadlinePlanIndex === index && { borderColor: plan.accent, backgroundColor: `${plan.accent}16` }]}
+                  onPress={() => setDeadlinePlanIndex(index)}
+                >
+                  <Text style={[styles.termChipText, deadlinePlanIndex === index && { color: plan.accent }]}>{plan.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.memoryPrompt}>{activeDeadlinePlan.move}</Text>
+            <Button compact mode="outlined" icon="calendar-month" onPress={() => router.push("/(tabs)/calendar")}>
+              Open calendar
+            </Button>
+          </AppCard>
+        </Animated.View>
+
+        <Animated.View entering={motion.card(370)} style={styles.featureItem}>
+          <AppCard style={[styles.featureCard, { borderColor: "rgba(255,107,107,0.28)" }]}>
+            <View style={styles.featureTop}>
+              <View style={[styles.smallIconBox, { backgroundColor: "rgba(255,107,107,0.16)" }]}>
+                <MaterialCommunityIcons name="clipboard-search-outline" color={palette.secondary} size={20} />
+              </View>
+              <View style={styles.toolCopy}>
+                <Text style={[styles.diceLabel, { color: palette.secondary }]}>Mistake autopsy</Text>
+                <Text style={styles.featureTitle}>{autopsyProgress}/{mistakeAutopsy.length} checked</Text>
+              </View>
+            </View>
+            <View style={styles.checkList}>
+              {mistakeAutopsy.map((item) => {
+                const checked = checkedAutopsyItems.includes(item);
+                return (
+                  <Pressable key={item} accessibilityRole="checkbox" accessibilityState={{ checked }} style={styles.checkRow} onPress={() => toggleAutopsyItem(item)}>
+                    <MaterialCommunityIcons
+                      name={checked ? "check-circle" : "checkbox-blank-circle-outline"}
+                      color={checked ? palette.success : activePalette.muted}
+                      size={18}
+                    />
+                    <Text style={[styles.checkText, checked && styles.checkTextDone]}>{item}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Button compact mode="outlined" icon="note-edit-outline" onPress={() => router.push("/(tabs)/study")}>
+              Repair it
+            </Button>
+          </AppCard>
+        </Animated.View>
+
+        <Animated.View entering={motion.card(395)} style={styles.featureItem}>
+          <AppCard style={[styles.featureCard, { borderColor: `${activeTeacherQuestion.accent}35` }]}>
+            <View style={styles.featureTop}>
+              <View style={[styles.smallIconBox, { backgroundColor: `${activeTeacherQuestion.accent}18` }]}>
+                <MaterialCommunityIcons name="account-question-outline" color={activeTeacherQuestion.accent} size={20} />
+              </View>
+              <View style={styles.toolCopy}>
+                <Text style={[styles.diceLabel, { color: activeTeacherQuestion.accent }]}>Teacher question</Text>
+                <Text style={styles.featureTitle}>{activeTeacherQuestion.label}</Text>
+              </View>
+            </View>
+            <View style={styles.termRail}>
+              {teacherQuestionPrompts.map((prompt, index) => (
+                <Pressable
+                  key={prompt.label}
+                  accessibilityRole="button"
+                  style={[styles.termChip, teacherQuestionIndex === index && { borderColor: prompt.accent, backgroundColor: `${prompt.accent}16` }]}
+                  onPress={() => setTeacherQuestionIndex(index)}
+                >
+                  <Text style={[styles.termChipText, teacherQuestionIndex === index && { color: prompt.accent }]}>{prompt.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.memoryPrompt}>{activeTeacherQuestion.prompt}</Text>
+          </AppCard>
+        </Animated.View>
+      </View>
+
+      <Animated.View entering={motion.card(420)} style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Routine builders</Text>
+        <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>Turn loose materials into proof of study.</Text>
+      </Animated.View>
+
+      <View style={styles.featureGrid}>
+        <Animated.View entering={motion.card(445)} style={styles.featureItem}>
+          <AppCard style={[styles.featureCard, { borderColor: `${activeResourceMode.accent}35` }]}>
+            <View style={styles.featureTop}>
+              <View style={[styles.smallIconBox, { backgroundColor: `${activeResourceMode.accent}18` }]}>
+                <MaterialCommunityIcons name="file-tree-outline" color={activeResourceMode.accent} size={20} />
+              </View>
+              <View style={styles.toolCopy}>
+                <Text style={[styles.diceLabel, { color: activeResourceMode.accent }]}>Resource triage</Text>
+                <Text style={styles.featureTitle}>{activeResourceMode.label}</Text>
+              </View>
+            </View>
+            <View style={styles.termRail}>
+              {resourceModes.map((mode, index) => (
+                <Pressable
+                  key={mode.label}
+                  accessibilityRole="button"
+                  style={[styles.termChip, resourceModeIndex === index && { borderColor: mode.accent, backgroundColor: `${mode.accent}16` }]}
+                  onPress={() => setResourceModeIndex(index)}
+                >
+                  <Text style={[styles.termChipText, resourceModeIndex === index && { color: mode.accent }]}>{mode.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.memoryPrompt}>{activeResourceMode.action}</Text>
+            <Button compact mode="outlined" icon="folder-upload-outline" onPress={() => router.push("/(tabs)/study")}>
+              Use it
+            </Button>
+          </AppCard>
+        </Animated.View>
+
+        <Animated.View entering={motion.card(470)} style={styles.featureItem}>
+          <AppCard style={[styles.featureCard, { borderColor: "rgba(74,222,128,0.28)" }]}>
+            <View style={styles.featureTop}>
+              <View style={[styles.smallIconBox, { backgroundColor: "rgba(74,222,128,0.16)" }]}>
+                <MaterialCommunityIcons name="handshake-outline" color={palette.success} size={20} />
+              </View>
+              <View style={styles.toolCopy}>
+                <Text style={[styles.diceLabel, { color: palette.success }]}>Study contract</Text>
+                <Text style={styles.featureTitle}>{contractMinutes} minute promise</Text>
+              </View>
+            </View>
+            <View style={styles.termRail}>
+              {contractOptions.map((minutes) => (
+                <Pressable
+                  key={minutes}
+                  accessibilityRole="button"
+                  style={[styles.termChip, contractMinutes === minutes && { borderColor: palette.success, backgroundColor: `${palette.success}16` }]}
+                  onPress={() => {
+                    setContractMinutes(minutes);
+                    setContractLocked(false);
+                  }}
+                >
+                  <Text style={[styles.termChipText, contractMinutes === minutes && { color: palette.success }]}>{minutes}m</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={[styles.contractBox, contractLocked && styles.contractBoxLocked]}>
+              <MaterialCommunityIcons name={contractLocked ? "lock-check-outline" : "lock-open-outline"} color={contractLocked ? palette.success : activePalette.muted} size={18} />
+              <Text style={styles.contractText}>
+                I will do {contractMinutes} minutes, avoid tab-hopping, and leave one piece of evidence.
+              </Text>
+            </View>
+            <View style={styles.diceActions}>
+              <Button compact mode="contained-tonal" icon="lock-check-outline" onPress={() => setContractLocked((value) => !value)}>
+                {contractLocked ? "Locked" : "Lock in"}
+              </Button>
+              <Button compact mode="outlined" icon="timer-outline" onPress={() => router.push("/(tabs)/study")}>
+                Start
+              </Button>
+            </View>
+          </AppCard>
+        </Animated.View>
+      </View>
+
       <View style={styles.grid}>
         {moreItems.map((item, index) => (
           <Animated.View key={item.title} entering={motion.card(index * 35)} style={styles.gridItem}>
@@ -793,6 +1065,30 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     paddingHorizontal: 10,
     paddingVertical: 10
+  },
+  contractBox: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  contractBoxLocked: {
+    borderColor: "rgba(74,222,128,0.36)",
+    backgroundColor: "rgba(74,222,128,0.08)"
+  },
+  contractText: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 13,
+    lineHeight: 18
   },
   gridItem: {
     width: "100%",
