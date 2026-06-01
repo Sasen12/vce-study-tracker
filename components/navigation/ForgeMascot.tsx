@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { router, usePathname } from "expo-router";
 import { Button, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { palette } from "@/constants/theme";
@@ -12,7 +13,10 @@ import {
   subscribeStudyPreferences,
   type StudyPreferences
 } from "@/utils/studyPreferences";
-import type { StudyAnswer } from "@/types";
+import type { AdaptiveStudyTask, StudyAnswer, StudyEvent, StudentSubjectMemory } from "@/types";
+
+type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+type QuickAskRouteKey = "home" | "study" | "calendar" | "community" | "more" | "insights";
 
 const POCKET_BIRD_SRC = "https://cdn.jsdelivr.net/gh/IdreesInc/Pocket-Bird@main/dist/web/birb.embed.js";
 const POCKET_BIRD_SCRIPT_ID = "vce-forge-pocket-bird-script";
@@ -35,6 +39,69 @@ const FLIGHT_TARGETS = [
   { x: 0.86, y: 0.58, width: 112 }
 ];
 
+const routeKeyForPath = (pathname: string): QuickAskRouteKey => {
+  if (pathname.includes("study")) return "study";
+  if (pathname.includes("calendar")) return "calendar";
+  if (pathname.includes("community")) return "community";
+  if (pathname.includes("insights")) return "insights";
+  if (pathname.includes("more") || pathname.includes("questions") || pathname.includes("shop") || pathname.includes("profile")) return "more";
+  return "home";
+};
+
+const routeActionFor = (routeKey: QuickAskRouteKey): { label: string; icon: IconName; route: "/(tabs)" | "/(tabs)/study" | "/(tabs)/calendar" | "/(tabs)/community" | "/(tabs)/more" | "/(tabs)/insights" } => {
+  if (routeKey === "study") return { label: "Open timer", icon: "timer-outline", route: "/(tabs)/study" };
+  if (routeKey === "calendar") return { label: "Open calendar", icon: "calendar-month", route: "/(tabs)/calendar" };
+  if (routeKey === "community") return { label: "Open community", icon: "forum-outline", route: "/(tabs)/community" };
+  if (routeKey === "insights") return { label: "Open insights", icon: "map-search-outline", route: "/(tabs)/insights" };
+  if (routeKey === "more") return { label: "Open tools", icon: "dots-grid", route: "/(tabs)/more" };
+  return { label: "Open Home", icon: "view-dashboard", route: "/(tabs)" };
+};
+
+const routeCopy: Record<QuickAskRouteKey, { eyebrow: string; title: string; body: string; icon: IconName; accent: string }> = {
+  home: {
+    eyebrow: "Home coach",
+    title: "Ask about your next move",
+    body: "Forge can use your deadline, weak area and plan context to decide what deserves attention now.",
+    icon: "view-dashboard",
+    accent: palette.info
+  },
+  study: {
+    eyebrow: "Study coach",
+    title: "Ask during the work",
+    body: "Use this for a quick hint, method check or stuck-point repair without leaving the study flow.",
+    icon: "timer-outline",
+    accent: palette.success
+  },
+  calendar: {
+    eyebrow: "Deadline coach",
+    title: "Turn dates into a plan",
+    body: "Ask what to do first, how to split prep, or whether a SAC needs panic planning.",
+    icon: "calendar-month",
+    accent: palette.warning
+  },
+  community: {
+    eyebrow: "Community coach",
+    title: "Ask before you post",
+    body: "Turn a messy stuck point into a clean squad question or helpful reply.",
+    icon: "forum-outline",
+    accent: palette.primary
+  },
+  more: {
+    eyebrow: "Tool coach",
+    title: "Find the right tool",
+    body: "Ask which extra tool fits the problem before opening everything at once.",
+    icon: "dots-grid",
+    accent: "#60A5FA"
+  },
+  insights: {
+    eyebrow: "Student Map",
+    title: "Ask what the evidence means",
+    body: "Use weak areas, mistakes and patterns to pick a repair, not random revision.",
+    icon: "map-search-outline",
+    accent: "#A78BFA"
+  }
+};
+
 type PocketBirdWindow = Window &
   typeof globalThis & {
     __vceForgePocketBirdLoaded?: boolean;
@@ -53,6 +120,24 @@ const compactAnswer = (answer: StudyAnswer) =>
   ]
     .filter(Boolean)
     .join("\n\n");
+
+const daysUntil = (eventDate: string) => {
+  const today = new Date();
+  const target = new Date(`${eventDate.slice(0, 10)}T00:00:00`);
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+};
+
+const deadlineLabel = (event: StudyEvent) => {
+  const days = daysUntil(event.eventDate);
+  if (days < 0) return `${event.title} was due`;
+  if (days === 0) return `${event.title} is today`;
+  if (days === 1) return `${event.title} is tomorrow`;
+  return `${event.title} is in ${days} days`;
+};
+
+const memoryRiskScore = (memory: StudentSubjectMemory) =>
+  memory.riskLevel === "high" ? 3 : memory.riskLevel === "medium" ? 2 : memory.riskLevel === "low" ? 1 : 0;
 
 const getPocketBirdHost = () => document.getElementById(POCKET_BIRD_HOST_ID) as HTMLElement | null;
 
@@ -181,8 +266,12 @@ const ensurePocketBirdScript = () => {
 
 export function ForgeMascot() {
   const activePalette = useActivePalette();
+  const pathname = usePathname();
   const userId = useAuthStore((state) => state.user?.id);
   const subjects = useAppStore((state) => state.subjects);
+  const events = useAppStore((state) => state.events);
+  const latestPlan = useAppStore((state) => state.latestPlan);
+  const subjectMemories = useAppStore((state) => state.subjectMemories);
   const askStudyQuestion = useAppStore((state) => state.askStudyQuestion);
   const createNote = useAppStore((state) => state.createNote);
   const [preferences, setPreferences] = useState<StudyPreferences>(DEFAULT_STUDY_PREFERENCES);
@@ -299,6 +388,78 @@ export function ForgeMascot() {
     () => subjects.find((subject) => subject.id === selectedSubjectId) ?? subjects[0] ?? null,
     [selectedSubjectId, subjects]
   );
+  const routeKey = routeKeyForPath(pathname);
+  const pageCopy = routeCopy[routeKey];
+  const pageAction = routeActionFor(routeKey);
+  const nearestDeadline = useMemo(
+    () =>
+      [...events]
+        .filter((event) => daysUntil(event.eventDate) >= 0)
+        .sort((a, b) => daysUntil(a.eventDate) - daysUntil(b.eventDate))[0] ?? null,
+    [events]
+  );
+  const weakestMemory = useMemo(
+    () =>
+      [...subjectMemories].sort((a, b) => {
+        const riskGap = memoryRiskScore(b) - memoryRiskScore(a);
+        if (riskGap !== 0) return riskGap;
+        return (b.weakAreas?.length ?? 0) - (a.weakAreas?.length ?? 0);
+      })[0] ?? null,
+    [subjectMemories]
+  );
+  const nextPlanTask: AdaptiveStudyTask | null = latestPlan?.tasks?.[0] ?? null;
+  const starterPrompts = useMemo(() => {
+    const subjectName = selectedSubject?.subjectName ?? weakestMemory?.subjectName ?? "my subject";
+    const deadline = nearestDeadline ? deadlineLabel(nearestDeadline) : "my next SAC or exam";
+    const weakArea = weakestMemory?.predictedNextTask ?? weakestMemory?.subjectName ?? "my weakest area";
+    const planTask = nextPlanTask?.title ?? "tonight's study block";
+    const prompts: Record<QuickAskRouteKey, string[]> = {
+      home: [
+        `What should I study tonight for ${subjectName}?`,
+        `Turn ${deadline} into a simple plan.`,
+        `What is the smallest useful move for ${weakArea}?`
+      ],
+      study: [
+        `Give me a hint for ${subjectName}, not the full answer.`,
+        `Make ${planTask} easier to start.`,
+        "Check if my approach would earn marks."
+      ],
+      calendar: [
+        `How should I prepare for ${deadline}?`,
+        "Split this assessment into three study blocks.",
+        "What should I do if I only have 25 minutes?"
+      ],
+      community: [
+        `Turn my confusion in ${subjectName} into a clean squad question.`,
+        "Help me write a useful answer to another student.",
+        "What should I ask without oversharing personal info?"
+      ],
+      more: [
+        "Which tool should I use for this problem?",
+        "Give me a one-minute reset before I study.",
+        `What extra tool helps with ${subjectName}?`
+      ],
+      insights: [
+        `What does my ${weakestMemory?.subjectName ?? subjectName} weak area mean?`,
+        "Turn this mistake pattern into a drill.",
+        "What evidence should I create next?"
+      ]
+    };
+    return prompts[routeKey];
+  }, [nearestDeadline, nextPlanTask, routeKey, selectedSubject?.subjectName, weakestMemory]);
+  const contextLines = useMemo(
+    () =>
+      [
+        `Student opened Ask Forge from: ${pageCopy.eyebrow}.`,
+        selectedSubject ? `Selected subject: ${selectedSubject.subjectName} (${selectedSubject.unit}).` : null,
+        nearestDeadline ? `Nearest deadline: ${deadlineLabel(nearestDeadline)}.` : null,
+        weakestMemory
+          ? `Student Map signal: ${weakestMemory.subjectName} risk is ${weakestMemory.riskLevel}; predicted next task: ${weakestMemory.predictedNextTask ?? "not enough evidence yet"}.`
+          : null,
+        nextPlanTask ? `Current suggested plan task: ${nextPlanTask.title} (${nextPlanTask.minutes} minutes).` : null
+      ].filter(Boolean) as string[],
+    [nearestDeadline, nextPlanTask, pageCopy.eyebrow, selectedSubject, weakestMemory]
+  );
 
   const ask = async () => {
     const prompt = question.trim();
@@ -313,7 +474,7 @@ export function ForgeMascot() {
     try {
       const formData = new FormData();
       if (selectedSubject?.id) formData.append("subjectId", selectedSubject.id);
-      formData.append("question", prompt);
+      formData.append("question", `${contextLines.join("\n")}\n\nStudent question: ${prompt}`);
       formData.append("responseMode", "direct");
       const nextAnswer = await askStudyQuestion(formData);
       setAnswer(nextAnswer);
@@ -343,18 +504,19 @@ export function ForgeMascot() {
         <View style={[styles.modalCard, { backgroundColor: activePalette.surface, borderColor: activePalette.border }]}>
           <View style={styles.modalHeader}>
             <View style={styles.modalTitleRow}>
-              <View style={[styles.modalIcon, { backgroundColor: `${activePalette.primary}18` }]}>
-                <MaterialCommunityIcons name="message-question-outline" color={activePalette.primary} size={25} />
+              <View style={[styles.modalIcon, { backgroundColor: `${pageCopy.accent}18` }]}>
+                <MaterialCommunityIcons name={pageCopy.icon} color={pageCopy.accent} size={25} />
               </View>
               <View style={styles.flexText}>
-                <Text style={[styles.eyebrow, { color: activePalette.primary }]}>Quick ask</Text>
-                <Text style={styles.modalTitle}>Ask from anywhere</Text>
+                <Text style={[styles.eyebrow, { color: pageCopy.accent }]}>{pageCopy.eyebrow}</Text>
+                <Text style={styles.modalTitle}>{pageCopy.title}</Text>
               </View>
             </View>
             <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" color={palette.muted} size={22} />
             </Pressable>
           </View>
+          <Text style={styles.modalBody}>{pageCopy.body}</Text>
 
           {subjects.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
@@ -381,9 +543,24 @@ export function ForgeMascot() {
             </ScrollView>
           ) : null}
 
+          <View style={styles.promptGrid}>
+            {starterPrompts.map((prompt) => (
+              <Pressable
+                key={prompt}
+                accessibilityRole="button"
+                onPress={() => setQuestion(prompt)}
+                style={[styles.promptChip, { borderColor: `${pageCopy.accent}35`, backgroundColor: `${pageCopy.accent}10` }]}
+              >
+                <MaterialCommunityIcons name="lightbulb-on-outline" color={pageCopy.accent} size={15} />
+                <Text style={styles.promptText}>{prompt}</Text>
+              </Pressable>
+            ))}
+          </View>
+
           <TextInput
             mode="outlined"
-            label="What are you stuck on?"
+            label="Ask Forge"
+            placeholder={starterPrompts[0]}
             value={question}
             multiline
             numberOfLines={3}
@@ -405,10 +582,23 @@ export function ForgeMascot() {
                   ))}
                 </View>
               ) : null}
+              {answer.follow_up_questions.length ? (
+                <View style={styles.followUpGrid}>
+                  {answer.follow_up_questions.slice(0, 3).map((followUp) => (
+                    <Pressable key={followUp} accessibilityRole="button" style={styles.followUpChip} onPress={() => setQuestion(followUp)}>
+                      <MaterialCommunityIcons name="arrow-right" color={pageCopy.accent} size={14} />
+                      <Text style={styles.followUpText}>{followUp}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </ScrollView>
           ) : null}
 
           <View style={styles.modalActions}>
+            <Button mode="outlined" compact icon={pageAction.icon} onPress={() => router.push(pageAction.route)}>
+              {pageAction.label}
+            </Button>
             <Button mode="text" onPress={() => setOpen(false)}>
               Close
             </Button>
@@ -472,6 +662,11 @@ const styles = StyleSheet.create({
     fontSize: 21,
     lineHeight: 26
   },
+  modalBody: {
+    color: palette.muted,
+    fontSize: 14,
+    lineHeight: 20
+  },
   closeButton: {
     width: 38,
     height: 38,
@@ -496,6 +691,30 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: palette.muted,
     fontFamily: "Outfit_700Bold"
+  },
+  promptGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  promptChip: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    flexGrow: 1,
+    flexBasis: 170,
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  promptText: {
+    flex: 1,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    lineHeight: 16
   },
   message: {
     color: palette.muted,
@@ -538,8 +757,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20
   },
+  followUpGrid: {
+    gap: 8
+  },
+  followUpChip: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.16)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  followUpText: {
+    flex: 1,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    lineHeight: 16
+  },
   modalActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "flex-end",
     alignItems: "center",
     gap: 8
