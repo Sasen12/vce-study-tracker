@@ -41,6 +41,15 @@ const clampStudyScore = (score: number) => Math.max(0, Math.min(50, score));
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const maxSubjects = 8;
 
+type SubjectTransitionRow = {
+  subject: UserSubject;
+  evidenceCount: number;
+  futureDeadlineCount: number;
+  weekMinutes: number;
+  recommendedAction: "rollover" | "protect" | "archive" | "steady";
+  actionCopy: string;
+};
+
 const startOfWeek = () => {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -608,6 +617,44 @@ export default function ProfileScreen() {
     [events, goals, notes, resources, savedQuestions, sessions, subjects]
   );
   const visibleRituals = ritualsExpanded ? personalRituals : personalRituals.slice(0, 1);
+  const subjectTransitionRows = useMemo<SubjectTransitionRow[]>(
+    () =>
+      subjects.map((subject) => {
+        const evidenceCount =
+          sessions.filter((session) => session.subjectId === subject.id).length +
+          notes.filter((note) => note.subjectId === subject.id).length +
+          savedQuestions.filter((question) => question.subjectId === subject.id).length +
+          resources.filter((resource) => resource.subjectId === subject.id).length;
+        const futureDeadlineCount = events.filter((event) => event.subjectId === subject.id && !event.completed).length;
+        const weekMinutes = Math.round((weeklySecondsBySubject[subject.id] ?? 0) / 60);
+        const recommendedAction =
+          subject.unit === "1/2"
+            ? "rollover"
+            : futureDeadlineCount > 0
+              ? "protect"
+              : evidenceCount === 0 && subjects.length >= 5
+                ? "archive"
+                : "steady";
+        const actionCopy =
+          recommendedAction === "rollover"
+            ? "Ready for Unit 3/4 if this subject continues."
+            : recommendedAction === "protect"
+              ? `${futureDeadlineCount} active deadline${futureDeadlineCount === 1 ? "" : "s"} still attached.`
+              : recommendedAction === "archive"
+                ? "No evidence yet. Safe candidate if this was a trial subject."
+                : "Keep active. History is being preserved.";
+
+        return { subject, evidenceCount, futureDeadlineCount, weekMinutes, recommendedAction, actionCopy };
+      }),
+    [events, notes, resources, savedQuestions, sessions, subjects, weeklySecondsBySubject]
+  );
+  const transitionStats = useMemo(() => {
+    const unit12Count = subjectTransitionRows.filter((row) => row.subject.unit === "1/2").length;
+    const totalEvidence = subjectTransitionRows.reduce((sum, row) => sum + row.evidenceCount, 0);
+    const protectedDeadlines = subjectTransitionRows.reduce((sum, row) => sum + row.futureDeadlineCount, 0);
+    const rolloverReady = subjectTransitionRows.filter((row) => row.recommendedAction === "rollover").length;
+    return { unit12Count, totalEvidence, protectedDeadlines, rolloverReady };
+  }, [subjectTransitionRows]);
 
   const openRitual = (ritual: PersonalRitual) => {
     router.push({
@@ -1071,6 +1118,85 @@ export default function ProfileScreen() {
         <Text style={styles.disclaimer}>
           Estimate only. Uses 2025 VTAC rounded scaling and aggregate thresholds; official results vary by year and exact VTAC
           calculations use more precision.
+        </Text>
+      </AppCard>
+
+      <AppCard style={styles.transitionCard}>
+        <View style={styles.transitionHeader}>
+          <View style={styles.transitionIcon}>
+            <MaterialCommunityIcons name="swap-horizontal-bold" color={palette.warning} size={23} />
+          </View>
+          <View style={styles.flexText}>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Subject transition
+            </Text>
+            <Text style={styles.muted}>
+              Use this when Unit 1 moves to Unit 2, Year 11 turns into Year 12, or a subject gets dropped.
+            </Text>
+          </View>
+          <Button compact mode="contained-tonal" icon="plus" disabled={subjects.length >= subjectLimit} onPress={() => setAddSubjectOpen(true)}>
+            Add replacement
+          </Button>
+        </View>
+        <View style={styles.transitionStatGrid}>
+          <View style={styles.transitionStat}>
+            <Text style={styles.transitionStatValue}>{transitionStats.rolloverReady}</Text>
+            <Text style={styles.transitionStatLabel}>ready to roll</Text>
+          </View>
+          <View style={styles.transitionStat}>
+            <Text style={styles.transitionStatValue}>{transitionStats.protectedDeadlines}</Text>
+            <Text style={styles.transitionStatLabel}>live dates</Text>
+          </View>
+          <View style={styles.transitionStat}>
+            <Text style={styles.transitionStatValue}>{transitionStats.totalEvidence}</Text>
+            <Text style={styles.transitionStatLabel}>history items</Text>
+          </View>
+          <View style={styles.transitionStat}>
+            <Text style={styles.transitionStatValue}>{transitionStats.unit12Count}</Text>
+            <Text style={styles.transitionStatLabel}>Unit 1/2</Text>
+          </View>
+        </View>
+        {subjectTransitionRows.length ? (
+          <View style={styles.transitionList}>
+            {subjectTransitionRows.map((row) => (
+              <View key={row.subject.id} style={styles.transitionRow}>
+                <View style={[styles.transitionSubjectDot, { backgroundColor: row.subject.color }]} />
+                <View style={styles.transitionRowText}>
+                  <View style={styles.transitionTitleLine}>
+                    <Text style={styles.transitionSubjectName} numberOfLines={1}>
+                      {row.subject.subjectName}
+                    </Text>
+                    <Text style={styles.transitionUnit}>Unit {row.subject.unit}</Text>
+                  </View>
+                  <Text style={styles.defaultTabDescription} numberOfLines={2}>
+                    {row.actionCopy} {row.weekMinutes ? `${row.weekMinutes}m studied this week.` : "No minutes this week."}
+                  </Text>
+                </View>
+                <View style={styles.transitionRowActions}>
+                  {row.subject.unit === "1/2" ? (
+                    <Button
+                      compact
+                      mode="contained-tonal"
+                      icon="arrow-up-bold-box-outline"
+                      loading={rollingSubjectId === row.subject.id}
+                      disabled={rollingSubjectId === row.subject.id}
+                      onPress={() => moveSubjectToUnit34(row.subject)}
+                    >
+                      3/4
+                    </Button>
+                  ) : null}
+                  <Button compact mode="outlined" icon="archive-outline" onPress={() => setArchivingSubject(row.subject)}>
+                    Archive
+                  </Button>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.muted}>Add your current subjects first. Transition planning appears once subjects exist.</Text>
+        )}
+        <Text style={styles.transitionNote}>
+          Archiving removes a subject from active study but keeps its sessions, notes, saved questions, resources and memory attached.
         </Text>
       </AppCard>
 
@@ -1556,6 +1682,110 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12,
     lineHeight: 18
+  },
+  transitionCard: {
+    gap: 13,
+    borderColor: "rgba(245,158,11,0.26)",
+    backgroundColor: "rgba(245,158,11,0.07)"
+  },
+  transitionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 12
+  },
+  transitionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,158,11,0.15)"
+  },
+  transitionStatGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  transitionStat: {
+    flexGrow: 1,
+    flexBasis: 120,
+    minHeight: 62,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.18)",
+    backgroundColor: "rgba(0,0,0,0.13)",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  transitionStatValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 20
+  },
+  transitionStatLabel: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
+  },
+  transitionList: {
+    gap: 8
+  },
+  transitionRow: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  transitionSubjectDot: {
+    width: 11,
+    height: 42,
+    borderRadius: 999
+  },
+  transitionRowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  transitionTitleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  transitionSubjectName: {
+    flex: 1,
+    minWidth: 0,
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 15
+  },
+  transitionUnit: {
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "rgba(245,158,11,0.15)",
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  transitionRowActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 7
+  },
+  transitionNote: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    lineHeight: 17
   },
   sectionTitle: {
     color: palette.text,
