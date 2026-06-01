@@ -796,6 +796,60 @@ export default function DashboardScreen() {
     chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye") ??
     null;
   const showChessSignupCard = Boolean(chessTournament && !examWeekMode && (chessTournament.signupOpen !== false || chessTournament.joined));
+  const todayStudyMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
+  const weekStudyMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
+  const homeSignalTiles: {
+    id: string;
+    label: string;
+    value: string;
+    meta: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    accent: string;
+    onPress: () => void;
+  }[] = [
+    {
+      id: "today",
+      label: "today",
+      value: todayStudyMinutes ? formatMinutes(todayStudyMinutes) : "0m",
+      meta: todayStudyMinutes ? `${formatMinutes(weekStudyMinutes)} this week` : "first block waiting",
+      icon: "timer-outline",
+      accent: palette.success,
+      onPress: () => {
+        if (primaryPlan) {
+          openTimerForPlan(primaryPlan);
+          return;
+        }
+        router.push("/(tabs)/study");
+      }
+    },
+    {
+      id: "deadline",
+      label: "deadline",
+      value: nextDeadline ? countdownLabel(nextDeadline) : `${deadlineRadar.week}`,
+      meta: nextDeadline?.title ?? "dates protected",
+      icon: nextDeadline ? eventIconName(nextDeadline) : "calendar-check-outline",
+      accent: nextDeadline && daysUntil(nextDeadline.eventDate) <= 2 ? palette.secondary : palette.warning,
+      onPress: () => router.push("/(tabs)/calendar")
+    },
+    {
+      id: "evidence",
+      label: "evidence",
+      value: `${evidenceAverage}`,
+      meta: revisionDebt.length ? `${revisionDebt.length} repair${revisionDebt.length === 1 ? "" : "s"}` : "clean board",
+      icon: "chart-timeline-variant",
+      accent: palette.info,
+      onPress: () => router.push("/(tabs)/insights")
+    },
+    {
+      id: "chess",
+      label: "community",
+      value: chessTournament ? `${chessTournament.joinedCount}` : "live",
+      meta: chessTournament ? "chess signups" : "rooms open",
+      icon: chessTournament?.joined ? "chess-king" : "forum-outline",
+      accent: chessTournament ? palette.warning : palette.primary,
+      onPress: () => router.push("/(tabs)/community")
+    }
+  ];
 
   const openPanicForEvent = (event?: StudyEvent) => {
     const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
@@ -1242,6 +1296,41 @@ export default function DashboardScreen() {
             <MaterialCommunityIcons name="rocket-launch-outline" color={palette.info} size={24} />
           </View>
 
+          {nowView ? (
+            <>
+              <View style={styles.homePulseRail}>
+                {homeSignalTiles.map((tile) => (
+                  <Pressable
+                    key={tile.id}
+                    accessibilityRole="button"
+                    style={[styles.homePulseTile, { borderColor: `${tile.accent}33` }]}
+                    onPress={tile.onPress}
+                  >
+                    <View style={[styles.homePulseIcon, { backgroundColor: `${tile.accent}18` }]}>
+                      <MaterialCommunityIcons name={tile.icon} color={tile.accent} size={18} />
+                    </View>
+                    <View style={styles.flexText}>
+                      <Text style={[styles.homePulseLabel, { color: tile.accent }]}>{tile.label}</Text>
+                      <Text style={styles.homePulseValue} numberOfLines={1}>
+                        {tile.value}
+                      </Text>
+                      <Text style={styles.homePulseMeta} numberOfLines={1}>
+                        {tile.meta}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable accessibilityRole="button" style={styles.commandSpark} onPress={() => setDetailsOpen(true)}>
+                <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={18} />
+                <Text style={styles.commandSparkText} numberOfLines={1}>
+                  {dailyInspiration.action}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" color={palette.warning} size={18} />
+              </Pressable>
+            </>
+          ) : null}
+
           {showHomeTools ? (
             <Pressable
               accessibilityRole="button"
@@ -1277,7 +1366,15 @@ export default function DashboardScreen() {
 
           {primaryPlan ? (
             nowView ? (
-              <View style={styles.focusCommand}>
+              <View
+                style={[
+                  styles.focusCommand,
+                  {
+                    borderColor: `${primaryPlan.accent}44`,
+                    backgroundColor: `${primaryPlan.accent}0f`
+                  }
+                ]}
+              >
                 <View style={[styles.focusCommandIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
                   <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={24} />
                 </View>
@@ -2489,9 +2586,47 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   launchpadCard: {
-    gap: 12,
-    borderColor: "rgba(56,189,248,0.22)",
-    backgroundColor: "rgba(56,189,248,0.07)"
+    gap: 14,
+    borderColor: "rgba(56,189,248,0.3)",
+    backgroundColor: "rgba(8,20,38,0.58)"
+  },
+  homePulseRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  homePulseTile: {
+    flexGrow: 1,
+    flexBasis: 145,
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  homePulseIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  homePulseLabel: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 10,
+    textTransform: "uppercase"
+  },
+  homePulseValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18
+  },
+  homePulseMeta: {
+    color: palette.muted,
+    fontSize: 12
   },
   chessSignupCard: {
     gap: 12,
@@ -2651,14 +2786,14 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   focusCommand: {
-    minHeight: 270,
+    minHeight: 230,
     alignItems: "stretch",
     justifyContent: "center",
     gap: 16,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(56,189,248,0.24)",
-    backgroundColor: "rgba(3,7,18,0.18)",
+    backgroundColor: "rgba(3,7,18,0.24)",
     padding: 18
   },
   focusCommandIcon: {
