@@ -70,6 +70,15 @@ type SignalForMap = {
   createdAt: Date;
 };
 
+type SignalSubjectTextSource = {
+  subjectName?: string | null;
+  topic?: string | null;
+  title?: string | null;
+  detail?: string | null;
+  evidence?: string | null;
+  nextAction?: string | null;
+};
+
 const assessmentEventTypes = ["SAC", "SAT", "PRACTICE_SAC", "PRACTICE_SAT", "EXAM", "TASK"];
 const weaknessTypes = new Set(["weakness", "mistake", "assessment_risk"]);
 const signalTypes = new Set<StudentSignalType>([
@@ -106,8 +115,13 @@ const sameSubjectName = (left?: string | null, right?: string | null) => {
   return normaliseSubjectName(left) === normaliseSubjectName(right);
 };
 
-const signalSubjectText = (signal: StudentMemorySignalDraft, fallbackSummary?: string | null) =>
-  [
+const joinSignalText = (parts: Array<string | null | undefined>) =>
+  parts
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join("\n");
+
+const signalSubjectText = (signal: SignalSubjectTextSource, fallbackSummary?: string | null) =>
+  joinSignalText([
     signal.subjectName,
     signal.topic,
     signal.title,
@@ -115,9 +129,21 @@ const signalSubjectText = (signal: StudentMemorySignalDraft, fallbackSummary?: s
     signal.evidence,
     signal.nextAction,
     fallbackSummary
-  ]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .join("\n");
+  ]);
+
+const signalContentText = (signal: SignalSubjectTextSource, fallbackSummary?: string | null) =>
+  joinSignalText([
+    signal.topic,
+    signal.title,
+    signal.detail,
+    signal.evidence,
+    signal.nextAction,
+    fallbackSummary
+  ]);
+
+const inferSubjectForSignal = (signal: SignalSubjectTextSource, fallbackSummary?: string | null) =>
+  inferVceSubjectFromQuestion(signalContentText(signal, fallbackSummary)) ??
+  inferVceSubjectFromQuestion(signalSubjectText(signal, fallbackSummary));
 
 const resolveSubjectTarget = async (userId: string, target: SubjectMemoryTarget): Promise<ResolvedSubjectMemoryTarget> => {
   if (target.subjectId) {
@@ -476,18 +502,7 @@ export const repairLearningSignalSubjects = async (userId: string) => {
   const updates: Prisma.PrismaPromise<unknown>[] = [];
 
   for (const signal of signals) {
-    const inferredSubjectName = inferVceSubjectFromQuestion(
-      [
-        signal.subjectName,
-        signal.topic,
-        signal.title,
-        signal.detail,
-        signal.evidence,
-        signal.nextAction
-      ]
-        .filter((value): value is string => Boolean(value && value.trim()))
-        .join("\n")
-    );
+    const inferredSubjectName = inferSubjectForSignal(signal);
     if (!inferredSubjectName) continue;
 
     const subject = subjectsByName.get(normaliseSubjectName(inferredSubjectName));
@@ -560,7 +575,7 @@ const targetForSignal = (
 ): SubjectMemoryTarget => {
   const currentSubjectId = signal.subjectId === undefined ? eventTarget.subjectId : signal.subjectId;
   const currentSubjectName = signal.subjectName ?? eventTarget.subjectName;
-  const inferredSubjectName = inferVceSubjectFromQuestion(signalSubjectText(signal, fallbackSummary));
+  const inferredSubjectName = inferSubjectForSignal(signal, fallbackSummary);
   const preferredSubjectName = inferredSubjectName ?? currentSubjectName;
   const subjectChanged = preferredSubjectName ? !sameSubjectName(preferredSubjectName, eventTarget.subjectName) : false;
 

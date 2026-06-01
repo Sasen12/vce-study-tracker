@@ -65,6 +65,7 @@ type StoredActiveTimer = {
   timerBonusXp: number;
   nextCheckpointAt: number;
   focusMode: boolean;
+  externalWorkMode?: boolean;
   startedAtMs: number;
   elapsedBeforeRun: number;
 };
@@ -194,6 +195,7 @@ export default function StudyScreen() {
   const [confettiKey, setConfettiKey] = useState(0);
   const [mode, setMode] = useState("coach");
   const [focusMode, setFocusMode] = useState(false);
+  const [externalWorkMode, setExternalWorkMode] = useState(false);
   const [completedRitualSteps, setCompletedRitualSteps] = useState<Record<number, boolean>>({});
   const [ritualBonusAwarded, setRitualBonusAwarded] = useState(false);
   const scale = useSharedValue(1);
@@ -258,6 +260,7 @@ export default function StudyScreen() {
       timerBonusXp,
       nextCheckpointAt,
       focusMode,
+      externalWorkMode,
       startedAtMs: runStartedAtRef.current,
       elapsedBeforeRun: elapsedAtRunStartRef.current
     };
@@ -265,6 +268,7 @@ export default function StudyScreen() {
   }, [
     checkInIntervalMinutes,
     checkInsEnabled,
+    externalWorkMode,
     focusMode,
     nextCheckpointAt,
     selectedSubjectId,
@@ -334,16 +338,20 @@ export default function StudyScreen() {
         setTargetMinutes(typeof parsed.targetMinutes === "string" ? parsed.targetMinutes : "25");
         setCheckInsEnabled(Boolean(parsed.checkInsEnabled));
         setCheckInIntervalMinutes(typeof parsed.checkInIntervalMinutes === "string" ? parsed.checkInIntervalMinutes : "10");
+        const restoredExternalWorkMode = Boolean(parsed.externalWorkMode);
         setTimerBonusXp(typeof parsed.timerBonusXp === "number" ? parsed.timerBonusXp : 0);
         setNextCheckpointAt(typeof parsed.nextCheckpointAt === "number" ? parsed.nextCheckpointAt : defaultCheckpointIntervalSeconds);
-        setFocusMode(Boolean(parsed.focusMode));
+        setFocusMode(restoredExternalWorkMode ? false : Boolean(parsed.focusMode));
+        setExternalWorkMode(restoredExternalWorkMode);
         setElapsed(restoredElapsed);
         setMode("timer");
         setRunning(true);
         setMessage(
           restoredElapsed >= maxBackgroundTimerSeconds
             ? "Recovered a long background timer and capped it at 8 hours. Save the real block or reset it."
-            : "Recovered your background timer. Folio work still counts when the tab is away."
+            : restoredExternalWorkMode
+              ? "Recovered your external work timer. Word, folio and SAT work still counted while the tab was away."
+              : "Recovered your background timer. Folio work still counts when the tab is away."
         );
       })
       .catch(() => undefined);
@@ -484,6 +492,7 @@ export default function StudyScreen() {
     checkInIntervalMinutes,
     checkInsEnabled,
     focusMode,
+    externalWorkMode,
     nextCheckpointAt,
     persistActiveTimer,
     running,
@@ -573,7 +582,7 @@ export default function StudyScreen() {
     }
   }, [calculatorSubjects.length, mode]);
   const trimmedStudyTopic = studyTopic.trim();
-  const checkInsActive = checkInsEnabled && Boolean(trimmedStudyTopic);
+  const checkInsActive = !externalWorkMode && checkInsEnabled && Boolean(trimmedStudyTopic);
   const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const xp = calculateXp(elapsed) + timerBonusXp;
   const evidenceBonusXp = useMemo(() => {
@@ -596,30 +605,35 @@ export default function StudyScreen() {
   const breakPlan = useMemo(() => breakPlanFor(elapsed, targetSeconds), [elapsed, targetSeconds]);
   const breakReady = elapsed >= targetSeconds && elapsed > 0;
   const showTimerSetup = !running && elapsed === 0;
-  const sessionBrief = trimmedStudyTopic || sessionGoal.trim() || "Pick one thing. Start the block. Save the evidence.";
+  const sessionBrief = externalWorkMode
+    ? trimmedStudyTopic || sessionGoal.trim() || "External work mode: Word, folio, SAT, IDE or handwritten evidence."
+    : trimmedStudyTopic || sessionGoal.trim() || "Pick one thing. Start the block. Save the evidence.";
   const timerStateText = running ? "Locked in" : elapsed > 0 ? "Paused block" : "Ready";
   const checkInSummary = checkInsActive
     ? `Check-ins every ${checkInIntervalMinutes}m`
-    : checkInsEnabled
+    : externalWorkMode
+      ? "External work mode"
+      : checkInsEnabled
       ? "Add a topic to arm check-ins"
       : "Check-ins off";
 
   const statusLabel = useMemo(() => {
     if (!selectedSubject) return "Choose a subject";
+    if (running && externalWorkMode) return `Counting outside work for ${selectedSubject.subjectName}${trimmedStudyTopic ? ` - ${trimmedStudyTopic}` : ""}`;
     if (running) return `Focusing on ${selectedSubject.subjectName}${trimmedStudyTopic ? ` - ${trimmedStudyTopic}` : ""}`;
     if (elapsed > 0) return "Paused";
     return "Ready when you are";
-  }, [elapsed, running, selectedSubject, trimmedStudyTopic]);
+  }, [elapsed, externalWorkMode, running, selectedSubject, trimmedStudyTopic]);
   const modeHeader = useMemo(() => {
     if (mode === "timer") {
-      return { eyebrow: "Study timer", title: running ? "Focus block" : "Deep work" };
+      return { eyebrow: "Study timer", title: running && externalWorkMode ? "External block" : running ? "Focus block" : "Deep work" };
     }
     if (mode === "coach") return { eyebrow: "Study coach", title: "Coach" };
     if (mode === "notes") return { eyebrow: "Study notes", title: "Notes" };
     if (mode === "resources") return { eyebrow: "Study files", title: "Files" };
     if (mode === "calculator") return { eyebrow: "Study tools", title: "Calculator" };
     return { eyebrow: "Study break", title: "Chess" };
-  }, [mode, running]);
+  }, [externalWorkMode, mode, running]);
 
   const checkpointOptions = useMemo(
     () => (checkpointQuestion ? optionsFor(checkpointQuestion) : []),
@@ -681,6 +695,7 @@ export default function StudyScreen() {
     setCheckInIntervalMinutes(presetCheckInMinutes);
     setNextCheckpointAt(Number(presetCheckInMinutes) * 60);
     setFocusMode(preset.focus);
+    setExternalWorkMode(false);
     setSessionGoal(preset.goal);
     setStudyTopic((current) => current.trim() || preset.topicHint);
     setMessage(`${preset.label} loaded.`);
@@ -755,6 +770,9 @@ export default function StudyScreen() {
 
   const toggleFocusMode = async () => {
     const nextFocusMode = !focusMode;
+    if (nextFocusMode && externalWorkMode) {
+      setExternalWorkMode(false);
+    }
     setFocusMode(nextFocusMode);
     if (!nextFocusMode) {
       releaseFocusLock();
@@ -765,6 +783,19 @@ export default function StudyScreen() {
       const focusLockMessage = await applyFocusLock();
       setMessage(focusLockMessage ?? "Focus lock on. Use Show tools when you need Coach or other study tools.");
     }
+  };
+
+  const toggleExternalWorkMode = (value: boolean) => {
+    if (running) return;
+    setExternalWorkMode(value);
+    if (!value) {
+      setMessage(null);
+      return;
+    }
+    setFocusMode(false);
+    setCheckInsEnabled(false);
+    releaseFocusLock();
+    setMessage("External work mode ready. Start the timer, then work in Word, folio files, CAD, IDEs or handwritten pages.");
   };
 
   const start = async () => {
@@ -793,8 +824,10 @@ export default function StudyScreen() {
       persistActiveTimer();
       const movementMessage = focusMode
         ? null
-        : "Timer is background-safe. You can switch to Word, Coach, Notes or Files and it will catch up when you return.";
-      const checkInMessage = checkInsActive ? null : "Check-ins are off for this session.";
+        : externalWorkMode
+          ? "External work mode is on. Work in Word, folio files, CAD, IDEs or handwritten pages; the timer catches up when you return."
+          : "Timer is background-safe. You can switch to Word, Coach, Notes or Files and it will catch up when you return.";
+      const checkInMessage = externalWorkMode ? null : checkInsActive ? null : "Check-ins are off for this session.";
       setMessage([focusLockMessage, movementMessage, checkInMessage].filter(Boolean).join(" ") || null);
     } finally {
       setStarting(false);
@@ -849,6 +882,7 @@ export default function StudyScreen() {
       typedNotes,
       `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`,
       nextStep ? `Next action: ${nextStep}` : "",
+      externalWorkMode ? "Work mode: external/folio work outside VCE Forge" : "",
       checkInsActive ? `Check-in rhythm: every ${checkInIntervalMinutes} minutes` : "Check-ins: off",
       timerBonusXp ? `Timer bonus: ${timerBonusXp} XP` : "",
       evidenceBonusXp ? `Evidence bonus: ${evidenceBonusXp} XP` : ""
@@ -876,6 +910,7 @@ export default function StudyScreen() {
               `${formatElapsed(elapsedForSave)} focused on ${selectedSubject.subjectName}.`,
               topic ? `Topic: ${topic}` : "",
               goal ? `Aim: ${goal}` : "",
+              externalWorkMode ? "Work mode: external/folio work outside VCE Forge" : "",
               typedNotes || "No extra notes written.",
               nextStep ? `Next action: ${nextStep}` : "",
               `Confidence: ${confidenceBefore}/5 -> ${confidenceAfter}/5`
@@ -1133,6 +1168,7 @@ export default function StudyScreen() {
               </View>
               <View style={styles.timerHeaderChips}>
                 <Text style={styles.backgroundPill}>Background safe</Text>
+                {externalWorkMode ? <Text style={styles.externalWorkPill}>External work</Text> : null}
                 <Text style={styles.progressPill}>{targetMinutes}m target</Text>
                 <Pressable
                   accessibilityRole="switch"
@@ -1267,16 +1303,34 @@ export default function StudyScreen() {
                     <Text style={styles.targetLabel}>Target length</Text>
                     <SegmentedButtons value={targetMinutes} onValueChange={setTargetMinutes} buttons={targetLengthButtons} />
                   </View>
+                  <View style={[styles.externalWorkRow, externalWorkMode && styles.externalWorkRowActive]}>
+                    <View style={styles.externalWorkIcon}>
+                      <MaterialCommunityIcons name="file-document-edit-outline" color={externalWorkMode ? palette.success : palette.info} size={20} />
+                    </View>
+                    <View style={styles.externalWorkText}>
+                      <Text style={styles.externalWorkTitle}>External work mode</Text>
+                      <Text style={styles.externalWorkStatus}>
+                        For Word folios, SAT docs, code, CAD, art evidence or handwritten work.
+                      </Text>
+                    </View>
+                    <Switch value={externalWorkMode} onValueChange={toggleExternalWorkMode} disabled={running} color={palette.success} />
+                  </View>
                   <View style={styles.checkInRow}>
                     <View style={styles.checkInText}>
                       <Text style={styles.checkInTitle}>Check-in questions</Text>
                       <Text style={styles.checkInStatus}>
-                        {checkInsActive ? `On - ${trimmedStudyTopic}` : checkInsEnabled ? "Waiting for a topic" : "Off for this session"}
+                        {externalWorkMode
+                          ? "Paused while you work outside the app"
+                          : checkInsActive
+                            ? `On - ${trimmedStudyTopic}`
+                            : checkInsEnabled
+                              ? "Waiting for a topic"
+                              : "Off for this session"}
                       </Text>
                     </View>
-                    <Switch value={checkInsEnabled} onValueChange={setCheckInsEnabled} color={palette.primary} />
+                    <Switch value={checkInsEnabled && !externalWorkMode} onValueChange={setCheckInsEnabled} disabled={externalWorkMode} color={palette.primary} />
                   </View>
-                  {checkInsEnabled ? (
+                  {checkInsEnabled && !externalWorkMode ? (
                     <View style={styles.targetBlock}>
                       <Text style={styles.targetLabel}>Check-in rhythm</Text>
                       <SegmentedButtons
@@ -1654,6 +1708,17 @@ const styles = StyleSheet.create({
   focusToggleTextActive: {
     color: palette.success
   },
+  externalWorkPill: {
+    color: palette.success,
+    fontSize: 12,
+    fontFamily: "Outfit_700Bold",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}14`,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
   timerCommandLayout: {
     width: "100%",
     flexDirection: "row",
@@ -1743,6 +1808,44 @@ const styles = StyleSheet.create({
   topicInput: {
     width: "100%",
     backgroundColor: palette.surface
+  },
+  externalWorkRow: {
+    width: "100%",
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.25)",
+    backgroundColor: "rgba(56,189,248,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  externalWorkRowActive: {
+    borderColor: `${palette.success}55`,
+    backgroundColor: `${palette.success}12`
+  },
+  externalWorkIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.055)"
+  },
+  externalWorkText: {
+    flex: 1,
+    minWidth: 0
+  },
+  externalWorkTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold"
+  },
+  externalWorkStatus: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 16
   },
   checkInRow: {
     width: "100%",

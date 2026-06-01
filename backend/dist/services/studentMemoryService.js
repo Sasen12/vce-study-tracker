@@ -32,7 +32,10 @@ const sameSubjectName = (left, right) => {
         return false;
     return normaliseSubjectName(left) === normaliseSubjectName(right);
 };
-const signalSubjectText = (signal, fallbackSummary) => [
+const joinSignalText = (parts) => parts
+    .filter((value) => Boolean(value && value.trim()))
+    .join("\n");
+const signalSubjectText = (signal, fallbackSummary) => joinSignalText([
     signal.subjectName,
     signal.topic,
     signal.title,
@@ -40,9 +43,17 @@ const signalSubjectText = (signal, fallbackSummary) => [
     signal.evidence,
     signal.nextAction,
     fallbackSummary
-]
-    .filter((value) => Boolean(value && value.trim()))
-    .join("\n");
+]);
+const signalContentText = (signal, fallbackSummary) => joinSignalText([
+    signal.topic,
+    signal.title,
+    signal.detail,
+    signal.evidence,
+    signal.nextAction,
+    fallbackSummary
+]);
+const inferSubjectForSignal = (signal, fallbackSummary) => inferVceSubjectFromQuestion(signalContentText(signal, fallbackSummary)) ??
+    inferVceSubjectFromQuestion(signalSubjectText(signal, fallbackSummary));
 const resolveSubjectTarget = async (userId, target) => {
     if (target.subjectId) {
         const subject = await prisma.userSubject.findFirst({
@@ -352,16 +363,7 @@ export const repairLearningSignalSubjects = async (userId) => {
     const subjectsByName = new Map(subjects.map((subject) => [normaliseSubjectName(subject.subjectName), subject]));
     const updates = [];
     for (const signal of signals) {
-        const inferredSubjectName = inferVceSubjectFromQuestion([
-            signal.subjectName,
-            signal.topic,
-            signal.title,
-            signal.detail,
-            signal.evidence,
-            signal.nextAction
-        ]
-            .filter((value) => Boolean(value && value.trim()))
-            .join("\n"));
+        const inferredSubjectName = inferSubjectForSignal(signal);
         if (!inferredSubjectName)
             continue;
         const subject = subjectsByName.get(normaliseSubjectName(inferredSubjectName));
@@ -419,7 +421,7 @@ export const rebuildStudentMemoryMaps = async (userId) => {
 const targetForSignal = (signal, eventTarget, fallbackSummary) => {
     const currentSubjectId = signal.subjectId === undefined ? eventTarget.subjectId : signal.subjectId;
     const currentSubjectName = signal.subjectName ?? eventTarget.subjectName;
-    const inferredSubjectName = inferVceSubjectFromQuestion(signalSubjectText(signal, fallbackSummary));
+    const inferredSubjectName = inferSubjectForSignal(signal, fallbackSummary);
     const preferredSubjectName = inferredSubjectName ?? currentSubjectName;
     const subjectChanged = preferredSubjectName ? !sameSubjectName(preferredSubjectName, eventTarget.subjectName) : false;
     return {

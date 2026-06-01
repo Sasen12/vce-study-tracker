@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Button, Text } from "react-native-paper";
+import { Button, Text, TextInput } from "react-native-paper";
 import Animated from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
@@ -251,8 +251,137 @@ const resourceModes = [
 
 const contractOptions = [12, 25, 45] as const;
 
+const toolCategories = [
+  { id: "all", label: "All" },
+  { id: "sac", label: "SAC" },
+  { id: "exam", label: "Exam" },
+  { id: "folio", label: "Folio" },
+  { id: "memory", label: "Memory" },
+  { id: "reset", label: "Reset" },
+  { id: "routes", label: "App" }
+] as const;
+
+type ToolCategory = (typeof toolCategories)[number]["id"];
+
+const toolFinderItems: {
+  title: string;
+  detail: string;
+  category: Exclude<ToolCategory, "all">;
+  keywords: string;
+  icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
+  accent: string;
+  route?: "/(tabs)/study" | "/(tabs)/questions" | "/(tabs)/calendar" | "/(tabs)/insights" | "/(tabs)/shop" | "/(tabs)/profile";
+}[] = [
+  {
+    title: "Study dice",
+    detail: "Pick a tiny mission when you feel stuck.",
+    category: "reset",
+    keywords: "random mission stuck low energy",
+    icon: "dice-d20-outline",
+    accent: palette.secondary,
+    route: "/(tabs)/study"
+  },
+  {
+    title: "Command decoder",
+    detail: "Explain, analyse, evaluate and discuss frames.",
+    category: "exam",
+    keywords: "command terms answer frame evaluate analyse explain discuss",
+    icon: "text-box-check-outline",
+    accent: palette.info
+  },
+  {
+    title: "Pre-SAC check",
+    detail: "A fast checklist before assessment pressure hits.",
+    category: "sac",
+    keywords: "sac checklist assessment teacher feedback",
+    icon: "clipboard-check-outline",
+    accent: palette.warning
+  },
+  {
+    title: "Answer skeleton",
+    detail: "Structure 4 mark, 10 mark and essay responses.",
+    category: "exam",
+    keywords: "marks essay paragraph structure",
+    icon: "format-list-numbered",
+    accent: palette.primary
+  },
+  {
+    title: "Folio checkpoint",
+    detail: "Evidence, screenshots, decisions and reflections.",
+    category: "folio",
+    keywords: "folio sat software art systems evidence screenshot",
+    icon: "folder-check-outline",
+    accent: "#60A5FA"
+  },
+  {
+    title: "Memory spark",
+    detail: "Recall prompts for quick active memory.",
+    category: "memory",
+    keywords: "recall flashcards memory prompt",
+    icon: "brain",
+    accent: palette.primary,
+    route: "/(tabs)/questions"
+  },
+  {
+    title: "Deadline backplan",
+    detail: "Turn SAC dates into tonight's move.",
+    category: "sac",
+    keywords: "deadline calendar backplan panic",
+    icon: "calendar-range",
+    accent: palette.info,
+    route: "/(tabs)/calendar"
+  },
+  {
+    title: "Mistake autopsy",
+    detail: "Work out exactly where marks leaked.",
+    category: "exam",
+    keywords: "mistake log repair marks feedback",
+    icon: "clipboard-search-outline",
+    accent: palette.secondary,
+    route: "/(tabs)/study"
+  },
+  {
+    title: "Resource triage",
+    detail: "Make notes, videos and feedback usable.",
+    category: "folio",
+    keywords: "files notes upload resource feedback",
+    icon: "file-tree-outline",
+    accent: palette.primary,
+    route: "/(tabs)/study"
+  },
+  {
+    title: "Insights",
+    detail: "Weak spots and evidence patterns.",
+    category: "routes",
+    keywords: "student map weaknesses insights",
+    icon: "map-search-outline",
+    accent: palette.primary,
+    route: "/(tabs)/insights"
+  },
+  {
+    title: "Shop",
+    detail: "Themes, titles, badges and unlocks.",
+    category: "routes",
+    keywords: "coins themes badges title",
+    icon: "shopping-outline",
+    accent: palette.success,
+    route: "/(tabs)/shop"
+  },
+  {
+    title: "Profile",
+    detail: "Subjects, defaults and account settings.",
+    category: "routes",
+    keywords: "subjects default tab preferences",
+    icon: "account-circle-outline",
+    accent: "#60A5FA",
+    route: "/(tabs)/profile"
+  }
+];
+
 export default function MoreScreen() {
   const activePalette = useActivePalette();
+  const [toolQuery, setToolQuery] = useState("");
+  const [activeToolCategory, setActiveToolCategory] = useState<ToolCategory>("all");
   const [missionIndex, setMissionIndex] = useState(0);
   const [commandIndex, setCommandIndex] = useState(0);
   const [resetSeconds, setResetSeconds] = useState(60);
@@ -282,6 +411,21 @@ export default function MoreScreen() {
   const checkedToolItems = checklistProgress + folioProgress + autopsyProgress;
   const suggestedMinutes = Math.max(3, Math.round(markTarget * 1.5));
   const activeMemoryPrompt = memoryPrompts[memoryPromptIndex] ?? memoryPrompts[0];
+  const normalisedToolQuery = toolQuery.trim().toLowerCase();
+  const matchingTools = useMemo(
+    () =>
+      toolFinderItems
+        .filter((item) => {
+          const categoryMatch = activeToolCategory === "all" || item.category === activeToolCategory;
+          if (!categoryMatch) return false;
+          if (!normalisedToolQuery) return true;
+          const searchable = `${item.title} ${item.detail} ${item.category} ${item.keywords}`.toLowerCase();
+          return searchable.includes(normalisedToolQuery);
+        })
+        .slice(0, 8),
+    [activeToolCategory, normalisedToolQuery]
+  );
+  const finderActive = activeToolCategory !== "all" || Boolean(normalisedToolQuery);
   useTrackScreen("more");
 
   useEffect(() => {
@@ -365,6 +509,90 @@ export default function MoreScreen() {
       </Animated.View>
 
       <Animated.View entering={motion.card(20)}>
+        <AppCard style={styles.finderCard}>
+          <View style={styles.finderHeader}>
+            <View style={styles.toolCopy}>
+              <Text style={styles.sectionTitle}>Find the right tool</Text>
+              <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>
+                Search by pressure, subject type, or the problem you are trying to solve.
+              </Text>
+            </View>
+            {finderActive ? (
+              <Button
+                compact
+                mode="outlined"
+                icon="close"
+                onPress={() => {
+                  setToolQuery("");
+                  setActiveToolCategory("all");
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </View>
+          <TextInput
+            mode="outlined"
+            value={toolQuery}
+            onChangeText={setToolQuery}
+            placeholder="Try SAC, folio, memory, command terms..."
+            left={<TextInput.Icon icon="magnify" />}
+            style={styles.finderInput}
+            textColor={palette.text}
+          />
+          <View style={styles.categoryRail}>
+            {toolCategories.map((category) => {
+              const active = activeToolCategory === category.id;
+              return (
+                <Pressable
+                  key={category.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={[styles.categoryChip, active && styles.categoryChipActive]}
+                  onPress={() => setActiveToolCategory(category.id)}
+                >
+                  <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{category.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {matchingTools.length ? (
+            <View style={styles.finderResults}>
+              {matchingTools.map((item) => (
+                <Pressable
+                  key={`${item.title}-${item.category}`}
+                  accessibilityRole={item.route ? "button" : "text"}
+                  disabled={!item.route}
+                  onPress={() => {
+                    if (item.route) router.push(item.route);
+                  }}
+                  style={({ pressed }) => [
+                    styles.finderResult,
+                    { borderColor: `${item.accent}28` },
+                    pressed && item.route ? styles.pressed : null
+                  ]}
+                >
+                  <View style={[styles.resultIcon, { backgroundColor: `${item.accent}18` }]}>
+                    <MaterialCommunityIcons name={item.icon} color={item.accent} size={19} />
+                  </View>
+                  <View style={styles.toolCopy}>
+                    <Text style={styles.resultTitle}>{item.title}</Text>
+                    <Text style={[styles.resultDetail, { color: activePalette.muted }]}>{item.detail}</Text>
+                  </View>
+                  <Text style={[styles.resultCategory, { color: item.accent }]}>{item.category}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.finderEmpty}>
+              <MaterialCommunityIcons name="magnify-close" color={activePalette.muted} size={20} />
+              <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>No match yet. Try “SAC”, “folio”, “memory” or “exam”.</Text>
+            </View>
+          )}
+        </AppCard>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(45)}>
         <AppCard style={[styles.studyDiceCard, { borderColor: `${activeMission.accent}35` }]}>
           <View style={styles.studyDiceTop}>
             <View style={[styles.diceIconBox, { backgroundColor: `${activeMission.accent}18` }]}>
@@ -387,13 +615,13 @@ export default function MoreScreen() {
         </AppCard>
       </Animated.View>
 
-      <Animated.View entering={motion.card(45)} style={styles.sectionHeader}>
+      <Animated.View entering={motion.card(70)} style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Pocket tools</Text>
         <Text style={[styles.sectionMeta, { color: activePalette.muted }]}>Small helpers for weird study moments.</Text>
       </Animated.View>
 
       <View style={styles.featureGrid}>
-        <Animated.View entering={motion.card(70)} style={styles.featureItem}>
+        <Animated.View entering={motion.card(95)} style={styles.featureItem}>
           <AppCard style={[styles.featureCard, { borderColor: `${activeCommand.accent}35` }]}>
             <View style={styles.featureTop}>
               <View style={[styles.smallIconBox, { backgroundColor: `${activeCommand.accent}18` }]}>
@@ -421,7 +649,7 @@ export default function MoreScreen() {
           </AppCard>
         </Animated.View>
 
-        <Animated.View entering={motion.card(95)} style={styles.featureItem}>
+        <Animated.View entering={motion.card(120)} style={styles.featureItem}>
           <AppCard style={[styles.featureCard, { borderColor: "rgba(74,222,128,0.28)" }]}>
             <View style={styles.featureTop}>
               <View style={[styles.smallIconBox, { backgroundColor: "rgba(74,222,128,0.16)" }]}>
@@ -461,7 +689,7 @@ export default function MoreScreen() {
           </AppCard>
         </Animated.View>
 
-        <Animated.View entering={motion.card(120)} style={styles.featureItem}>
+        <Animated.View entering={motion.card(145)} style={styles.featureItem}>
           <AppCard style={[styles.featureCard, { borderColor: "rgba(245,158,11,0.28)" }]}>
             <View style={styles.featureTop}>
               <View style={[styles.smallIconBox, { backgroundColor: "rgba(245,158,11,0.16)" }]}>
@@ -920,6 +1148,103 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontFamily: "Outfit_700Bold",
     fontSize: 11
+  },
+  finderCard: {
+    gap: 12,
+    borderColor: "rgba(56,189,248,0.26)",
+    backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  finderHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  finderInput: {
+    backgroundColor: palette.surface
+  },
+  categoryRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  categoryChip: {
+    minHeight: 34,
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 11
+  },
+  categoryChipActive: {
+    borderColor: "rgba(56,189,248,0.55)",
+    backgroundColor: "rgba(56,189,248,0.14)"
+  },
+  categoryChipText: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  categoryChipTextActive: {
+    color: palette.info
+  },
+  finderResults: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9
+  },
+  finderResult: {
+    flexGrow: 1,
+    flexBasis: 240,
+    minWidth: 220,
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.034)",
+    padding: 10
+  },
+  resultIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  resultTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 14,
+    lineHeight: 18
+  },
+  resultDetail: {
+    fontSize: 12,
+    lineHeight: 16
+  },
+  resultCategory: {
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  finderEmpty: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 10,
+    paddingVertical: 8
   },
   eyebrow: {
     color: palette.primary,

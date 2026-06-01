@@ -98,8 +98,9 @@ const subjectProfiles: Record<string, SubjectProfile> = {
   },
   "General Mathematics": {
     signals: [
-      { pattern: /\bmatrix|matrices|recursion|financial maths|annuit(?:y|ies)|networks?|critical path\b/i, weight: 7 },
-      { pattern: /\bminimum spanning tree|maximum flow|transition matrix|depreciation|compound interest\b/i, weight: 7 }
+      { pattern: /\bmatrix|matrices|recursion|recurrence|financial maths|financial modelling|financial modeling|annuit(?:y|ies)|networks?|critical path\b/i, weight: 8 },
+      { pattern: /\bminimum spanning tree|maximum flow|transition matrix|depreciation|compound interest|loan repayments?|perpetuit(?:y|ies)\b/i, weight: 8 },
+      { pattern: /\breducing balance|flat rate|monthly compounding|quarterly compounding|effective interest|nominal interest\b/i, weight: 7 }
     ]
   },
   "Mathematical Methods": {
