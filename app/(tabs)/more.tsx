@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Text } from "react-native-paper";
+import { Button, Text } from "react-native-paper";
 import Animated from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppCard } from "@/components/ui/AppCard";
@@ -48,9 +49,57 @@ const moreItems = [
   }
 ] as const;
 
+const studyDiceMissions = [
+  {
+    label: "10 minute repair",
+    title: "Fix one mistake properly.",
+    detail: "Pick a recent mistake, rewrite the rule, then do one similar question.",
+    icon: "wrench-outline",
+    accent: palette.secondary
+  },
+  {
+    label: "Command term snap",
+    title: "Write one answer with a verb.",
+    detail: "Choose analyse, evaluate or explain. Write the answer, then underline the evidence.",
+    icon: "lightning-bolt-outline",
+    accent: palette.warning
+  },
+  {
+    label: "SAC pressure check",
+    title: "Find the next date that can hurt you.",
+    detail: "Open Calendar, pick the closest SAC, and plan one block backwards from it.",
+    icon: "calendar-alert",
+    accent: palette.info
+  },
+  {
+    label: "Low energy mode",
+    title: "Make one clean note.",
+    detail: "Turn one messy page into five bullet points. No perfection, just usable evidence.",
+    icon: "note-edit-outline",
+    accent: palette.success
+  },
+  {
+    label: "Question forge",
+    title: "Make the topic answer back.",
+    detail: "Generate or save three questions from the topic you keep avoiding.",
+    icon: "cards-outline",
+    accent: palette.primary
+  }
+] as const;
+
 export default function MoreScreen() {
   const activePalette = useActivePalette();
+  const [missionIndex, setMissionIndex] = useState(0);
+  const activeMission = studyDiceMissions[missionIndex] ?? studyDiceMissions[0];
   useTrackScreen("more");
+
+  const rollStudyDice = () => {
+    setMissionIndex((current) => {
+      if (studyDiceMissions.length <= 1) return current;
+      const offset = 1 + Math.floor(Math.random() * (studyDiceMissions.length - 1));
+      return (current + offset) % studyDiceMissions.length;
+    });
+  };
 
   return (
     <Screen>
@@ -59,6 +108,29 @@ export default function MoreScreen() {
         <Text variant="headlineLarge" style={styles.title}>
           Extra tools
         </Text>
+      </Animated.View>
+
+      <Animated.View entering={motion.card(20)}>
+        <AppCard style={[styles.studyDiceCard, { borderColor: `${activeMission.accent}35` }]}>
+          <View style={styles.studyDiceTop}>
+            <View style={[styles.diceIconBox, { backgroundColor: `${activeMission.accent}18` }]}>
+              <MaterialCommunityIcons name="dice-d20-outline" color={activeMission.accent} size={24} />
+            </View>
+            <View style={styles.toolCopy}>
+              <Text style={[styles.diceLabel, { color: activeMission.accent }]}>{activeMission.label}</Text>
+              <Text style={styles.diceTitle}>{activeMission.title}</Text>
+              <Text style={[styles.toolDetail, { color: activePalette.muted }]}>{activeMission.detail}</Text>
+            </View>
+          </View>
+          <View style={styles.diceActions}>
+            <Button compact mode="contained-tonal" icon="dice-5-outline" onPress={rollStudyDice}>
+              Roll
+            </Button>
+            <Button compact mode="outlined" icon={activeMission.icon} onPress={() => router.push("/(tabs)/study")}>
+              Start
+            </Button>
+          </View>
+        </AppCard>
       </Animated.View>
 
       <View style={styles.grid}>
@@ -111,6 +183,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12
+  },
+  studyDiceCard: {
+    gap: 14,
+    borderWidth: 1,
+    backgroundColor: "rgba(124,110,255,0.08)"
+  },
+  studyDiceTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14
+  },
+  diceIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  diceLabel: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    textTransform: "uppercase"
+  },
+  diceTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 18,
+    lineHeight: 23
+  },
+  diceActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   gridItem: {
     width: "100%",

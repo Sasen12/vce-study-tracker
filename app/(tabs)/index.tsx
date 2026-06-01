@@ -796,6 +796,17 @@ export default function DashboardScreen() {
     chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye") ??
     null;
   const showChessSignupCard = Boolean(chessTournament && !examWeekMode && (chessTournament.signupOpen !== false || chessTournament.joined));
+  const showChessHomeStrip = !examWeekMode && nowView;
+  const chessHomeTitle = chessTournament?.joined ? "Chess tournament: you're in" : "Chess tournament signup";
+  const chessHomeMeta = chessTournament
+    ? chessTournament.joined
+      ? nextChessMatch?.status === "paired"
+        ? `Next match ${nextChessMatch.matchCode ?? "soon"}`
+        : nextChessMatch?.status === "bye"
+          ? "Bye round locked"
+          : "Pairings appear after signup closes"
+      : `${chessTournament.joinedCount} signed - closes ${formatChessHour(chessTournament.signupClosesAt)}`
+    : "Weekly rounds run Wednesday and Sunday.";
   const todayStudyMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
   const weekStudyMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
   const homeSignalTiles: {
@@ -849,6 +860,17 @@ export default function DashboardScreen() {
       accent: chessTournament ? palette.warning : palette.primary,
       onPress: () => router.push("/(tabs)/community")
     }
+  ];
+  const morePreviewItems: {
+    label: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    accent: string;
+    route: "/(tabs)/more" | "/(tabs)/insights" | "/(tabs)/shop" | "/(tabs)/profile";
+  }[] = [
+    { label: "Insights", icon: "map-search-outline", accent: palette.primary, route: "/(tabs)/insights" },
+    { label: "Shop", icon: "shopping-outline", accent: palette.success, route: "/(tabs)/shop" },
+    { label: "Profile", icon: "account-circle-outline", accent: "#60A5FA", route: "/(tabs)/profile" },
+    { label: "Study dice", icon: "dice-d20-outline", accent: palette.warning, route: "/(tabs)/more" }
   ];
 
   const openPanicForEvent = (event?: StudyEvent) => {
@@ -1328,6 +1350,29 @@ export default function DashboardScreen() {
                 </Text>
                 <MaterialCommunityIcons name="chevron-right" color={palette.warning} size={18} />
               </Pressable>
+              {showChessHomeStrip ? (
+                <View style={styles.homeChessStrip}>
+                  <View style={styles.homeChessCopy}>
+                    <View style={styles.homeChessTopline}>
+                      <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={18} />
+                      <Text style={styles.homeChessLabel}>Community event</Text>
+                    </View>
+                    <Text style={styles.homeChessTitle}>{chessHomeTitle}</Text>
+                    <Text style={styles.homeChessMeta} numberOfLines={1}>
+                      {chessHomeMeta}
+                    </Text>
+                  </View>
+                  <Button
+                    compact
+                    mode="contained-tonal"
+                    icon={chessTournament?.joined ? "chess-king" : "plus"}
+                    loading={joiningChessTournament}
+                    onPress={joinChessTournament}
+                  >
+                    {chessTournament?.joined ? "Board" : "Sign up"}
+                  </Button>
+                </View>
+              ) : null}
             </>
           ) : null}
 
@@ -1487,10 +1532,31 @@ export default function DashboardScreen() {
               </Button>
             </View>
           ) : (
-            <View style={styles.focusMoreRow}>
-              <Button compact mode="text" icon="dots-horizontal" onPress={() => setDetailsOpen(true)}>
-                More tools
-              </Button>
+            <View style={styles.focusMorePanel}>
+              <View style={styles.morePreviewHeader}>
+                <View style={styles.morePreviewCopy}>
+                  <Text style={styles.morePreviewTitle}>More has the extras.</Text>
+                  <Text style={styles.morePreviewBody}>Insights, Shop, Profile, Guide, chess and quick tools live there.</Text>
+                </View>
+                <Button compact mode="text" icon="dots-grid" onPress={() => router.push("/(tabs)/more")}>
+                  Open
+                </Button>
+              </View>
+              <View style={styles.moreMiniRail}>
+                {morePreviewItems.map((item) => (
+                  <Pressable
+                    key={item.label}
+                    accessibilityRole="button"
+                    style={[styles.moreMiniChip, { borderColor: `${item.accent}2e` }]}
+                    onPress={() => router.push(item.route)}
+                  >
+                    <MaterialCommunityIcons name={item.icon} color={item.accent} size={15} />
+                    <Text style={styles.moreMiniText} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1687,7 +1753,7 @@ export default function DashboardScreen() {
         </AppCard>
       </Animated.View>
 
-      {showChessSignupCard && chessTournament ? (
+      {showChessSignupCard && chessTournament && !nowView ? (
         <Animated.View entering={motion.card(36)}>
           <AppCard style={styles.chessSignupCard}>
             <View style={styles.chessSignupTop}>
@@ -2689,6 +2755,44 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold",
     fontSize: 16
   },
+  homeChessStrip: {
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+    backgroundColor: "rgba(245,158,11,0.09)",
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  homeChessCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  homeChessTopline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  homeChessLabel: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 10,
+    textTransform: "uppercase"
+  },
+  homeChessTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  homeChessMeta: {
+    color: palette.muted,
+    fontSize: 12
+  },
   nowTitle: {
     color: palette.text,
     fontFamily: "Outfit_700Bold",
@@ -2906,6 +3010,54 @@ const styles = StyleSheet.create({
   focusMoreRow: {
     minHeight: 32,
     alignItems: "flex-end"
+  },
+  focusMorePanel: {
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(124,110,255,0.24)",
+    backgroundColor: "rgba(124,110,255,0.08)",
+    padding: 10
+  },
+  morePreviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8
+  },
+  morePreviewCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  morePreviewTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 14
+  },
+  morePreviewBody: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  moreMiniRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7
+  },
+  moreMiniChip: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 9
+  },
+  moreMiniText: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
   },
   commandAlert: {
     minHeight: 44,
