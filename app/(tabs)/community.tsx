@@ -45,7 +45,6 @@ const SUBJECT_ROOM_INTRO_KEY = "vce_subject_rooms_intro_seen_v1";
 const JOINED_SUBJECT_ROOMS_KEY = "vce_joined_subject_rooms_v1";
 const COMMUNITY_GUIDE_KEY = "vce_community_guide_seen_v1";
 const QUESTION_TYPES = ["Homework help", "SAC prep", "Exam revision", "Concept help", "Motivation"] as const;
-const CHESS_ARENA_MINUTES = 90;
 
 const genericRoomPrompts = [
   "Ask a question",
@@ -649,61 +648,69 @@ function SquadCard({
   onAsk: (squad: CommunitySquad) => void;
   onRoom: (squad: CommunitySquad) => void;
 }) {
-  const viewerLine = squad.viewerJoined
-    ? squad.viewerMinutes > 0
-      ? `You: ${squad.viewerMinutes}m${squad.viewerRank ? ` - #${squad.viewerRank}` : ""}`
+  const weeklyMinutes = squad.weeklyMinutes ?? 0;
+  const weeklyGoalMinutes = Math.max(1, squad.weeklyGoalMinutes ?? 180);
+  const todayMinutes = squad.todayMinutes ?? 0;
+  const viewerMinutes = squad.viewerMinutes ?? 0;
+  const goalProgress =
+    typeof squad.goalProgress === "number"
+      ? Math.min(100, Math.max(0, squad.goalProgress))
+      : Math.min(100, Math.round((weeklyMinutes / weeklyGoalMinutes) * 100));
+  const viewerJoined = Boolean(squad.viewerJoined);
+  const viewerLine = viewerJoined
+    ? viewerMinutes > 0
+      ? `You: ${viewerMinutes}m${squad.viewerRank ? ` - #${squad.viewerRank}` : ""}`
       : "You: no minutes yet"
-    : `${squad.todayMinutes}m today`;
+    : todayMinutes > 0
+      ? `${todayMinutes}m today`
+      : "No minutes today";
 
   return (
-    <View style={[styles.squadCard, squad.viewerJoined && { borderColor: `${squad.color}aa` }]}>
+    <View style={[styles.squadCard, viewerJoined && { borderColor: `${squad.color}aa` }]}>
       <View style={styles.squadTop}>
         <View style={[styles.squadMark, { backgroundColor: `${squad.color}20` }]}>
           <MaterialCommunityIcons name="account-group-outline" color={squad.color} size={22} />
         </View>
         <View style={styles.flexText}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
             {squad.name}
           </Text>
           <Text style={styles.mutedSmall}>
-            {squad.memberCount} members {squad.viewerJoined ? "- your squad" : ""}
-          </Text>
-          <Text style={styles.mutedSmall} numberOfLines={2}>
-            {squad.identity}
+            {squad.memberCount ?? 0} members {viewerJoined ? "- your squad" : ""}
           </Text>
         </View>
         <View style={[styles.pulsePill, { backgroundColor: `${squad.color}18` }]}>
-          <Text style={[styles.pulseText, { color: squad.color }]}>{squad.momentum}</Text>
+          <Text style={[styles.pulseText, { color: squad.color }]}>{squad.momentum ?? "Open"}</Text>
         </View>
       </View>
       <View style={styles.squadGoalBlock}>
         <View style={styles.squadGoalHeader}>
           <Text style={styles.mutedSmall}>
-            Squad goal {squad.weeklyMinutes}/{squad.weeklyGoalMinutes}m
+            Squad goal {weeklyMinutes}/{weeklyGoalMinutes}m
           </Text>
           <Text style={styles.mutedSmall}>{viewerLine}</Text>
         </View>
         <View style={styles.squadProgressTrack}>
-          <View style={[styles.squadProgressFill, { width: `${squad.goalProgress}%`, backgroundColor: squad.color }]} />
+          <View style={[styles.squadProgressFill, { width: `${goalProgress}%`, backgroundColor: squad.color }]} />
         </View>
         <Text style={styles.squadNudge} numberOfLines={2}>
-          {squad.nextNudge}
+          {squad.nextNudge ?? squad.identity}
         </Text>
-        {squad.weeklyMinutes === 0 ? (
+        {weeklyMinutes === 0 ? (
           <Text style={styles.mutedSmall}>No pressure: first session makes this squad feel alive.</Text>
         ) : null}
       </View>
       <View style={styles.squadStatGrid}>
         <View style={styles.squadStat}>
-          <Text style={styles.metricValue}>{squad.activeTodayCount}</Text>
+          <Text style={styles.metricValue}>{squad.activeTodayCount ?? 0}</Text>
           <Text style={styles.mutedSmall}>active today</Text>
         </View>
         <View style={styles.squadStat}>
-          <Text style={styles.metricValue}>{squad.questionsAnswered}</Text>
+          <Text style={styles.metricValue}>{squad.questionsAnswered ?? 0}</Text>
           <Text style={styles.mutedSmall}>Q&A helped</Text>
         </View>
         <View style={styles.squadStat}>
-          <Text style={styles.metricValue}>{squad.streakCount}</Text>
+          <Text style={styles.metricValue}>{squad.streakCount ?? 0}</Text>
           <Text style={styles.mutedSmall}>on streak</Text>
         </View>
       </View>
@@ -1856,8 +1863,8 @@ export default function CommunityScreen() {
       router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } });
       return;
     }
-    if (!chessTournament?.eligible) {
-      router.push({ pathname: "/(tabs)/study", params: { mode: "timer", targetMinutes: "25" } });
+    if (chessTournament && chessTournament.signupOpen === false) {
+      setError(chessTournament.statusCopy ?? "Chess tournament signups are closed for this week.");
       return;
     }
     setSending(true);
@@ -1866,7 +1873,7 @@ export default function CommunityScreen() {
     try {
       const data = await studyApi.joinChessTournament();
       setChessTournament(data.chessTournament);
-      setNotice("You are in the weekly chess arena. Keep study first, then play.");
+      setNotice("You are signed up for this week's chess tournament. Pairings will stay on the Rooms tab.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not join the chess arena");
     } finally {
@@ -2039,6 +2046,18 @@ export default function CommunityScreen() {
       : nextBoardGap
         ? `${boardGapLabel(boardScope, nextBoardGap)} to climb one spot.`
         : null;
+  const chessRounds = chessTournament?.rounds ?? [];
+  const chessMatches = chessTournament?.viewerMatches ?? [];
+  const primaryChessMatch =
+    chessMatches.find((match) => match.status === "paired") ??
+    chessMatches.find((match) => match.status === "waiting" || match.status === "bye") ??
+    null;
+  const chessSignupOpen = chessTournament?.signupOpen !== false;
+  const chessButtonLabel = chessTournament?.joined
+    ? "Open chess board"
+    : chessSignupOpen
+      ? "Sign up this week"
+      : "Signups closed";
   const chooseMode = (value: string) => {
     const nextMode = value as Mode;
     setMode(nextMode);
@@ -2171,30 +2190,64 @@ export default function CommunityScreen() {
                 <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
               </View>
               <View style={styles.flexText}>
-                <Text style={styles.cardTitle}>Weekly chess arena</Text>
+                <Text style={styles.cardTitle}>Chess tournament</Text>
                 <Text style={styles.muted}>
-                  A study-first tournament: unlock entry after {chessTournament?.requiredMinutes ?? CHESS_ARENA_MINUTES} minutes this week.
+                  Twice a week. Sign up early, get paired, then play your match.
                 </Text>
               </View>
               <View style={styles.minutePill}>
                 <Text style={styles.minuteText}>
-                  {chessTournament?.viewerMinutes ?? pulse?.snapshot.weeklyStudyMinutes ?? 0}/{chessTournament?.requiredMinutes ?? CHESS_ARENA_MINUTES}m
+                  {chessTournament?.joinedCount ?? 0} signed
                 </Text>
               </View>
             </View>
             <Text style={styles.muted}>
-              {chessTournament?.joined
-                ? `${chessTournament.joinedCount} joined. Next round ${formatHour(chessTournament.nextRoundAt)}.`
-                : "Chess stays a break, not the main event. Study enough, then play a quick bracket without derailing the night."}
+              {chessTournament?.statusCopy ??
+                "Sign up before Tuesday night. Rounds run Wednesday and Sunday at 7:30pm."}
             </Text>
+            <View style={styles.chessRoundGrid}>
+              {chessRounds.map((round) => (
+                <View key={round.id} style={styles.chessRoundTile}>
+                  <Text style={styles.userThemeText}>{round.label}</Text>
+                  <Text style={styles.mutedSmall}>
+                    {formatHour(round.startsAt)} - {round.status}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            {chessTournament?.joined ? (
+              <View style={styles.chessMatchGrid}>
+                {chessMatches.map((match) => (
+                  <View key={match.id} style={styles.chessMatchTile}>
+                    <Text style={styles.userThemeText}>{match.label}</Text>
+                    <Text style={styles.metricValueSmall}>
+                      {match.status === "paired"
+                        ? `vs ${match.opponent?.displayName ?? "opponent"}`
+                        : match.status === "bye"
+                          ? "Bye round"
+                          : "Waiting for player"}
+                    </Text>
+                    <Text style={styles.mutedSmall}>
+                      {formatHour(match.startsAt)}
+                      {match.matchCode ? ` - ${match.matchCode}` : ""}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : primaryChessMatch ? null : (
+              <Text style={styles.mutedSmall}>
+                No minute gate. The only rule is signing up before matchups are set.
+              </Text>
+            )}
             <Button
               mode="outlined"
               compact
               icon="chess-king"
               loading={sending}
+              disabled={!chessTournament?.joined && !chessSignupOpen}
               onPress={joinChessArena}
             >
-              {chessTournament?.joined ? "Open chess" : chessTournament?.eligible ? "Join arena" : "Study to unlock"}
+              {chessButtonLabel}
             </Button>
           </AppCard>
 
@@ -3177,6 +3230,11 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold",
     fontSize: 24
   },
+  metricValueSmall: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 15
+  },
   metricLabel: {
     color: palette.text,
     fontFamily: "Outfit_700Bold",
@@ -3489,7 +3547,9 @@ const styles = StyleSheet.create({
   },
   squadCard: {
     flexGrow: 1,
+    flexShrink: 1,
     flexBasis: 260,
+    maxWidth: 390,
     minHeight: 196,
     gap: 12,
     padding: 12,
@@ -3830,6 +3890,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(245,158,11,0.14)"
+  },
+  chessRoundGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  chessRoundTile: {
+    flexGrow: 1,
+    flexBasis: 170,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.18)",
+    backgroundColor: "rgba(0,0,0,0.14)"
+  },
+  chessMatchGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  chessMatchTile: {
+    flexGrow: 1,
+    flexBasis: 220,
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.26)",
+    backgroundColor: "rgba(245,158,11,0.08)"
   },
   rulesCard: {
     gap: 10,

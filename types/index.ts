@@ -281,6 +281,28 @@ export type CommunityChessTournament = {
   joined: boolean;
   joinedCount: number;
   nextRoundAt: string;
+  signupClosesAt?: string;
+  signupOpen?: boolean;
+  statusCopy?: string;
+  pairingCount?: number;
+  rounds?: {
+    id: string;
+    label: string;
+    startsAt: string;
+    status: "signup" | "upcoming" | "live" | "done";
+  }[];
+  viewerMatches?: {
+    id: string;
+    round: number;
+    label: string;
+    startsAt: string;
+    status: "signup" | "waiting" | "paired" | "bye";
+    color: "white" | "black" | "either";
+    matchCode?: string | null;
+    opponent?: {
+      displayName: string;
+    } | null;
+  }[];
 };
 
 export type CommunityReportSummary = {

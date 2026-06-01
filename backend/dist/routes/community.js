@@ -81,7 +81,8 @@ const HELP_BONUS_MESSAGES = 3;
 const MAX_DAILY_CHAT_MESSAGES = 60;
 const WEEKLY_MISSION_BADGE_ID = "weekly_lock_in";
 const WEEKLY_MISSION_XP = 80;
-const CHESS_ARENA_MINUTES = 90;
+const CHESS_SIGNUP_CLOSE_DAY = 2;
+const CHESS_SIGNUP_CLOSE_HOUR = 20;
 const USAGE_EVENT_THROTTLE_MS = 60_000;
 const SUBJECT_ROOM_PREFIX = "[[subject-room:";
 const SUBJECT_ROOM_MESSAGE_PATTERN = /^\[\[subject-room:([a-z0-9-]+)\]\]\s*([\s\S]*)$/;
@@ -1310,16 +1311,39 @@ const buildPublicMission = async (viewerUserId) => {
             : null
     };
 };
+const chessSignupClosesAt = (weekStart) => {
+    const closesAt = new Date(weekStart);
+    closesAt.setDate(closesAt.getDate() + (CHESS_SIGNUP_CLOSE_DAY - 1));
+    closesAt.setHours(CHESS_SIGNUP_CLOSE_HOUR, 0, 0, 0);
+    return closesAt;
+};
+const chessRoundsForWeek = (weekStart, now) => [
+    { id: "round-1", label: "Wednesday bracket", offsetDays: 2 },
+    { id: "round-2", label: "Sunday bracket", offsetDays: 6 }
+].map((round) => {
+    const startsAt = new Date(weekStart);
+    startsAt.setDate(startsAt.getDate() + round.offsetDays);
+    startsAt.setHours(19, 30, 0, 0);
+    const endsAt = new Date(startsAt.getTime() + 90 * 60 * 1000);
+    return {
+        id: round.id,
+        label: round.label,
+        startsAt,
+        status: now < startsAt ? "upcoming" : now <= endsAt ? "live" : "done"
+    };
+});
+const chessMatchCode = (weekStart, round, pairIndex) => {
+    const weekKey = weekStart.toISOString().slice(5, 10).replace("-", "");
+    return `FORGE-${weekKey}-R${round}-M${pairIndex + 1}`;
+};
 const buildChessTournament = async (viewerUserId) => {
     const now = new Date();
     const weekStart = startOfWeek(now);
-    const nextRoundAt = new Date(weekStart);
-    nextRoundAt.setDate(nextRoundAt.getDate() + 5);
-    nextRoundAt.setHours(19, 30, 0, 0);
-    if (nextRoundAt < now) {
-        nextRoundAt.setDate(nextRoundAt.getDate() + 7);
-    }
-    const [study, viewerEntry, joinedCount] = await Promise.all([
+    const signupClosesAt = chessSignupClosesAt(weekStart);
+    const signupOpen = now <= signupClosesAt;
+    const rounds = chessRoundsForWeek(weekStart, now);
+    const nextRound = rounds.find((round) => round.status !== "done") ?? rounds[rounds.length - 1];
+    const [study, viewerEntry, entries] = await Promise.all([
         prisma.studySession.aggregate({
             where: { userId: viewerUserId, createdAt: { gte: weekStart } },
             _sum: { durationSeconds: true }
@@ -1327,19 +1351,92 @@ const buildChessTournament = async (viewerUserId) => {
         prisma.communityChessTournamentEntry.findUnique({
             where: { userId_weekStart: { userId: viewerUserId, weekStart } }
         }),
-        prisma.communityChessTournamentEntry.count({
-            where: { weekStart }
+        prisma.communityChessTournamentEntry.findMany({
+            where: { weekStart },
+            orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
+            include: { user: { select: { id: true, displayName: true } } }
         })
     ]);
     const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
+    const joined = Boolean(viewerEntry);
+    const viewerMatches = rounds.map((round, roundIndex) => {
+        if (!joined) {
+            return {
+                id: `${round.id}-signup`,
+                round: roundIndex + 1,
+                label: round.label,
+                startsAt: round.startsAt.toISOString(),
+                status: "signup",
+                color: "either",
+                matchCode: null,
+                opponent: null
+            };
+        }
+        const orderedEntries = roundIndex === 0 || entries.length < 3 ? entries : [entries[0], ...entries.slice(1).reverse()];
+        const viewerIndex = orderedEntries.findIndex((entry) => entry.userId === viewerUserId);
+        if (viewerIndex === -1 || orderedEntries.length < 2) {
+            return {
+                id: `${round.id}-waiting`,
+                round: roundIndex + 1,
+                label: round.label,
+                startsAt: round.startsAt.toISOString(),
+                status: "waiting",
+                color: "either",
+                matchCode: null,
+                opponent: null
+            };
+        }
+        const opponentIndex = viewerIndex % 2 === 0 ? viewerIndex + 1 : viewerIndex - 1;
+        const opponent = orderedEntries[opponentIndex];
+        if (!opponent) {
+            return {
+                id: `${round.id}-bye`,
+                round: roundIndex + 1,
+                label: round.label,
+                startsAt: round.startsAt.toISOString(),
+                status: "bye",
+                color: "either",
+                matchCode: null,
+                opponent: null
+            };
+        }
+        return {
+            id: `${round.id}-${Math.floor(viewerIndex / 2)}`,
+            round: roundIndex + 1,
+            label: round.label,
+            startsAt: round.startsAt.toISOString(),
+            status: "paired",
+            color: viewerIndex % 2 === 0 ? "white" : "black",
+            matchCode: chessMatchCode(weekStart, roundIndex + 1, Math.floor(viewerIndex / 2)),
+            opponent: { displayName: opponent.user.displayName }
+        };
+    });
+    const statusCopy = joined
+        ? viewerMatches.some((match) => match.status === "paired")
+            ? "You are signed up. Your pairings are set for the week."
+            : "You are signed up. Waiting for one more student to make a match."
+        : signupOpen
+            ? "Sign up before Tuesday 8pm to get paired for both weekly rounds."
+            : "Signups are closed for this week. Next signup opens Monday.";
     return {
         weekStart: weekStart.toISOString(),
-        requiredMinutes: CHESS_ARENA_MINUTES,
+        signupClosesAt: signupClosesAt.toISOString(),
+        signupOpen,
+        requiredMinutes: 0,
         viewerMinutes,
-        eligible: viewerMinutes >= CHESS_ARENA_MINUTES,
-        joined: Boolean(viewerEntry),
-        joinedCount,
-        nextRoundAt: nextRoundAt.toISOString()
+        eligible: signupOpen || joined,
+        joined,
+        joinedCount: entries.length,
+        pairingCount: Math.floor(entries.length / 2),
+        nextRoundAt: nextRound.startsAt.toISOString(),
+        statusCopy,
+        rounds: rounds.map((round) => ({
+            id: round.id,
+            label: round.label,
+            startsAt: round.startsAt.toISOString(),
+            status: signupOpen && !joined ? "signup" : round.status
+        })),
+        viewerMatches
     };
 };
 const communityPayload = async (user) => {
@@ -1860,15 +1957,17 @@ communityRouter.delete("/users/:id/mute", asyncHandler(async (req, res) => {
 }));
 communityRouter.post("/chess-tournament/join", asyncHandler(async (req, res) => {
     const authReq = req;
-    const weekStart = startOfWeek(new Date());
+    const now = new Date();
+    const weekStart = startOfWeek(now);
+    const signupClosesAt = chessSignupClosesAt(weekStart);
+    if (now > signupClosesAt) {
+        throw new HttpError(403, "Chess tournament signups are closed for this week. Next signup opens Monday.");
+    }
     const study = await prisma.studySession.aggregate({
         where: { userId: authReq.user.id, createdAt: { gte: weekStart } },
         _sum: { durationSeconds: true }
     });
     const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
-    if (viewerMinutes < CHESS_ARENA_MINUTES) {
-        throw new HttpError(403, `Study ${CHESS_ARENA_MINUTES - viewerMinutes} more minutes this week to join chess arena.`);
-    }
     await prisma.communityChessTournamentEntry.upsert({
         where: { userId_weekStart: { userId: authReq.user.id, weekStart } },
         create: {
