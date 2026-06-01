@@ -1683,6 +1683,11 @@ communityRouter.get("/", asyncHandler(async (req, res) => {
     const payload = await communityPayload(authReq.user);
     res.json(payload);
 }));
+communityRouter.get("/chess-tournament", asyncHandler(async (req, res) => {
+    const authReq = req;
+    const chessTournament = await buildChessTournament(authReq.user.id);
+    res.json({ chessTournament });
+}));
 communityRouter.post("/feedback", asyncHandler(async (req, res) => {
     const authReq = req;
     const payload = feedbackSchema.parse(req.body);

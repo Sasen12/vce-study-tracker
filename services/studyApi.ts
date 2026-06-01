@@ -291,6 +291,7 @@ export const studyApi = {
     }),
   muteCommunityUser: (userId: string) => apiFetch<{ mutedUserId: string }>(`/community/users/${userId}/mute`, { method: "POST" }),
   unmuteCommunityUser: (userId: string) => apiFetch<void>(`/community/users/${userId}/mute`, { method: "DELETE" }),
+  chessTournament: () => apiFetch<{ chessTournament: CommunityChessTournament }>("/community/chess-tournament"),
   joinChessTournament: () =>
     apiFetch<{ chessTournament: CommunityChessTournament }>("/community/chess-tournament/join", { method: "POST" }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),

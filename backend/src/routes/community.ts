@@ -1982,6 +1982,15 @@ communityRouter.get(
   })
 );
 
+communityRouter.get(
+  "/chess-tournament",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const chessTournament = await buildChessTournament(authReq.user.id);
+    res.json({ chessTournament });
+  })
+);
+
 communityRouter.post(
   "/feedback",
   asyncHandler(async (req, res) => {

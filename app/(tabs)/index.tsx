@@ -26,6 +26,7 @@ import type {
   StudyNote,
   StudyResource,
   StudySession,
+  CommunityChessTournament,
   UserGiftMessage,
   UserSubject
 } from "@/types";
@@ -171,6 +172,20 @@ const formatMinutes = (minutes: number) => {
   const remainder = minutes % 60;
   return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 };
+
+const formatChessHour = (value?: string | null) => {
+  if (!value) return "TBC";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBC";
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+};
+
+const chessStatusLabel = (status: string) =>
+  status === "live" ? "live now" : status === "done" ? "done" : status === "signup" ? "signup" : "upcoming";
 
 const clampStudyMinutes = (minutes?: number | null) => {
   const safe = Number.isFinite(minutes ?? NaN) ? Math.round(minutes ?? 25) : 25;
@@ -450,6 +465,9 @@ export default function DashboardScreen() {
   const [autopsyNext, setAutopsyNext] = useState("");
   const [autopsySaving, setAutopsySaving] = useState(false);
   const [autopsyMessage, setAutopsyMessage] = useState<string | null>(null);
+  const [chessTournament, setChessTournament] = useState<CommunityChessTournament | null>(null);
+  const [joiningChessTournament, setJoiningChessTournament] = useState(false);
+  const [chessNotice, setChessNotice] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -501,6 +519,12 @@ export default function DashboardScreen() {
         .giftMessages()
         .then(({ gifts }) => {
           if (active) setGiftMessages(gifts.filter((gift) => !gift.readAt));
+        })
+        .catch(() => undefined);
+      studyApi
+        .chessTournament()
+        .then(({ chessTournament }) => {
+          if (active) setChessTournament(chessTournament);
         })
         .catch(() => undefined);
       AsyncStorage.getItem(commandKey)
@@ -766,6 +790,12 @@ export default function DashboardScreen() {
         .slice(0, 3),
     [notes]
   );
+  const nextChessRound = chessTournament?.rounds?.find((round) => round.status !== "done") ?? chessTournament?.rounds?.[0] ?? null;
+  const nextChessMatch =
+    chessTournament?.viewerMatches?.find((match) => match.status === "paired") ??
+    chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye") ??
+    null;
+  const showChessSignupCard = Boolean(chessTournament && !examWeekMode && (chessTournament.signupOpen !== false || chessTournament.joined));
 
   const openPanicForEvent = (event?: StudyEvent) => {
     const eventSubject = event ? subjectForDeadline(event, subjects) : defaultSubject;
@@ -903,6 +933,28 @@ export default function DashboardScreen() {
       await studyApi.markGiftMessageRead(id);
     } catch {
       // The message can safely stay dismissed locally; it will retry on next login if the server update failed.
+    }
+  };
+
+  const joinChessTournament = async () => {
+    if (chessTournament?.joined) {
+      router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } });
+      return;
+    }
+    if (chessTournament && chessTournament.signupOpen === false) {
+      setChessNotice(chessTournament.statusCopy ?? "Chess tournament signups are closed for this week.");
+      return;
+    }
+    setJoiningChessTournament(true);
+    setChessNotice(null);
+    try {
+      const data = await studyApi.joinChessTournament();
+      setChessTournament(data.chessTournament);
+      setChessNotice("Signed up. Pairings will appear here and in Community.");
+    } catch (error) {
+      setChessNotice(error instanceof Error ? error.message : "Could not sign up for chess.");
+    } finally {
+      setJoiningChessTournament(false);
     }
   };
 
@@ -1537,6 +1589,64 @@ export default function DashboardScreen() {
           ) : null}
         </AppCard>
       </Animated.View>
+
+      {showChessSignupCard && chessTournament ? (
+        <Animated.View entering={motion.card(36)}>
+          <AppCard style={styles.chessSignupCard}>
+            <View style={styles.chessSignupTop}>
+              <View style={styles.chessSignupIcon}>
+                <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
+              </View>
+              <View style={styles.flexText}>
+                <Text style={styles.chessSignupLabel}>Community event</Text>
+                <Text style={styles.chessSignupTitle}>Chess tournament signup</Text>
+                <Text style={styles.muted} numberOfLines={2}>
+                  {chessTournament.statusCopy ?? "Sign up early in the week. Rounds run Wednesday and Sunday."}
+                </Text>
+              </View>
+              <View style={styles.chessSignupPill}>
+                <Text style={styles.chessSignupPillText}>{chessTournament.joinedCount} signed</Text>
+              </View>
+            </View>
+
+            <View style={styles.chessSignupBody}>
+              <View style={styles.chessSignupTile}>
+                <Text style={styles.nextUpLabel}>Next round</Text>
+                <Text style={styles.chessSignupValue}>
+                  {nextChessRound ? formatChessHour(nextChessRound.startsAt) : formatChessHour(chessTournament.nextRoundAt)}
+                </Text>
+                <Text style={styles.mutedSmall}>{nextChessRound ? chessStatusLabel(nextChessRound.status) : "upcoming"}</Text>
+              </View>
+              <View style={styles.chessSignupTile}>
+                <Text style={styles.nextUpLabel}>{chessTournament.joined ? "Your match" : "Signup closes"}</Text>
+                <Text style={styles.chessSignupValue} numberOfLines={1}>
+                  {chessTournament.joined
+                    ? nextChessMatch?.status === "paired"
+                      ? `vs ${nextChessMatch.opponent?.displayName ?? "opponent"}`
+                      : nextChessMatch?.status === "bye"
+                        ? "Bye round"
+                        : "Waiting"
+                    : formatChessHour(chessTournament.signupClosesAt)}
+                </Text>
+                <Text style={styles.mutedSmall} numberOfLines={1}>
+                  {chessTournament.joined ? nextChessMatch?.matchCode ?? "Pairings update live" : "Tuesday 8pm"}
+                </Text>
+              </View>
+            </View>
+
+            {chessNotice ? <Text style={chessNotice.includes("Signed") ? styles.successText : styles.error}>{chessNotice}</Text> : null}
+
+            <View style={styles.actionRow}>
+              <Button mode="contained" compact icon="chess-king" loading={joiningChessTournament} onPress={joinChessTournament}>
+                {chessTournament.joined ? "Open board" : "Sign up"}
+              </Button>
+              <Button mode="outlined" compact icon="forum-outline" onPress={() => router.push("/(tabs)/community")}>
+                Community
+              </Button>
+            </View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       {autopsyCandidate && showHomeTools ? (
         <Animated.View entering={motion.card(36)}>
@@ -2295,6 +2405,10 @@ const styles = StyleSheet.create({
     color: palette.muted,
     lineHeight: 20
   },
+  mutedSmall: {
+    color: palette.muted,
+    fontSize: 12
+  },
   flexText: {
     flex: 1,
     minWidth: 0
@@ -2378,6 +2492,67 @@ const styles = StyleSheet.create({
     gap: 12,
     borderColor: "rgba(56,189,248,0.22)",
     backgroundColor: "rgba(56,189,248,0.07)"
+  },
+  chessSignupCard: {
+    gap: 12,
+    borderColor: "rgba(245,158,11,0.3)",
+    backgroundColor: "rgba(245,158,11,0.08)"
+  },
+  chessSignupTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  chessSignupIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,158,11,0.16)"
+  },
+  chessSignupLabel: {
+    color: palette.warning,
+    fontSize: 11,
+    fontFamily: "Outfit_700Bold",
+    textTransform: "uppercase"
+  },
+  chessSignupTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 17
+  },
+  chessSignupPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(245,158,11,0.16)"
+  },
+  chessSignupPillText: {
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
+  },
+  chessSignupBody: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  chessSignupTile: {
+    flexGrow: 1,
+    flexBasis: 180,
+    gap: 2,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.18)",
+    backgroundColor: "rgba(0,0,0,0.14)"
+  },
+  chessSignupValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
   },
   nowTitle: {
     color: palette.text,
