@@ -905,7 +905,7 @@ const buildWeeklySubjectSquads = async (viewerUserId) => {
     weekEnd.setDate(weekEnd.getDate() + 7);
     const previousWeekStart = new Date(weekStart);
     previousWeekStart.setDate(previousWeekStart.getDate() - 7);
-    const [subjects, sessions, savedQuestions, wall] = await Promise.all([
+    const [subjects, viewerSubjects, sessions, savedQuestions, wall] = await Promise.all([
         prisma.userSubject.findMany({
             where: {
                 archivedAt: null,
@@ -922,6 +922,15 @@ const buildWeeklySubjectSquads = async (viewerUserId) => {
                         }
                     }
                 }
+            }
+        }),
+        prisma.userSubject.findMany({
+            where: {
+                userId: viewerUserId,
+                archivedAt: null
+            },
+            select: {
+                subjectName: true
             }
         }),
         prisma.studySession.findMany({
@@ -948,7 +957,10 @@ const buildWeeklySubjectSquads = async (viewerUserId) => {
         }),
         buildQuestionWall(viewerUserId)
     ]);
-    return COMMUNITY_SQUADS.map((squad) => {
+    const viewerSquadIds = new Set(viewerSubjects
+        .map((subject) => squadForSubjectName(subject.subjectName)?.id)
+        .filter((squadId) => Boolean(squadId)));
+    return COMMUNITY_SQUADS.filter((squad) => viewerSquadIds.has(squad.id)).map((squad) => {
         const memberRows = subjects.filter((subject) => squadForSubjectName(subject.subjectName)?.id === squad.id);
         const memberIds = new Set(memberRows.map((subject) => subject.userId));
         const allSessionRows = sessions.filter((session) => squadForSubjectName(session.subject?.subjectName)?.id === squad.id);
@@ -1330,46 +1342,44 @@ const chessSignupClosesAt = (weekStart) => {
     closesAt.setHours(CHESS_SIGNUP_CLOSE_HOUR, 0, 0, 0);
     return closesAt;
 };
-const chessRoundsForWeek = (weekStart, now) => [
-    { id: "round-1", label: "Wednesday bracket", offsetDays: 2 },
-    { id: "round-2", label: "Sunday bracket", offsetDays: 6 }
-].map((round) => {
+const chessRoundCount = (entryCount) => (entryCount > 1 ? Math.ceil(Math.log2(entryCount)) : 1);
+const chessRoundStartsAt = (weekStart, roundIndex) => {
     const startsAt = new Date(weekStart);
-    startsAt.setDate(startsAt.getDate() + round.offsetDays);
-    startsAt.setHours(19, 30, 0, 0);
-    const endsAt = new Date(startsAt.getTime() + 90 * 60 * 1000);
-    return {
-        id: round.id,
-        label: round.label,
-        startsAt,
-        status: now < startsAt ? "upcoming" : now <= endsAt ? "live" : "done"
-    };
-});
+    if (roundIndex === 0) {
+        startsAt.setDate(startsAt.getDate() + 2);
+        startsAt.setHours(19, 30, 0, 0);
+        return startsAt;
+    }
+    startsAt.setDate(startsAt.getDate() + 6);
+    startsAt.setHours(19, 30 + (roundIndex - 1) * 90, 0, 0);
+    return startsAt;
+};
+const chessRoundLabel = (roundIndex, totalRounds) => {
+    const roundsFromFinal = totalRounds - roundIndex - 1;
+    if (roundsFromFinal === 0)
+        return "Final";
+    if (roundsFromFinal === 1)
+        return "Semi final";
+    if (roundsFromFinal === 2)
+        return "Quarter final";
+    return `Knockout round ${roundIndex + 1}`;
+};
+const chessRoundsForWeek = (weekStart, now, entryCount) => {
+    const totalRounds = chessRoundCount(entryCount);
+    return Array.from({ length: totalRounds }, (_, roundIndex) => {
+        const startsAt = chessRoundStartsAt(weekStart, roundIndex);
+        const endsAt = new Date(startsAt.getTime() + 90 * 60 * 1000);
+        return {
+            id: `round-${roundIndex + 1}`,
+            label: chessRoundLabel(roundIndex, totalRounds),
+            startsAt,
+            status: now < startsAt ? "upcoming" : now <= endsAt ? "live" : "done"
+        };
+    });
+};
 const chessMatchCode = (weekStart, round, pairIndex) => {
     const weekKey = weekStart.toISOString().slice(5, 10).replace("-", "");
     return `FORGE-${weekKey}-R${round}-M${pairIndex + 1}`;
-};
-const orderedChessEntriesForRound = (entries, roundIndex) => roundIndex === 0 || entries.length < 3 ? entries : [entries[0], ...entries.slice(1).reverse()];
-const chessPairingsForRound = (weekStart, round, roundIndex, entries) => {
-    const orderedEntries = orderedChessEntriesForRound(entries, roundIndex);
-    const pairings = [];
-    for (let index = 0; index < orderedEntries.length; index += 2) {
-        const whiteEntry = orderedEntries[index];
-        const blackEntry = orderedEntries[index + 1];
-        if (!whiteEntry || !blackEntry)
-            continue;
-        const pairIndex = Math.floor(index / 2);
-        pairings.push({
-            matchCode: chessMatchCode(weekStart, roundIndex + 1, pairIndex),
-            round: roundIndex + 1,
-            pairIndex,
-            label: round.label,
-            startsAt: round.startsAt,
-            whiteEntry,
-            blackEntry
-        });
-    }
-    return pairings;
 };
 const chessMatchInclude = {
     whiteUser: { select: { id: true, displayName: true } },
@@ -1384,6 +1394,115 @@ const chessStatusCopy = (status, winnerName) => {
     if (status === "draw")
         return "Draw.";
     return "Active match.";
+};
+const chessTournamentResultCopy = (status, result, winnerName) => {
+    if (!status)
+        return "Scheduled";
+    if (status === "active")
+        return result ? `In progress - ${result}` : "In progress";
+    return chessStatusCopy(status, winnerName);
+};
+const buildChessKnockoutBracket = ({ entries, matchRecords, rounds, signupOpen, viewerUserId, weekStart }) => {
+    const matchesByCode = new Map(matchRecords.map((match) => [match.matchCode, match]));
+    const pairings = [];
+    const tournamentMatches = [];
+    let participants = [...entries];
+    for (const [roundIndex, round] of rounds.entries()) {
+        if (participants.length < 2)
+            break;
+        const winners = [];
+        let roundComplete = true;
+        let pairIndex = 0;
+        for (let index = 0; index < participants.length; index += 2) {
+            const whiteEntry = participants[index];
+            const blackEntry = participants[index + 1];
+            if (!whiteEntry)
+                continue;
+            if (!blackEntry) {
+                winners.push(whiteEntry);
+                tournamentMatches.push({
+                    id: `${round.id}-bye-${whiteEntry.userId}`,
+                    round: roundIndex + 1,
+                    label: round.label,
+                    startsAt: round.startsAt.toISOString(),
+                    matchCode: null,
+                    status: "bye",
+                    result: null,
+                    resultCopy: "Bye - advances",
+                    canOpen: false,
+                    viewerColor: whiteEntry.userId === viewerUserId ? "white" : null,
+                    white: { displayName: whiteEntry.user.displayName },
+                    black: null
+                });
+                continue;
+            }
+            const matchCode = chessMatchCode(weekStart, roundIndex + 1, pairIndex);
+            const pairing = {
+                matchCode,
+                round: roundIndex + 1,
+                pairIndex,
+                label: round.label,
+                startsAt: round.startsAt,
+                whiteEntry,
+                blackEntry
+            };
+            pairings.push(pairing);
+            pairIndex += 1;
+            const record = matchesByCode.get(matchCode);
+            const status = record?.status ?? "scheduled";
+            const viewerIsWhite = whiteEntry.userId === viewerUserId;
+            const viewerIsBlack = blackEntry.userId === viewerUserId;
+            tournamentMatches.push({
+                id: matchCode,
+                round: roundIndex + 1,
+                label: round.label,
+                startsAt: round.startsAt.toISOString(),
+                matchCode,
+                status: status,
+                result: record?.result ?? null,
+                resultCopy: chessTournamentResultCopy(record?.status, record?.result, record?.winnerUser?.displayName ?? null),
+                canOpen: !signupOpen && (viewerIsWhite || viewerIsBlack),
+                viewerColor: viewerIsWhite ? "white" : viewerIsBlack ? "black" : null,
+                white: { displayName: whiteEntry.user.displayName },
+                black: { displayName: blackEntry.user.displayName }
+            });
+            if (record?.status === "white_win") {
+                winners.push(whiteEntry);
+            }
+            else if (record?.status === "black_win") {
+                winners.push(blackEntry);
+            }
+            else {
+                roundComplete = false;
+            }
+        }
+        if (!roundComplete) {
+            for (const futureRound of rounds.slice(roundIndex + 1)) {
+                tournamentMatches.push({
+                    id: `${futureRound.id}-waiting`,
+                    round: Number(futureRound.id.replace("round-", "")),
+                    label: futureRound.label,
+                    startsAt: futureRound.startsAt.toISOString(),
+                    matchCode: null,
+                    status: "waiting",
+                    result: null,
+                    resultCopy: "Waiting for winners",
+                    canOpen: false,
+                    viewerColor: null,
+                    white: null,
+                    black: null
+                });
+            }
+            return { pairings, tournamentMatches, remainingParticipants: participants, complete: false };
+        }
+        participants = winners;
+    }
+    return {
+        pairings,
+        tournamentMatches,
+        remainingParticipants: participants,
+        complete: entries.length > 1 && participants.length === 1
+    };
 };
 const serialiseChessMatch = (match, viewerUserId, pairing) => {
     const game = new Chess(match.fen);
@@ -1428,15 +1547,21 @@ const resolveChessPairing = async (matchCode, viewerUserId) => {
     const weekStart = startOfWeek(now);
     const signupClosesAt = chessSignupClosesAt(weekStart);
     const signupOpen = now <= signupClosesAt;
-    const rounds = chessRoundsForWeek(weekStart, now);
-    const entries = await prisma.communityChessTournamentEntry.findMany({
-        where: { weekStart },
-        orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
-        include: { user: { select: { displayName: true } } }
-    });
-    for (const [roundIndex, round] of rounds.entries()) {
-        const pairing = chessPairingsForRound(weekStart, round, roundIndex, entries).find((item) => item.matchCode === matchCode);
-        if (!pairing)
+    const [entries, matchRecords] = await Promise.all([
+        prisma.communityChessTournamentEntry.findMany({
+            where: { weekStart },
+            orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
+            include: { user: { select: { displayName: true } } }
+        }),
+        prisma.communityChessMatch.findMany({
+            where: { weekStart },
+            include: chessMatchInclude
+        })
+    ]);
+    const rounds = chessRoundsForWeek(weekStart, now, entries.length);
+    const bracket = buildChessKnockoutBracket({ entries, matchRecords, rounds, signupOpen, viewerUserId, weekStart });
+    for (const pairing of bracket.pairings) {
+        if (pairing.matchCode !== matchCode)
             continue;
         const viewerIsPlayer = pairing.whiteEntry.userId === viewerUserId || pairing.blackEntry.userId === viewerUserId;
         if (!viewerIsPlayer) {
@@ -1465,9 +1590,7 @@ const buildChessTournament = async (viewerUserId) => {
     const weekStart = startOfWeek(now);
     const signupClosesAt = chessSignupClosesAt(weekStart);
     const signupOpen = now <= signupClosesAt;
-    const rounds = chessRoundsForWeek(weekStart, now);
-    const nextRound = rounds.find((round) => round.status !== "done") ?? rounds[rounds.length - 1];
-    const [study, viewerEntry, entries] = await Promise.all([
+    const [study, viewerEntry, entries, matchRecords] = await Promise.all([
         prisma.studySession.aggregate({
             where: { userId: viewerUserId, createdAt: { gte: weekStart } },
             _sum: { durationSeconds: true }
@@ -1479,70 +1602,169 @@ const buildChessTournament = async (viewerUserId) => {
             where: { weekStart },
             orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
             include: { user: { select: { id: true, displayName: true } } }
+        }),
+        prisma.communityChessMatch.findMany({
+            where: { weekStart },
+            include: chessMatchInclude
         })
     ]);
     const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
     const joined = Boolean(viewerEntry);
-    const viewerMatches = rounds.map((round, roundIndex) => {
-        if (!joined) {
-            return {
-                id: `${round.id}-signup`,
-                round: roundIndex + 1,
-                label: round.label,
-                startsAt: round.startsAt.toISOString(),
-                status: "signup",
-                color: "either",
-                matchCode: null,
-                opponent: null
-            };
+    const rounds = chessRoundsForWeek(weekStart, now, entries.length);
+    const nextRound = rounds.find((round) => round.status !== "done") ?? rounds[rounds.length - 1];
+    const bracket = buildChessKnockoutBracket({ entries, matchRecords, rounds, signupOpen, viewerUserId, weekStart });
+    const decisiveLosses = new Set();
+    for (const match of matchRecords) {
+        if (match.status === "white_win") {
+            decisiveLosses.add(match.blackUserId);
         }
-        const orderedEntries = roundIndex === 0 || entries.length < 3 ? entries : [entries[0], ...entries.slice(1).reverse()];
-        const viewerIndex = orderedEntries.findIndex((entry) => entry.userId === viewerUserId);
-        if (viewerIndex === -1 || orderedEntries.length < 2) {
-            return {
-                id: `${round.id}-waiting`,
-                round: roundIndex + 1,
-                label: round.label,
-                startsAt: round.startsAt.toISOString(),
-                status: "waiting",
-                color: "either",
-                matchCode: null,
-                opponent: null
-            };
+        else if (match.status === "black_win") {
+            decisiveLosses.add(match.whiteUserId);
         }
-        const opponentIndex = viewerIndex % 2 === 0 ? viewerIndex + 1 : viewerIndex - 1;
-        const opponent = orderedEntries[opponentIndex];
-        if (!opponent) {
-            return {
-                id: `${round.id}-bye`,
-                round: roundIndex + 1,
-                label: round.label,
-                startsAt: round.startsAt.toISOString(),
-                status: "bye",
-                color: "either",
-                matchCode: null,
-                opponent: null
-            };
-        }
-        return {
-            id: `${round.id}-${Math.floor(viewerIndex / 2)}`,
+    }
+    const championUserId = bracket.complete ? bracket.remainingParticipants[0]?.userId : null;
+    const aliveUserIds = new Set(bracket.remainingParticipants.map((entry) => entry.userId));
+    const matchRecordsByCode = new Map(matchRecords.map((match) => [match.matchCode, match]));
+    const viewerMatches = joined
+        ? bracket.tournamentMatches
+            .filter((match) => match.viewerColor ||
+            (match.status === "waiting" && aliveUserIds.has(viewerUserId)))
+            .map((match) => ({
+            id: match.id,
+            round: match.round,
+            label: match.label,
+            startsAt: match.startsAt,
+            status: match.status === "bye"
+                ? "bye"
+                : match.viewerColor
+                    ? "paired"
+                    : "waiting",
+            color: match.viewerColor ?? "either",
+            matchCode: match.matchCode ?? null,
+            opponent: match.viewerColor === "white"
+                ? match.black ?? null
+                : match.viewerColor === "black"
+                    ? match.white ?? null
+                    : null
+        }))
+        : rounds.map((round, roundIndex) => ({
+            id: `${round.id}-signup`,
             round: roundIndex + 1,
             label: round.label,
             startsAt: round.startsAt.toISOString(),
-            status: "paired",
-            color: viewerIndex % 2 === 0 ? "white" : "black",
-            matchCode: chessMatchCode(weekStart, roundIndex + 1, Math.floor(viewerIndex / 2)),
-            opponent: { displayName: opponent.user.displayName }
-        };
-    });
+            status: "signup",
+            color: "either",
+            matchCode: null,
+            opponent: null
+        }));
+    if (joined && championUserId === viewerUserId) {
+        viewerMatches.push({
+            id: "champion",
+            round: rounds.length,
+            label: "Champion",
+            startsAt: (rounds[rounds.length - 1] ?? nextRound).startsAt.toISOString(),
+            status: "champion",
+            color: "either",
+            matchCode: null,
+            opponent: null
+        });
+    }
+    else if (joined && decisiveLosses.has(viewerUserId)) {
+        viewerMatches.push({
+            id: "eliminated",
+            round: rounds.length,
+            label: "Knockout status",
+            startsAt: (rounds[rounds.length - 1] ?? nextRound).startsAt.toISOString(),
+            status: "eliminated",
+            color: "either",
+            matchCode: null,
+            opponent: null
+        });
+    }
+    const standingsByUser = new Map();
+    for (const entry of entries) {
+        standingsByUser.set(entry.userId, {
+            displayName: entry.user.displayName,
+            played: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            points: 0,
+            matchesRemaining: 0,
+            status: "alive",
+            isCurrentUser: entry.userId === viewerUserId
+        });
+    }
+    for (const pairing of bracket.pairings) {
+        const record = matchRecordsByCode.get(pairing.matchCode);
+        const whiteStanding = standingsByUser.get(pairing.whiteEntry.userId);
+        const blackStanding = standingsByUser.get(pairing.blackEntry.userId);
+        if (record?.status === "white_win") {
+            if (whiteStanding) {
+                whiteStanding.played += 1;
+                whiteStanding.wins += 1;
+                whiteStanding.points += 1;
+            }
+            if (blackStanding) {
+                blackStanding.played += 1;
+                blackStanding.losses += 1;
+            }
+        }
+        else if (record?.status === "black_win") {
+            if (blackStanding) {
+                blackStanding.played += 1;
+                blackStanding.wins += 1;
+                blackStanding.points += 1;
+            }
+            if (whiteStanding) {
+                whiteStanding.played += 1;
+                whiteStanding.losses += 1;
+            }
+        }
+        else if (record?.status === "draw") {
+            if (whiteStanding) {
+                whiteStanding.played += 1;
+                whiteStanding.draws += 1;
+                whiteStanding.points += 0.5;
+            }
+            if (blackStanding) {
+                blackStanding.played += 1;
+                blackStanding.draws += 1;
+                blackStanding.points += 0.5;
+            }
+        }
+        else {
+            if (whiteStanding)
+                whiteStanding.matchesRemaining += 1;
+            if (blackStanding)
+                blackStanding.matchesRemaining += 1;
+        }
+    }
+    for (const [userId, standing] of standingsByUser.entries()) {
+        if (championUserId === userId) {
+            standing.status = "champion";
+        }
+        else if (decisiveLosses.has(userId)) {
+            standing.status = "eliminated";
+        }
+    }
+    const standings = Array.from(standingsByUser.values()).sort((a, b) => b.points - a.points ||
+        b.wins - a.wins ||
+        b.played - a.played ||
+        a.displayName.localeCompare(b.displayName));
+    const viewerHasOpenMatch = bracket.tournamentMatches.some((match) => match.canOpen && match.matchCode && (match.status === "scheduled" || match.status === "active"));
     const statusCopy = joined
         ? signupOpen
-            ? "You are signed up. Pairings lock Tuesday 8pm, then match boards open."
-            : viewerMatches.some((match) => match.status === "paired")
-                ? "Your pairings are locked. Open a match board and play your opponent."
-                : "You are signed up. Waiting for one more student to make a match."
+            ? "You are signed up. The knockout bracket locks Tuesday 8pm."
+            : championUserId === viewerUserId
+                ? "You won this week's chess knockout."
+                : decisiveLosses.has(viewerUserId)
+                    ? "You were knocked out. You can still watch the bracket finish."
+                    : viewerHasOpenMatch
+                        ? "Your knockout match is ready."
+                        : "You are still alive. Waiting for the next knockout opponent."
         : signupOpen
-            ? "Sign up before Tuesday 8pm to get paired for both weekly rounds."
+            ? "Sign up before Tuesday 8pm to enter this week's knockout bracket."
             : "Signups are closed for this week. Next signup opens Monday.";
     return {
         weekStart: weekStart.toISOString(),
@@ -1553,7 +1775,7 @@ const buildChessTournament = async (viewerUserId) => {
         eligible: signupOpen || joined,
         joined,
         joinedCount: entries.length,
-        pairingCount: Math.floor(entries.length / 2),
+        pairingCount: bracket.pairings.length,
         nextRoundAt: nextRound.startsAt.toISOString(),
         statusCopy,
         rounds: rounds.map((round) => ({
@@ -1562,7 +1784,9 @@ const buildChessTournament = async (viewerUserId) => {
             startsAt: round.startsAt.toISOString(),
             status: signupOpen && !joined ? "signup" : round.status
         })),
-        viewerMatches
+        viewerMatches,
+        tournamentMatches: bracket.tournamentMatches,
+        standings
     };
 };
 const communityPayload = async (user) => {

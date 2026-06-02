@@ -545,10 +545,10 @@ function CommunityGuideCard({ hidden, onDismiss }: { hidden: boolean; onDismiss:
   if (hidden) return null;
 
   const steps: { icon: IconName; title: string; body: string; color: string }[] = [
-    { icon: "account-group-outline", title: "Join squads", body: "Your subjects become weekly teams.", color: palette.primary },
+    { icon: "account-group-outline", title: "Subject squads", body: "Only squads matching your active subjects appear.", color: palette.primary },
     { icon: "door-open", title: "Use rooms", body: "Study beside people without needing to chat.", color: palette.success },
     { icon: "comment-question-outline", title: "Ask safely", body: "Anonymous Q&A keeps stuck points moving.", color: palette.info },
-    { icon: "shield-check-outline", title: "Stay private", body: "Opt out, report and delete your own messages.", color: palette.warning }
+    { icon: "chess-knight", title: "Chess knockout", body: "Sign up, play your match, and advance by winning.", color: palette.warning }
   ];
 
   return (
@@ -556,7 +556,7 @@ function CommunityGuideCard({ hidden, onDismiss }: { hidden: boolean; onDismiss:
       <View style={styles.feedbackHeader}>
         <View style={styles.flexText}>
           <Text style={styles.cardTitle}>How Community works</Text>
-          <Text style={styles.muted}>Study earns XP, XP helps squads, helping others earns recognition.</Text>
+          <Text style={styles.muted}>Study helps your subject squads; Q&A and chess give students structured ways to compete or help.</Text>
         </View>
         <IconButton icon="close" size={18} iconColor={palette.muted} accessibilityLabel="Hide community guide" onPress={onDismiss} />
       </View>
@@ -1902,9 +1902,9 @@ export default function CommunityScreen() {
         setError("You are signed up. Pairings lock Tuesday 8pm, then your match board opens here.");
         return;
       }
-      const match = chessTournament.viewerMatches?.find((item) => item.status === "paired" && item.matchCode);
+      const match = currentChessMatch;
       if (!match?.matchCode) {
-        setError("You are signed up, but there is no opponent yet.");
+        setError(chessTournament.statusCopy ?? "There is no playable knockout match right now.");
         return;
       }
       router.push({ pathname: "/chess-match", params: { code: match.matchCode } });
@@ -2119,6 +2119,11 @@ export default function CommunityScreen() {
         : null;
   const chessRounds = chessTournament?.rounds ?? [];
   const chessMatches = chessTournament?.viewerMatches ?? [];
+  const chessTournamentMatches = chessTournament?.tournamentMatches ?? [];
+  const chessStandings = chessTournament?.standings ?? [];
+  const currentChessMatch = chessTournamentMatches.find(
+    (item) => item.canOpen && item.matchCode && (item.status === "scheduled" || item.status === "active")
+  );
   const primaryChessMatch =
     chessMatches.find((match) => match.status === "paired") ??
     chessMatches.find((match) => match.status === "waiting" || match.status === "bye") ??
@@ -2131,10 +2136,13 @@ export default function CommunityScreen() {
   const chessButtonLabel = chessTournament?.joined
     ? chessSignupOpen
       ? "Pairings lock Tuesday"
-      : "Open your match"
+      : currentChessMatch
+        ? "Open your match"
+        : "Bracket visible"
     : chessSignupOpen
       ? "Sign up this week"
       : "Signups closed";
+  const formatChessPoints = (points: number) => (Number.isInteger(points) ? `${points}` : points.toFixed(1));
   const chooseMode = (value: string) => {
     const nextMode = value as Mode;
     setMode(nextMode);
@@ -2250,9 +2258,13 @@ export default function CommunityScreen() {
               <Text style={styles.muted}>{formatWeekRange(boards?.weekStart ?? leaderboard?.weekStart, boards?.weekEnd ?? leaderboard?.weekEnd)}</Text>
             </View>
             <View style={styles.squadGrid}>
-              {squads.map((squad) => (
-                <SquadCard key={squad.id} squad={squad} onStart={startSquadSprint} onAsk={askSquad} onRoom={viewSquadRoom} />
-              ))}
+              {squads.length ? (
+                squads.map((squad) => (
+                  <SquadCard key={squad.id} squad={squad} onStart={startSquadSprint} onAsk={askSquad} onRoom={viewSquadRoom} />
+                ))
+              ) : (
+                <EmptyState title="No matching squads" body="Add one of the supported VCE subjects, then its squad will appear here." />
+              )}
             </View>
           </AppCard>
         </>
@@ -2295,9 +2307,9 @@ export default function CommunityScreen() {
                 <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
               </View>
               <View style={styles.flexText}>
-                <Text style={styles.cardTitle}>Chess pairing board</Text>
+                <Text style={styles.cardTitle}>Chess knockout bracket</Text>
                 <Text style={styles.muted}>
-                  Sign up early, get a weekly opponent and use the match code to organise your game.
+                  Winners advance. Losers are knocked out. New rounds appear after the previous winners are decided.
                 </Text>
               </View>
               <View style={styles.chessPillRow}>
@@ -2324,7 +2336,7 @@ export default function CommunityScreen() {
               </View>
               <View style={styles.chessFactTile}>
                 <Text style={styles.mutedSmall}>Results</Text>
-                <Text style={styles.userThemeText}>Moves saved</Text>
+                <Text style={styles.userThemeText}>Winners advance</Text>
               </View>
             </View>
             <View style={styles.chessRoundGrid}>
@@ -2347,7 +2359,11 @@ export default function CommunityScreen() {
                         ? `vs ${match.opponent?.displayName ?? "opponent"}`
                         : match.status === "bye"
                           ? "Bye round"
-                          : "Waiting for player"}
+                          : match.status === "champion"
+                            ? "Champion"
+                            : match.status === "eliminated"
+                              ? "Knocked out"
+                              : "Waiting for winner"}
                     </Text>
                     <Text style={styles.mutedSmall}>
                       {formatHour(match.startsAt)}
@@ -2373,6 +2389,55 @@ export default function CommunityScreen() {
                 No minute gate. The only rule is signing up before matchups are set.
               </Text>
             )}
+            {chessStandings.length ? (
+              <View style={styles.chessTournamentSection}>
+                <Text style={styles.userThemeText}>Tournament standings</Text>
+                <View style={styles.chessStandingList}>
+                  {chessStandings.map((standing, index) => (
+                    <View key={`standing-${standing.displayName}-${index}`} style={[styles.chessStandingRow, standing.isCurrentUser && styles.chessStandingRowActive]}>
+                      <Text style={styles.chessStandingRank}>#{index + 1}</Text>
+                      <View style={styles.flexText}>
+                        <Text style={styles.userThemeText} numberOfLines={1}>
+                          {standing.displayName}
+                        </Text>
+                        <Text style={styles.mutedSmall}>
+                          {standing.status} - {standing.wins}W {standing.draws}D {standing.losses}L - {standing.matchesRemaining} to play
+                        </Text>
+                      </View>
+                      <Text style={styles.metricValueSmall}>{formatChessPoints(standing.points)} win pts</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            {chessTournamentMatches.length ? (
+              <View style={styles.chessTournamentSection}>
+                <Text style={styles.userThemeText}>Match board</Text>
+                <View style={styles.chessMatchGrid}>
+                  {chessTournamentMatches.map((match) => (
+                    <View key={`board-${match.id}`} style={styles.chessMatchTile}>
+                      <Text style={styles.userThemeText}>{match.label}</Text>
+                      <Text style={styles.metricValueSmall} numberOfLines={1}>
+                        {match.status === "waiting"
+                          ? "Waiting for winners"
+                          : match.status === "bye"
+                            ? `${match.white?.displayName ?? "Player"} advances`
+                            : `${match.white?.displayName ?? "TBD"} vs ${match.black?.displayName ?? "TBD"}`}
+                      </Text>
+                      <Text style={styles.mutedSmall}>
+                        {formatHour(match.startsAt)} - {match.resultCopy}
+                        {match.matchCode ? ` - ${match.matchCode}` : ""}
+                      </Text>
+                      {match.canOpen ? (
+                        <Button mode="outlined" compact icon="chess-board" onPress={() => openChessMatch(match.matchCode)}>
+                          Open
+                        </Button>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
             <Button
               mode="outlined"
               compact
@@ -4116,6 +4181,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(245,158,11,0.18)",
     backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  chessTournamentSection: {
+    gap: 8
+  },
+  chessStandingList: {
+    gap: 6
+  },
+  chessStandingRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.16)",
+    backgroundColor: "rgba(0,0,0,0.12)"
+  },
+  chessStandingRowActive: {
+    borderColor: "rgba(245,158,11,0.42)",
+    backgroundColor: "rgba(245,158,11,0.1)"
+  },
+  chessStandingRank: {
+    minWidth: 34,
+    color: palette.warning,
+    fontFamily: "Outfit_700Bold"
   },
   chessRoundGrid: {
     flexDirection: "row",

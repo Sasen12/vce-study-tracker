@@ -812,22 +812,29 @@ export default function DashboardScreen() {
     [notes]
   );
   const nextChessRound = chessTournament?.rounds?.find((round) => round.status !== "done") ?? chessTournament?.rounds?.[0] ?? null;
+  const currentChessMatch = chessTournament?.tournamentMatches?.find(
+    (match) => match.canOpen && match.matchCode && (match.status === "scheduled" || match.status === "active")
+  ) ?? null;
   const nextChessMatch =
     chessTournament?.viewerMatches?.find((match) => match.status === "paired") ??
-    chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye") ??
+    chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye" || match.status === "champion" || match.status === "eliminated") ??
     null;
   const showChessSignupCard = Boolean(chessTournament && !examWeekMode && (chessTournament.signupOpen !== false || chessTournament.joined));
   const showChessHomeStrip = !examWeekMode && nowView;
-  const chessHomeTitle = chessTournament?.joined ? "Chess tournament: you're in" : "Chess tournament signup";
+  const chessHomeTitle = chessTournament?.joined ? "Chess knockout: you're in" : "Chess knockout signup";
   const chessHomeMeta = chessTournament
     ? chessTournament.joined
       ? nextChessMatch?.status === "paired"
         ? `Next match ${nextChessMatch.matchCode ?? "soon"}`
         : nextChessMatch?.status === "bye"
           ? "Bye round locked"
-          : "Pairings appear after signup closes"
+          : nextChessMatch?.status === "champion"
+            ? "Champion"
+            : nextChessMatch?.status === "eliminated"
+              ? "Knocked out"
+              : "Bracket updates after winners"
       : `${chessTournament.joinedCount} signed - closes ${formatChessHour(chessTournament.signupClosesAt)}`
-    : "Weekly rounds run Wednesday and Sunday.";
+    : "Weekly knockout opens after signup closes.";
   const todayStudyMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
   const weekStudyMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
   const homeSignalTiles: {
@@ -1094,7 +1101,11 @@ export default function DashboardScreen() {
 
   const joinChessTournament = async () => {
     if (chessTournament?.joined) {
-      router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } });
+      if (currentChessMatch?.matchCode) {
+        router.push({ pathname: "/chess-match", params: { code: currentChessMatch.matchCode } });
+      } else {
+        router.push("/(tabs)/community");
+      }
       return;
     }
     if (chessTournament && chessTournament.signupOpen === false) {
@@ -1106,7 +1117,7 @@ export default function DashboardScreen() {
     try {
       const data = await studyApi.joinChessTournament();
       setChessTournament(data.chessTournament);
-      setChessNotice("Signed up. Pairings will appear here and in Community.");
+      setChessNotice("Signed up. The knockout bracket will appear in Community.");
     } catch (error) {
       setChessNotice(error instanceof Error ? error.message : "Could not sign up for chess.");
     } finally {
@@ -1906,9 +1917,9 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.flexText}>
                 <Text style={styles.chessSignupLabel}>Community event</Text>
-                <Text style={styles.chessSignupTitle}>Chess tournament signup</Text>
+                <Text style={styles.chessSignupTitle}>Chess knockout signup</Text>
                 <Text style={styles.muted} numberOfLines={2}>
-                  {chessTournament.statusCopy ?? "Sign up early in the week. Rounds run Wednesday and Sunday."}
+                  {chessTournament.statusCopy ?? "Sign up early in the week. Winners advance through the bracket."}
                 </Text>
               </View>
               <View style={styles.chessSignupPill}>
@@ -1936,7 +1947,7 @@ export default function DashboardScreen() {
                     : formatChessHour(chessTournament.signupClosesAt)}
                 </Text>
                 <Text style={styles.mutedSmall} numberOfLines={1}>
-                  {chessTournament.joined ? nextChessMatch?.matchCode ?? "Pairings update live" : "Tuesday 8pm"}
+                  {chessTournament.joined ? nextChessMatch?.matchCode ?? "Bracket updates live" : "Tuesday 8pm"}
                 </Text>
               </View>
             </View>
@@ -1945,7 +1956,7 @@ export default function DashboardScreen() {
 
             <View style={styles.actionRow}>
               <Button mode="contained" compact icon="chess-king" loading={joiningChessTournament} onPress={joinChessTournament}>
-                {chessTournament.joined ? "Open board" : "Sign up"}
+                {chessTournament.joined ? (currentChessMatch ? "Open match" : "Bracket") : "Sign up"}
               </Button>
               <Button mode="outlined" compact icon="forum-outline" onPress={() => router.push("/(tabs)/community")}>
                 Community

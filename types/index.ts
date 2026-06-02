@@ -296,12 +296,41 @@ export type CommunityChessTournament = {
     round: number;
     label: string;
     startsAt: string;
-    status: "signup" | "waiting" | "paired" | "bye";
+    status: "signup" | "waiting" | "paired" | "bye" | "eliminated" | "champion";
     color: "white" | "black" | "either";
     matchCode?: string | null;
     opponent?: {
       displayName: string;
     } | null;
+  }[];
+  tournamentMatches?: {
+    id: string;
+    round: number;
+    label: string;
+    startsAt: string;
+    matchCode?: string | null;
+    status: "scheduled" | "active" | "white_win" | "black_win" | "draw" | "bye" | "waiting";
+    result?: string | null;
+    resultCopy: string;
+    canOpen: boolean;
+    viewerColor?: "white" | "black" | null;
+    white?: {
+      displayName: string;
+    } | null;
+    black?: {
+      displayName: string;
+    } | null;
+  }[];
+  standings?: {
+    displayName: string;
+    played: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    points: number;
+    matchesRemaining: number;
+    status: "alive" | "eliminated" | "champion";
+    isCurrentUser: boolean;
   }[];
 };
 

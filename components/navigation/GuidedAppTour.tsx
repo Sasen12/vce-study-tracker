@@ -64,8 +64,8 @@ const tourSteps: TourStep[] = [
   },
   {
     eyebrow: "Community",
-    title: "Students are in here.",
-    body: "Community is for chat, subject rooms and school-wide updates. It is a main tab because people are easier to find than buried tools.",
+    title: "Your subjects, rooms and tournament.",
+    body: "Community shows squads for subjects you actually take, subject rooms, Q&A and the weekly chess knockout bracket. Winners advance; eliminated players can still follow the board.",
     icon: "forum-outline",
     accent: palette.primary,
     target: { kind: "tab", index: 3, routeKey: "community", route: "/(tabs)/community" },
@@ -96,7 +96,7 @@ const tourSteps: TourStep[] = [
   {
     eyebrow: "Done",
     title: "That is the loop.",
-    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Community keeps students close. The bird is there only when you want a quick ask.",
+    body: "Home tells you what matters. Study does the work. Calendar protects deadlines. Community keeps your subject squads, rooms and tournaments in one place.",
     icon: "check-circle-outline",
     accent: palette.info,
     target: { kind: "none" },
