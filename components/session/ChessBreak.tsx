@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Button, SegmentedButtons, Text } from "react-native-paper";
 import { Chess, type Move, type Square } from "chess.js";
@@ -6,6 +6,9 @@ import { palette } from "@/constants/theme";
 import { AppCard } from "@/components/ui/AppCard";
 
 type ChessDifficulty = "easy" | "medium" | "hard";
+type Premove = { from: Square; to: Square };
+
+const BOT_THINK_MS = 520;
 
 const pieceSymbols: Record<string, string> = {
   wp: "♙",
@@ -32,9 +35,9 @@ const pieceValues: Record<string, number> = {
 };
 
 const difficultyCopy: Record<ChessDifficulty, string> = {
-  easy: "Easy bot plays legal moves with very little planning.",
-  medium: "Medium bot prefers stronger captures, checks and safer material.",
-  hard: "Hard bot looks one reply ahead before choosing."
+  easy: "Random bot only knows legal moves. Good for a warm-up, not a coach.",
+  medium: "Tactical bot likes captures, checks and material, with a little randomness.",
+  hard: "One-reply bot checks your immediate response, but it is still not a full chess engine."
 };
 
 const centerSquares = new Set(["d4", "e4", "d5", "e5"]);
@@ -122,7 +125,11 @@ export function ChessBreak() {
   const { width, height } = useWindowDimensions();
   const [fen, setFen] = useState(new Chess().fen());
   const [selected, setSelected] = useState<Square | null>(null);
+  const [premoveFrom, setPremoveFrom] = useState<Square | null>(null);
+  const [premove, setPremove] = useState<Premove | null>(null);
+  const [pendingBotMove, setPendingBotMove] = useState(false);
   const [difficulty, setDifficulty] = useState<ChessDifficulty>("medium");
+  const premoveRef = useRef<Premove | null>(null);
   const game = useMemo(() => new Chess(fen), [fen]);
   const board = game.board();
   const availableWidth = Math.max(220, width - 72);
@@ -137,23 +144,93 @@ export function ChessBreak() {
     return new Set(game.moves({ square: selected, verbose: true }).map((move) => move.to));
   }, [game, selected]);
 
+  useEffect(() => {
+    premoveRef.current = premove;
+  }, [premove]);
+
+  useEffect(() => {
+    if (!pendingBotMove) return;
+
+    const current = new Chess(fen);
+    if (current.isGameOver() || current.turn() !== "b") {
+      setPendingBotMove(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      const next = new Chess(fen);
+      if (next.isGameOver() || next.turn() !== "b") {
+        setPendingBotMove(false);
+        return;
+      }
+
+      botMove(next, difficulty);
+
+      let keepBotLoopRunning = false;
+      const queuedPremove = premoveRef.current;
+      if (queuedPremove && !next.isGameOver() && next.turn() === "w") {
+        try {
+          next.move({ from: queuedPremove.from, to: queuedPremove.to, promotion: "q" });
+          setPremove(null);
+          setPremoveFrom(null);
+          keepBotLoopRunning = !next.isGameOver() && next.turn() === "b";
+        } catch {
+          setPremove(null);
+          setPremoveFrom(null);
+        }
+      }
+
+      setFen(next.fen());
+      setSelected(null);
+      setPendingBotMove(keepBotLoopRunning);
+    }, BOT_THINK_MS);
+
+    return () => clearTimeout(timeout);
+  }, [difficulty, fen, pendingBotMove]);
+
   const status = useMemo(() => {
     if (game.isCheckmate()) return game.turn() === "w" ? "Checkmate. Bot wins." : "Checkmate. You win.";
     if (game.isDraw()) return "Draw.";
+    if (pendingBotMove && premove) return "Bot thinking. Premove queued.";
+    if (pendingBotMove && premoveFrom) return "Choose the premove target.";
+    if (pendingBotMove || game.turn() === "b") return "Bot thinking. You can queue a premove.";
     if (game.isCheck()) return game.turn() === "w" ? "You are in check." : "Bot is in check.";
     return game.turn() === "w" ? "Your move" : "Bot thinking";
-  }, [game]);
+  }, [game, pendingBotMove, premove, premoveFrom]);
 
   const tapSquare = (square: Square) => {
-    if (game.isGameOver() || game.turn() !== "w") return;
+    if (game.isGameOver()) return;
     const piece = game.get(square);
+
+    if (game.turn() !== "w") {
+      if (!pendingBotMove) return;
+      setSelected(null);
+
+      if (premoveFrom && premoveFrom !== square) {
+        setPremove({ from: premoveFrom, to: square });
+        setPremoveFrom(null);
+        return;
+      }
+
+      if (piece?.color === "w") {
+        setPremoveFrom(square);
+        setPremove(null);
+      } else {
+        setPremoveFrom(null);
+        setPremove(null);
+      }
+      return;
+    }
+
+    setPremoveFrom(null);
+    setPremove(null);
 
     if (selected && legalTargets.has(square)) {
       const next = new Chess(fen);
       next.move({ from: selected, to: square, promotion: "q" });
-      botMove(next, difficulty);
       setFen(next.fen());
       setSelected(null);
+      setPendingBotMove(!next.isGameOver() && next.turn() === "b");
       return;
     }
 
@@ -167,6 +244,9 @@ export function ChessBreak() {
   const reset = () => {
     setFen(new Chess().fen());
     setSelected(null);
+    setPremoveFrom(null);
+    setPremove(null);
+    setPendingBotMove(false);
   };
 
   return (
@@ -187,9 +267,9 @@ export function ChessBreak() {
         value={difficulty}
         onValueChange={(value) => setDifficulty(value as ChessDifficulty)}
         buttons={[
-          { value: "easy", label: "Easy" },
-          { value: "medium", label: "Medium" },
-          { value: "hard", label: "Hard" }
+          { value: "easy", label: "Random" },
+          { value: "medium", label: "Tactical" },
+          { value: "hard", label: "One-reply" }
         ]}
       />
 
@@ -202,6 +282,8 @@ export function ChessBreak() {
             const dark = (rankIndex + fileIndex) % 2 === 1;
             const active = selected === square;
             const legal = legalTargets.has(square);
+            const queuedFrom = premoveFrom === square || premove?.from === square;
+            const queuedTarget = premove?.to === square;
             const symbol = piece ? pieceSymbols[`${piece.color}${piece.type}`] : "";
 
             return (
@@ -212,7 +294,9 @@ export function ChessBreak() {
                   styles.square,
                   dark ? styles.darkSquare : styles.lightSquare,
                   active && styles.activeSquare,
-                  legal && styles.legalSquare
+                  legal && styles.legalSquare,
+                  queuedFrom && styles.premoveFromSquare,
+                  queuedTarget && styles.premoveTargetSquare
                 ]}
               >
                 <Text
@@ -230,7 +314,7 @@ export function ChessBreak() {
         )}
       </View>
 
-      <Text style={styles.caption}>White to move. {difficultyCopy[difficulty]}</Text>
+      <Text style={styles.caption}>White to move. Queue premoves while the bot thinks. {difficultyCopy[difficulty]}</Text>
     </AppCard>
   );
 }
@@ -280,6 +364,15 @@ const styles = StyleSheet.create({
   legalSquare: {
     borderWidth: 3,
     borderColor: palette.success
+  },
+  premoveFromSquare: {
+    borderWidth: 3,
+    borderColor: palette.warning
+  },
+  premoveTargetSquare: {
+    backgroundColor: "rgba(245,158,11,0.45)",
+    borderWidth: 3,
+    borderColor: palette.warning
   },
   piece: {
     color: "#FAFAFF",

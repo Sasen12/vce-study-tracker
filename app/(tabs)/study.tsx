@@ -3,7 +3,6 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, Dialog, Portal, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
@@ -25,6 +24,13 @@ import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type { GeneratedAnswerOption, GeneratedQuestion } from "@/types";
+import {
+  clearStoredActiveTimer as clearStoredActiveTimerForUser,
+  maxBackgroundTimerSeconds,
+  readStoredActiveTimer,
+  writeStoredActiveTimer,
+  type StoredActiveTimer
+} from "@/utils/activeStudyTimer";
 import { loadStudyPreferences } from "@/utils/studyPreferences";
 import { subjectToolProfile } from "@/utils/subjectTools";
 import { setTimerActivity } from "@/utils/timerActivity";
@@ -50,27 +56,7 @@ const formatStudyDuration = (seconds: number) => {
 const calculateXp = (seconds: number) => Math.floor(seconds / 600) * 10 + (seconds > 3600 ? 25 : 0);
 const defaultCheckpointIntervalSeconds = 10 * 60;
 const checkpointBonusXp = 8;
-const activeTimerStoragePrefix = "vce_active_study_timer_v1";
-const maxBackgroundTimerSeconds = 8 * 60 * 60;
 const studyModes = new Set(["coach", "timer", "notes", "resources", "calculator", "chess"]);
-
-type StoredActiveTimer = {
-  userId?: string;
-  subjectId: string;
-  studyTopic: string;
-  sessionGoal: string;
-  targetMinutes: string;
-  checkInsEnabled: boolean;
-  checkInIntervalMinutes: string;
-  timerBonusXp: number;
-  nextCheckpointAt: number;
-  focusMode: boolean;
-  externalWorkMode?: boolean;
-  startedAtMs: number;
-  elapsedBeforeRun: number;
-};
-
-const activeTimerStorageKey = (userId?: string | null) => `${activeTimerStoragePrefix}:${userId ?? "local"}`;
 
 const confidenceButtons = ["1", "2", "3", "4", "5"].map((value) => ({ value, label: value }));
 
@@ -244,7 +230,7 @@ export default function StudyScreen() {
   }, []);
 
   const clearStoredActiveTimer = useCallback(() => {
-    void AsyncStorage.removeItem(activeTimerStorageKey(userId)).catch(() => undefined);
+    void clearStoredActiveTimerForUser(userId);
   }, [userId]);
 
   const persistActiveTimer = useCallback(() => {
@@ -264,7 +250,7 @@ export default function StudyScreen() {
       startedAtMs: runStartedAtRef.current,
       elapsedBeforeRun: elapsedAtRunStartRef.current
     };
-    void AsyncStorage.setItem(activeTimerStorageKey(userId), JSON.stringify(payload)).catch(() => undefined);
+    void writeStoredActiveTimer(userId, payload);
   }, [
     checkInIntervalMinutes,
     checkInsEnabled,
@@ -311,18 +297,9 @@ export default function StudyScreen() {
     if (!userId || restoredTimerRef.current || running || elapsedRef.current > 0) return undefined;
     restoredTimerRef.current = true;
 
-    AsyncStorage.getItem(activeTimerStorageKey(userId))
-      .then((raw) => {
-        if (!active || !raw) return;
-        const parsed = JSON.parse(raw) as Partial<StoredActiveTimer>;
-        if (
-          typeof parsed.subjectId !== "string" ||
-          typeof parsed.startedAtMs !== "number" ||
-          typeof parsed.elapsedBeforeRun !== "number"
-        ) {
-          void AsyncStorage.removeItem(activeTimerStorageKey(userId));
-          return;
-        }
+    readStoredActiveTimer(userId)
+      .then((parsed) => {
+        if (!active || !parsed) return;
 
         const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - parsed.startedAtMs) / 1000));
         const restoredElapsed = Math.min(maxBackgroundTimerSeconds, parsed.elapsedBeforeRun + elapsedSinceStart);

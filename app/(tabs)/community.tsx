@@ -1911,7 +1911,7 @@ export default function CommunityScreen() {
     try {
       const data = await studyApi.joinChessTournament();
       setChessTournament(data.chessTournament);
-      setNotice("You are signed up for this week's chess tournament. Pairings will stay on the Rooms tab.");
+      setNotice("You are signed up. Pairings and match codes will stay on the Rooms tab.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not join the chess arena");
     } finally {
@@ -2103,8 +2103,12 @@ export default function CommunityScreen() {
     chessMatches.find((match) => match.status === "waiting" || match.status === "bye") ??
     null;
   const chessSignupOpen = chessTournament?.signupOpen !== false;
+  const chessPairingCount = chessTournament?.pairingCount ?? Math.floor((chessTournament?.joinedCount ?? 0) / 2);
+  const chessSignupStatus = chessSignupOpen
+    ? `Open until ${formatHour(chessTournament?.signupClosesAt)}`
+    : "Closed this week";
   const chessButtonLabel = chessTournament?.joined
-    ? "Open chess board"
+    ? "Open practice board"
     : chessSignupOpen
       ? "Sign up this week"
       : "Signups closed";
@@ -2268,21 +2272,38 @@ export default function CommunityScreen() {
                 <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
               </View>
               <View style={styles.flexText}>
-                <Text style={styles.cardTitle}>Chess tournament</Text>
+                <Text style={styles.cardTitle}>Chess pairing board</Text>
                 <Text style={styles.muted}>
-                  Twice a week. Sign up early, get paired, then play your match.
+                  Sign up early, get a weekly opponent and use the match code to organise your game.
                 </Text>
               </View>
-              <View style={styles.minutePill}>
-                <Text style={styles.minuteText}>
-                  {chessTournament?.joinedCount ?? 0} signed
-                </Text>
+              <View style={styles.chessPillRow}>
+                <View style={styles.minutePill}>
+                  <Text style={styles.minuteText}>{chessTournament?.joinedCount ?? 0} signed</Text>
+                </View>
+                <View style={styles.minutePill}>
+                  <Text style={styles.minuteText}>{chessPairingCount} paired</Text>
+                </View>
               </View>
             </View>
             <Text style={styles.muted}>
               {chessTournament?.statusCopy ??
                 "Sign up before Tuesday night. Rounds run Wednesday and Sunday at 7:30pm."}
             </Text>
+            <View style={styles.chessFactGrid}>
+              <View style={styles.chessFactTile}>
+                <Text style={styles.mutedSmall}>Signups</Text>
+                <Text style={styles.userThemeText}>{chessSignupStatus}</Text>
+              </View>
+              <View style={styles.chessFactTile}>
+                <Text style={styles.mutedSmall}>Pairings</Text>
+                <Text style={styles.userThemeText}>{chessPairingCount} match{chessPairingCount === 1 ? "" : "es"}</Text>
+              </View>
+              <View style={styles.chessFactTile}>
+                <Text style={styles.mutedSmall}>Results</Text>
+                <Text style={styles.userThemeText}>Manual for now</Text>
+              </View>
+            </View>
             <View style={styles.chessRoundGrid}>
               {chessRounds.map((round) => (
                 <View key={round.id} style={styles.chessRoundTile}>
@@ -2307,6 +2328,7 @@ export default function CommunityScreen() {
                     </Text>
                     <Text style={styles.mutedSmall}>
                       {formatHour(match.startsAt)}
+                      {match.color !== "either" ? ` - you play ${match.color}` : ""}
                       {match.matchCode ? ` - ${match.matchCode}` : ""}
                     </Text>
                   </View>
@@ -4039,6 +4061,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(245,158,11,0.14)"
+  },
+  chessPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 8
+  },
+  chessFactGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  chessFactTile: {
+    flexGrow: 1,
+    flexBasis: 150,
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.18)",
+    backgroundColor: "rgba(255,255,255,0.04)"
   },
   chessRoundGrid: {
     flexDirection: "row",

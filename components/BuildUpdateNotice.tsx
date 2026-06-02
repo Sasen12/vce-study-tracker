@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet } from "react-native";
 import { Button, Dialog, Portal, Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
+import { useAuthStore } from "@/store/authStore";
+import { hasRecoverableActiveTimer } from "@/utils/activeStudyTimer";
 import { useTimerActivity } from "@/utils/timerActivity";
 
 type BuildInfo = {
@@ -44,8 +46,11 @@ const formatBuildDate = (value?: string | null) => {
 
 export function BuildUpdateNotice() {
   const timerActivity = useTimerActivity();
+  const userId = useAuthStore((state) => state.user?.id);
   const currentBuildId = useRef<string | null>(null);
   const [update, setUpdate] = useState<BuildInfo | null>(null);
+  const [storedTimerActive, setStoredTimerActive] = useState(false);
+  const [checkingStoredTimer, setCheckingStoredTimer] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== "web") return undefined;
@@ -86,21 +91,54 @@ export function BuildUpdateNotice() {
     };
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || !update || timerActivity.running) {
+      setStoredTimerActive(false);
+      setCheckingStoredTimer(false);
+      return undefined;
+    }
+
+    let active = true;
+    const checkStoredTimer = async () => {
+      setCheckingStoredTimer(true);
+      const hasTimer = await hasRecoverableActiveTimer(userId);
+      if (active) {
+        setStoredTimerActive(hasTimer);
+        setCheckingStoredTimer(false);
+      }
+    };
+
+    checkStoredTimer();
+    const interval = setInterval(checkStoredTimer, 15_000);
+    return () => {
+      active = false;
+      setCheckingStoredTimer(false);
+      clearInterval(interval);
+    };
+  }, [timerActivity.running, update, userId]);
+
   const reload = () => {
     if (Platform.OS === "web") {
       window.location.reload();
     }
   };
 
+  const dismiss = () => {
+    if (update?.buildId) {
+      currentBuildId.current = update.buildId;
+    }
+    setUpdate(null);
+  };
+
   const changedAt = formatBuildDate(update?.committedAt ?? update?.builtAt);
   const changes = update?.changes?.length
     ? update.changes.slice(0, 5)
     : [update?.message ?? "Fresh fixes and improvements are ready."];
-  const visible = Boolean(update) && !timerActivity.running;
+  const visible = Boolean(update) && !timerActivity.running && !storedTimerActive && !checkingStoredTimer;
 
   return (
     <Portal>
-      <Dialog visible={visible} onDismiss={() => setUpdate(null)} style={styles.dialog}>
+      <Dialog visible={visible} onDismiss={dismiss} style={styles.dialog}>
         <Dialog.Title style={styles.dialogTitle}>Update ready</Dialog.Title>
         <Dialog.Content style={styles.dialogContent}>
           <Text style={styles.body}>
@@ -118,7 +156,7 @@ export function BuildUpdateNotice() {
           </Text>
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onPress={() => setUpdate(null)}>Later</Button>
+          <Button onPress={dismiss}>Later</Button>
           <Button mode="contained" icon="refresh" onPress={reload}>
             Reload app
           </Button>
