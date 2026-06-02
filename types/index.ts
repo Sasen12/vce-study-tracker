@@ -305,6 +305,42 @@ export type CommunityChessTournament = {
   }[];
 };
 
+export type CommunityChessMatchState = {
+  id: string;
+  matchCode: string;
+  weekStart: string;
+  round: number;
+  label: string;
+  startsAt: string;
+  fen: string;
+  pgn?: string | null;
+  status: "active" | "white_win" | "black_win" | "draw";
+  result?: string | null;
+  resultCopy?: string;
+  viewerColor: "white" | "black";
+  turn: "white" | "black";
+  canMove: boolean;
+  signupOpen?: boolean;
+  white: {
+    displayName: string;
+  };
+  black: {
+    displayName: string;
+  };
+  opponent: {
+    displayName: string;
+  };
+  lastMove?: {
+    from: string;
+    to: string;
+    san?: string | null;
+    at?: string | null;
+  } | null;
+  inCheck: boolean;
+  checkmate: boolean;
+  draw: boolean;
+};
+
 export type CommunityReportSummary = {
   id: string;
   contentType: string;

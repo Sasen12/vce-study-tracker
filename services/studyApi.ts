@@ -10,6 +10,7 @@ import type {
   ChatAllowance,
   CommunityBoards,
   CommunityChatMessage,
+  CommunityChessMatchState,
   CommunityChessTournament,
   CommunityLiveRoom,
   CommunityMission,
@@ -294,6 +295,13 @@ export const studyApi = {
   chessTournament: () => apiFetch<{ chessTournament: CommunityChessTournament }>("/community/chess-tournament"),
   joinChessTournament: () =>
     apiFetch<{ chessTournament: CommunityChessTournament }>("/community/chess-tournament/join", { method: "POST" }),
+  chessTournamentMatch: (matchCode: string) =>
+    apiFetch<{ match: CommunityChessMatchState }>(`/community/chess-tournament/matches/${encodeURIComponent(matchCode)}`),
+  playChessTournamentMove: (matchCode: string, body: { from: string; to: string; promotion?: "q" | "r" | "b" | "n" }) =>
+    apiFetch<{ match: CommunityChessMatchState }>(`/community/chess-tournament/matches/${encodeURIComponent(matchCode)}/move`, {
+      method: "POST",
+      body
+    }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
   giftTheme: (userId: string, body: { themeId: string; equip?: boolean }) =>
     apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/theme`, {

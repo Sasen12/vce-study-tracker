@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
+import { Chess } from "chess.js";
 import { prisma } from "../db/prismaClient.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { isAdminEmail, requireAdmin } from "../services/adminService.js";
@@ -54,6 +55,18 @@ const reportStatusSchema = z.object({
 });
 const liveRoomHeartbeatSchema = z.object({
     roomId: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/)
+});
+const chessMatchCodeSchema = z
+    .string()
+    .trim()
+    .min(8)
+    .max(40)
+    .regex(/^FORGE-\d{4}-R[12]-M\d+$/i)
+    .transform((value) => value.toUpperCase());
+const chessMoveSchema = z.object({
+    from: z.string().trim().regex(/^[a-h][1-8]$/),
+    to: z.string().trim().regex(/^[a-h][1-8]$/),
+    promotion: z.enum(["q", "r", "b", "n"]).optional().default("q")
 });
 const trackedScreens = ["home", "insights", "study", "calendar", "questions", "community", "shop", "pro", "profile", "more"];
 const usageEventSchema = z.object({
@@ -1336,6 +1349,117 @@ const chessMatchCode = (weekStart, round, pairIndex) => {
     const weekKey = weekStart.toISOString().slice(5, 10).replace("-", "");
     return `FORGE-${weekKey}-R${round}-M${pairIndex + 1}`;
 };
+const orderedChessEntriesForRound = (entries, roundIndex) => roundIndex === 0 || entries.length < 3 ? entries : [entries[0], ...entries.slice(1).reverse()];
+const chessPairingsForRound = (weekStart, round, roundIndex, entries) => {
+    const orderedEntries = orderedChessEntriesForRound(entries, roundIndex);
+    const pairings = [];
+    for (let index = 0; index < orderedEntries.length; index += 2) {
+        const whiteEntry = orderedEntries[index];
+        const blackEntry = orderedEntries[index + 1];
+        if (!whiteEntry || !blackEntry)
+            continue;
+        const pairIndex = Math.floor(index / 2);
+        pairings.push({
+            matchCode: chessMatchCode(weekStart, roundIndex + 1, pairIndex),
+            round: roundIndex + 1,
+            pairIndex,
+            label: round.label,
+            startsAt: round.startsAt,
+            whiteEntry,
+            blackEntry
+        });
+    }
+    return pairings;
+};
+const chessMatchInclude = {
+    whiteUser: { select: { id: true, displayName: true } },
+    blackUser: { select: { id: true, displayName: true } },
+    winnerUser: { select: { id: true, displayName: true } }
+};
+const chessStatusCopy = (status, winnerName) => {
+    if (status === "white_win")
+        return winnerName ? `${winnerName} won by checkmate.` : "White won by checkmate.";
+    if (status === "black_win")
+        return winnerName ? `${winnerName} won by checkmate.` : "Black won by checkmate.";
+    if (status === "draw")
+        return "Draw.";
+    return "Active match.";
+};
+const serialiseChessMatch = (match, viewerUserId, pairing) => {
+    const game = new Chess(match.fen);
+    const viewerColor = match.whiteUserId === viewerUserId ? "white" : "black";
+    const turn = game.turn() === "w" ? "white" : "black";
+    const opponent = viewerColor === "white" ? match.blackUser : match.whiteUser;
+    const canMove = match.status === "active" && !pairing.signupOpen && turn === viewerColor;
+    return {
+        id: match.id,
+        matchCode: match.matchCode,
+        weekStart: match.weekStart.toISOString(),
+        round: match.round,
+        label: pairing.label,
+        startsAt: pairing.startsAt.toISOString(),
+        fen: match.fen,
+        pgn: match.pgn,
+        status: match.status,
+        result: match.result,
+        resultCopy: chessStatusCopy(match.status, match.winnerUser?.displayName ?? null),
+        viewerColor,
+        turn,
+        canMove,
+        signupOpen: pairing.signupOpen,
+        white: { displayName: match.whiteUser.displayName },
+        black: { displayName: match.blackUser.displayName },
+        opponent: { displayName: opponent.displayName },
+        lastMove: match.lastMoveFrom && match.lastMoveTo
+            ? {
+                from: match.lastMoveFrom,
+                to: match.lastMoveTo,
+                san: match.lastMoveSan,
+                at: match.lastMoveAt?.toISOString() ?? null
+            }
+            : null,
+        inCheck: game.isCheck(),
+        checkmate: game.isCheckmate(),
+        draw: game.isDraw()
+    };
+};
+const resolveChessPairing = async (matchCode, viewerUserId) => {
+    const now = new Date();
+    const weekStart = startOfWeek(now);
+    const signupClosesAt = chessSignupClosesAt(weekStart);
+    const signupOpen = now <= signupClosesAt;
+    const rounds = chessRoundsForWeek(weekStart, now);
+    const entries = await prisma.communityChessTournamentEntry.findMany({
+        where: { weekStart },
+        orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
+        include: { user: { select: { displayName: true } } }
+    });
+    for (const [roundIndex, round] of rounds.entries()) {
+        const pairing = chessPairingsForRound(weekStart, round, roundIndex, entries).find((item) => item.matchCode === matchCode);
+        if (!pairing)
+            continue;
+        const viewerIsPlayer = pairing.whiteEntry.userId === viewerUserId || pairing.blackEntry.userId === viewerUserId;
+        if (!viewerIsPlayer) {
+            throw new HttpError(403, "This chess match belongs to another pairing.");
+        }
+        return { ...pairing, weekStart, signupOpen };
+    }
+    throw new HttpError(404, "Chess match not found for this week's pairings.");
+};
+const ensureChessMatch = async (pairing) => prisma.communityChessMatch.upsert({
+    where: { matchCode: pairing.matchCode },
+    update: {},
+    create: {
+        weekStart: pairing.weekStart,
+        round: pairing.round,
+        matchCode: pairing.matchCode,
+        whiteUserId: pairing.whiteEntry.userId,
+        blackUserId: pairing.blackEntry.userId,
+        fen: new Chess().fen(),
+        pgn: ""
+    },
+    include: chessMatchInclude
+});
 const buildChessTournament = async (viewerUserId) => {
     const now = new Date();
     const weekStart = startOfWeek(now);
@@ -1412,9 +1536,11 @@ const buildChessTournament = async (viewerUserId) => {
         };
     });
     const statusCopy = joined
-        ? viewerMatches.some((match) => match.status === "paired")
-            ? "You are signed up. Your pairings are set for the week."
-            : "You are signed up. Waiting for one more student to make a match."
+        ? signupOpen
+            ? "You are signed up. Pairings lock Tuesday 8pm, then match boards open."
+            : viewerMatches.some((match) => match.status === "paired")
+                ? "Your pairings are locked. Open a match board and play your opponent."
+                : "You are signed up. Waiting for one more student to make a match."
         : signupOpen
             ? "Sign up before Tuesday 8pm to get paired for both weekly rounds."
             : "Signups are closed for this week. Next signup opens Monday.";
@@ -1687,6 +1813,75 @@ communityRouter.get("/chess-tournament", asyncHandler(async (req, res) => {
     const authReq = req;
     const chessTournament = await buildChessTournament(authReq.user.id);
     res.json({ chessTournament });
+}));
+communityRouter.get("/chess-tournament/matches/:matchCode", asyncHandler(async (req, res) => {
+    const authReq = req;
+    const matchCode = chessMatchCodeSchema.parse(req.params.matchCode);
+    const pairing = await resolveChessPairing(matchCode, authReq.user.id);
+    if (pairing.signupOpen) {
+        throw new HttpError(403, "Pairings lock Tuesday 8pm. You can open this match once signups close.");
+    }
+    const match = await ensureChessMatch(pairing);
+    res.json({ match: serialiseChessMatch(match, authReq.user.id, pairing) });
+}));
+communityRouter.post("/chess-tournament/matches/:matchCode/move", asyncHandler(async (req, res) => {
+    const authReq = req;
+    const matchCode = chessMatchCodeSchema.parse(req.params.matchCode);
+    const payload = chessMoveSchema.parse(req.body);
+    const pairing = await resolveChessPairing(matchCode, authReq.user.id);
+    if (pairing.signupOpen) {
+        throw new HttpError(403, "Pairings lock Tuesday 8pm. You can play this match once signups close.");
+    }
+    const match = await ensureChessMatch(pairing);
+    if (match.status !== "active") {
+        throw new HttpError(400, "This chess match has already finished.");
+    }
+    const game = new Chess(match.fen);
+    const viewerTurn = match.whiteUserId === authReq.user.id ? "w" : "b";
+    if (game.turn() !== viewerTurn) {
+        throw new HttpError(403, "It is not your turn in this chess match.");
+    }
+    let move;
+    try {
+        move = game.move({ from: payload.from, to: payload.to, promotion: payload.promotion });
+    }
+    catch {
+        throw new HttpError(400, "That is not a legal chess move.");
+    }
+    if (!move) {
+        throw new HttpError(400, "That is not a legal chess move.");
+    }
+    const now = new Date();
+    const moveList = [match.pgn?.trim(), move.san].filter(Boolean).join(" ");
+    let status = "active";
+    let result = null;
+    let winnerUserId = null;
+    if (game.isCheckmate()) {
+        const whiteWon = game.turn() === "b";
+        status = whiteWon ? "white_win" : "black_win";
+        result = whiteWon ? "1-0" : "0-1";
+        winnerUserId = whiteWon ? match.whiteUserId : match.blackUserId;
+    }
+    else if (game.isDraw()) {
+        status = "draw";
+        result = "1/2-1/2";
+    }
+    const updated = await prisma.communityChessMatch.update({
+        where: { id: match.id },
+        data: {
+            fen: game.fen(),
+            pgn: moveList,
+            status,
+            result,
+            winnerUserId,
+            lastMoveFrom: move.from,
+            lastMoveTo: move.to,
+            lastMoveSan: move.san,
+            lastMoveAt: now
+        },
+        include: chessMatchInclude
+    });
+    res.json({ match: serialiseChessMatch(updated, authReq.user.id, pairing) });
 }));
 communityRouter.post("/feedback", asyncHandler(async (req, res) => {
     const authReq = req;

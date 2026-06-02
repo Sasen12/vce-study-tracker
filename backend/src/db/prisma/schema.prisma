@@ -38,6 +38,9 @@ model User {
   mutedUsers     CommunityUserMute[] @relation("CommunityMuteOwner")
   mutedByUsers   CommunityUserMute[] @relation("CommunityMutedUser")
   chessTournamentEntries CommunityChessTournamentEntry[]
+  chessMatchesAsWhite CommunityChessMatch[] @relation("CommunityChessWhite")
+  chessMatchesAsBlack CommunityChessMatch[] @relation("CommunityChessBlack")
+  chessMatchesWon CommunityChessMatch[] @relation("CommunityChessWinner")
   giftMessages   UserGiftMessage[]
   usageEvents    UserUsageEvent[]
   memoryEvents   StudentMemoryEvent[]
@@ -336,6 +339,35 @@ model CommunityChessTournamentEntry {
   @@unique([userId, weekStart])
   @@index([weekStart, createdAt])
   @@map("community_chess_tournament_entries")
+}
+
+model CommunityChessMatch {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weekStart      DateTime  @map("week_start") @db.Date
+  round          Int
+  matchCode      String    @unique @map("match_code")
+  whiteUserId    String    @map("white_user_id") @db.Uuid
+  blackUserId    String    @map("black_user_id") @db.Uuid
+  fen            String    @db.Text
+  pgn            String?   @db.Text
+  status         String    @default("active")
+  result         String?
+  winnerUserId   String?   @map("winner_user_id") @db.Uuid
+  lastMoveFrom   String?   @map("last_move_from")
+  lastMoveTo     String?   @map("last_move_to")
+  lastMoveSan    String?   @map("last_move_san")
+  lastMoveAt     DateTime? @map("last_move_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  whiteUser      User      @relation("CommunityChessWhite", fields: [whiteUserId], references: [id], onDelete: Cascade)
+  blackUser      User      @relation("CommunityChessBlack", fields: [blackUserId], references: [id], onDelete: Cascade)
+  winnerUser     User?     @relation("CommunityChessWinner", fields: [winnerUserId], references: [id])
+
+  @@unique([weekStart, round, whiteUserId, blackUserId])
+  @@index([whiteUserId, status])
+  @@index([blackUserId, status])
+  @@index([weekStart, round])
+  @@map("community_chess_matches")
 }
 
 model UserGiftMessage {

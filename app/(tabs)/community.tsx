@@ -1898,7 +1898,16 @@ export default function CommunityScreen() {
 
   const joinChessArena = async () => {
     if (chessTournament?.joined) {
-      router.push({ pathname: "/(tabs)/study", params: { mode: "chess" } });
+      if (chessTournament.signupOpen !== false) {
+        setError("You are signed up. Pairings lock Tuesday 8pm, then your match board opens here.");
+        return;
+      }
+      const match = chessTournament.viewerMatches?.find((item) => item.status === "paired" && item.matchCode);
+      if (!match?.matchCode) {
+        setError("You are signed up, but there is no opponent yet.");
+        return;
+      }
+      router.push({ pathname: "/chess-match", params: { code: match.matchCode } });
       return;
     }
     if (chessTournament && chessTournament.signupOpen === false) {
@@ -1917,6 +1926,18 @@ export default function CommunityScreen() {
     } finally {
       setSending(false);
     }
+  };
+
+  const openChessMatch = (matchCode?: string | null) => {
+    if (chessTournament?.signupOpen !== false) {
+      setError("Pairings lock Tuesday 8pm, then match boards open.");
+      return;
+    }
+    if (!matchCode) {
+      setError("This round does not have a match code yet.");
+      return;
+    }
+    router.push({ pathname: "/chess-match", params: { code: matchCode } });
   };
 
   const dismissRoomIntro = async () => {
@@ -2108,7 +2129,9 @@ export default function CommunityScreen() {
     ? `Open until ${formatHour(chessTournament?.signupClosesAt)}`
     : "Closed this week";
   const chessButtonLabel = chessTournament?.joined
-    ? "Open practice board"
+    ? chessSignupOpen
+      ? "Pairings lock Tuesday"
+      : "Open your match"
     : chessSignupOpen
       ? "Sign up this week"
       : "Signups closed";
@@ -2301,7 +2324,7 @@ export default function CommunityScreen() {
               </View>
               <View style={styles.chessFactTile}>
                 <Text style={styles.mutedSmall}>Results</Text>
-                <Text style={styles.userThemeText}>Manual for now</Text>
+                <Text style={styles.userThemeText}>Moves saved</Text>
               </View>
             </View>
             <View style={styles.chessRoundGrid}>
@@ -2331,6 +2354,17 @@ export default function CommunityScreen() {
                       {match.color !== "either" ? ` - you play ${match.color}` : ""}
                       {match.matchCode ? ` - ${match.matchCode}` : ""}
                     </Text>
+                    {match.status === "paired" && match.matchCode ? (
+                      <Button
+                        mode="contained-tonal"
+                        compact
+                        icon="chess-board"
+                        disabled={chessSignupOpen}
+                        onPress={() => openChessMatch(match.matchCode)}
+                      >
+                        Play match
+                      </Button>
+                    ) : null}
                   </View>
                 ))}
               </View>

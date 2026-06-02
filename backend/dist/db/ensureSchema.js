@@ -157,6 +157,31 @@ const ensureCommunityTrustSchema = async () => {
     )
   `);
     await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_chess_tournament_entries_week_created_idx ON community_chess_tournament_entries(week_start, created_at)");
+    await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS community_chess_matches (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      week_start DATE NOT NULL,
+      round INTEGER NOT NULL,
+      match_code TEXT NOT NULL UNIQUE,
+      white_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      black_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      fen TEXT NOT NULL,
+      pgn TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      result TEXT,
+      winner_user_id UUID REFERENCES users(id),
+      last_move_from TEXT,
+      last_move_to TEXT,
+      last_move_san TEXT,
+      last_move_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (week_start, round, white_user_id, black_user_id)
+    )
+  `);
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_chess_matches_white_status_idx ON community_chess_matches(white_user_id, status)");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_chess_matches_black_status_idx ON community_chess_matches(black_user_id, status)");
+    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS community_chess_matches_week_round_idx ON community_chess_matches(week_start, round)");
 };
 export const ensureDatabaseSchema = async () => {
     await prisma.$executeRaw `ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name TEXT`;
