@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
+import { useAuthStore } from "@/store/authStore";
 
 type ActivePage = "home" | "mission" | "contact";
 
@@ -19,6 +20,10 @@ const navItems: { label: string; href: "/" | "/mission" | "/contact"; active: Ac
 ];
 
 export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
+  const displayName = useAuthStore((state) => state.user?.displayName);
+  const loginLabel = displayName ? `Ready to study, ${firstName(displayName)}` : "Log in";
+  const signupLabel = isCompact ? "Sign up" : "Create account";
+
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
@@ -36,12 +41,12 @@ export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/login")} style={styles.loginButton}>
-            <MaterialCommunityIcons name="login" color={palette.text} size={17} />
-            {!isCompact ? <Text style={styles.loginText}>Log in</Text> : null}
+            <MaterialCommunityIcons name={displayName ? "rocket-launch" : "login"} color={palette.text} size={17} />
+            {!isCompact ? <Text style={styles.loginText}>{loginLabel}</Text> : null}
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.startButton}>
             <MaterialCommunityIcons name="account-plus" color="#06111F" size={17} />
-            <Text style={styles.startText}>Start</Text>
+            <Text style={styles.startText}>{signupLabel}</Text>
           </Pressable>
         </View>
       </View>
@@ -49,6 +54,10 @@ export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
       {isCompact ? <Nav active={active} compact /> : null}
     </View>
   );
+}
+
+function firstName(displayName: string) {
+  return displayName.trim().split(/\s+/)[0] || "student";
 }
 
 function Nav({ active, compact = false }: { active: ActivePage; compact?: boolean }) {

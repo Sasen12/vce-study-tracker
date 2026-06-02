@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 import { palette } from "@/constants/theme";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
+import { useAuthStore } from "@/store/authStore";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 type FeatureVisual = "deadlines" | "practice" | "coach" | "progress";
@@ -130,6 +131,8 @@ export function ProductLandingPage() {
   const isWide = width >= 980;
   const isCompact = width < 720;
   const scan = useRef(new Animated.Value(0)).current;
+  const displayName = useAuthStore((state) => state.user?.displayName);
+  const loginLabel = displayName ? `Ready to study, ${firstName(displayName)}` : "Log in";
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -184,8 +187,13 @@ export function ProductLandingPage() {
                 another blank planner.
               </Text>
               <View style={styles.ctaRow}>
-                <CtaButton label="Start studying" icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/register")} />
-                <CtaButton label="Log in" icon="login" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+                <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+                <CtaButton
+                  label={loginLabel}
+                  icon={displayName ? "rocket-launch" : "login"}
+                  variant="secondary"
+                  onPress={() => router.push("/(auth)/login")}
+                />
               </View>
               <View style={styles.signalRow}>
                 <Signal label="Next SAC" value="5 days" accent={palette.warning} />
@@ -245,11 +253,15 @@ export function ProductLandingPage() {
             ))}
           </View>
 
-          <FinalCta isCompact={isCompact} />
+          <FinalCta isCompact={isCompact} displayName={displayName} />
         </View>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function firstName(displayName: string) {
+  return displayName.trim().split(/\s+/)[0] || "student";
 }
 
 function CtaButton({
@@ -566,7 +578,9 @@ function OutcomeCard({
   );
 }
 
-function FinalCta({ isCompact }: { isCompact: boolean }) {
+function FinalCta({ isCompact, displayName }: { isCompact: boolean; displayName?: string }) {
+  const loginLabel = displayName ? `Ready to study, ${firstName(displayName)}` : "Log in";
+
   return (
     <LinearGradient colors={["rgba(124,110,255,0.22)", "rgba(56,189,248,0.13)"]} style={styles.finalCta}>
       <View style={styles.finalInner}>
@@ -578,8 +592,13 @@ function FinalCta({ isCompact }: { isCompact: boolean }) {
           Build the command centre now. Track the dates, run the drills, protect the streak, and walk in with a plan.
         </Text>
         <View style={styles.ctaRow}>
-          <CtaButton label="Start studying" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
-          <CtaButton label="Log in" icon="login-variant" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+          <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+          <CtaButton
+            label={loginLabel}
+            icon={displayName ? "rocket-launch" : "login-variant"}
+            variant="secondary"
+            onPress={() => router.push("/(auth)/login")}
+          />
         </View>
       </View>
     </LinearGradient>
