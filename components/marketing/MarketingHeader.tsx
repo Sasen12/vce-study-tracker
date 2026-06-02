@@ -42,12 +42,18 @@ export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/login")} style={styles.loginButton}>
             <MaterialCommunityIcons name={displayName ? "rocket-launch" : "login"} color={palette.text} size={17} />
-            {!isCompact ? <Text style={styles.loginText}>{loginLabel}</Text> : null}
+            {!isCompact ? (
+              <Text style={styles.loginText} numberOfLines={1}>
+                {loginLabel}
+              </Text>
+            ) : null}
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.startButton}>
-            <MaterialCommunityIcons name="account-plus" color="#06111F" size={17} />
-            <Text style={styles.startText}>{signupLabel}</Text>
-          </Pressable>
+          {!displayName ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push("/(auth)/register")} style={styles.startButton}>
+              <MaterialCommunityIcons name="account-plus" color="#06111F" size={17} />
+              <Text style={styles.startText}>{signupLabel}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -158,6 +164,7 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     minHeight: 42,
+    maxWidth: 260,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",

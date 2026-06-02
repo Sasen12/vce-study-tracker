@@ -187,13 +187,14 @@ export function ProductLandingPage() {
                 another blank planner.
               </Text>
               <View style={styles.ctaRow}>
-                <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
-                <CtaButton
-                  label={loginLabel}
-                  icon={displayName ? "rocket-launch" : "login"}
-                  variant="secondary"
-                  onPress={() => router.push("/(auth)/login")}
-                />
+                {displayName ? (
+                  <CtaButton label={loginLabel} icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/login")} />
+                ) : (
+                  <>
+                    <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+                    <CtaButton label="Log in" icon="login" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+                  </>
+                )}
               </View>
               <View style={styles.signalRow}>
                 <Signal label="Next SAC" value="5 days" accent={palette.warning} />
@@ -592,13 +593,14 @@ function FinalCta({ isCompact, displayName }: { isCompact: boolean; displayName?
           Build the command centre now. Track the dates, run the drills, protect the streak, and walk in with a plan.
         </Text>
         <View style={styles.ctaRow}>
-          <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
-          <CtaButton
-            label={loginLabel}
-            icon={displayName ? "rocket-launch" : "login-variant"}
-            variant="secondary"
-            onPress={() => router.push("/(auth)/login")}
-          />
+          {displayName ? (
+            <CtaButton label={loginLabel} icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/login")} />
+          ) : (
+            <>
+              <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+              <CtaButton label="Log in" icon="login-variant" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+            </>
+          )}
         </View>
       </View>
     </LinearGradient>

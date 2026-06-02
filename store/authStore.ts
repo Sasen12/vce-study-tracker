@@ -16,6 +16,8 @@ type AuthState = {
   error: string | null;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<string>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -65,6 +67,29 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: data.user, loading: false, error: null });
     } catch (error) {
       set({ loading: false, error: error instanceof Error ? error.message : "Login failed" });
+      throw error;
+    }
+  },
+  requestPasswordReset: async (email) => {
+    const data = await apiFetch<{ ok: boolean; message: string }>("/auth/password-reset/request", {
+      method: "POST",
+      skipAuth: true,
+      body: { email }
+    });
+    return data.message;
+  },
+  resetPassword: async (token, password) => {
+    set({ loading: true, error: null });
+    try {
+      const data = await apiFetch<AuthResponse>("/auth/password-reset/confirm", {
+        method: "POST",
+        skipAuth: true,
+        body: { token, password }
+      });
+      await setAuthTokens(data.accessToken, data.refreshToken);
+      set({ user: data.user, loading: false, error: null });
+    } catch (error) {
+      set({ loading: false, error: error instanceof Error ? error.message : "Password reset failed" });
       throw error;
     }
   },

@@ -1,5 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
+import jwt, { type JwtPayload } from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../db/prismaClient.js";
 import {
@@ -10,6 +12,7 @@ import {
   type AuthenticatedRequest
 } from "../middleware/authMiddleware.js";
 import { ensureGamification } from "../services/gamificationService.js";
+import { defaultFromEmail, escapeHtml, smtpTransport } from "../services/contactEmailService.js";
 import { asyncHandler, HttpError } from "../utils/http.js";
 import { inferSchoolNameFromEmail } from "../utils/schoolEmail.js";
 
@@ -42,6 +45,15 @@ const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+const passwordResetRequestSchema = z.object({
+  email: z.string().email()
+});
+
+const passwordResetConfirmSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8)
+});
+
 const preferenceSchema = z.object({
   weeklyDigestOptIn: z.boolean().optional()
 });
@@ -70,6 +82,88 @@ const publicUser = (user: {
 
 const isUniqueConstraintError = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+
+type PasswordResetPayload = JwtPayload & {
+  purpose?: string;
+  email?: string;
+  passwordFingerprint?: string;
+};
+
+const passwordResetSecret = () => process.env.PASSWORD_RESET_SECRET ?? process.env.JWT_SECRET ?? "dev_password_reset_secret";
+
+const publicSiteUrl = () => (process.env.PUBLIC_SITE_URL ?? process.env.APP_URL ?? "https://www.vceforge.space").replace(/\/$/, "");
+
+const passwordFingerprint = (passwordHash: string) => crypto.createHash("sha256").update(passwordHash).digest("hex");
+
+const signPasswordResetToken = (user: { id: string; email: string; passwordHash: string }) =>
+  jwt.sign(
+    {
+      purpose: "password-reset",
+      email: user.email,
+      passwordFingerprint: passwordFingerprint(user.passwordHash)
+    },
+    passwordResetSecret(),
+    {
+      subject: user.id,
+      expiresIn: "30m"
+    }
+  );
+
+const verifyPasswordResetToken = (token: string) => {
+  try {
+    const payload = jwt.verify(token, passwordResetSecret()) as PasswordResetPayload;
+    if (payload.purpose !== "password-reset" || !payload.sub || !payload.email || !payload.passwordFingerprint) {
+      throw new HttpError(400, "Reset link is invalid or expired.");
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, "Reset link is invalid or expired.");
+  }
+};
+
+const sendPasswordResetEmail = async (user: { email: string; displayName: string }, token: string) => {
+  const transport = await smtpTransport();
+  const resetUrl = `${publicSiteUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+  if (!transport) {
+    console.warn(`Password reset requested for ${user.email}, but SMTP is not configured. Reset URL: ${resetUrl}`);
+    return false;
+  }
+
+  const from = defaultFromEmail(process.env.CONTACT_RECIPIENT_EMAIL?.trim() || "techsavvy356@gmail.com");
+  const text = [
+    `Hi ${user.displayName},`,
+    "",
+    "Use this link to reset your VCE Forge password:",
+    resetUrl,
+    "",
+    "This link expires in 30 minutes. If you did not ask for a reset, you can ignore this email."
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
+      <h2>Reset your VCE Forge password</h2>
+      <p>Hi ${escapeHtml(user.displayName)},</p>
+      <p>Use this button to choose a new password. The link expires in 30 minutes.</p>
+      <p>
+        <a href="${escapeHtml(resetUrl)}" style="display:inline-block;background:#38BDF8;color:#06111F;text-decoration:none;font-weight:700;padding:12px 16px;border-radius:8px;">
+          Reset password
+        </a>
+      </p>
+      <p>If the button does not work, open this link:</p>
+      <p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>
+      <p>If you did not ask for a reset, you can ignore this email.</p>
+    </div>
+  `;
+
+  await transport.sendMail({
+    to: user.email,
+    from,
+    subject: "Reset your VCE Forge password",
+    text,
+    html
+  });
+  return true;
+};
 
 authRouter.post(
   "/register",
@@ -142,6 +236,60 @@ authRouter.post(
       user: publicUser(user),
       accessToken: signAccessToken(user),
       refreshToken: signRefreshToken(user)
+    });
+  })
+);
+
+authRouter.post(
+  "/password-reset/request",
+  asyncHandler(async (req, res) => {
+    const payload = passwordResetRequestSchema.parse(req.body);
+    const email = payload.email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (user) {
+      const token = signPasswordResetToken(user);
+      try {
+        await sendPasswordResetEmail(user, token);
+      } catch (error) {
+        console.error(`Password reset email failed for ${email}`, error);
+      }
+    }
+
+    res.json({
+      ok: true,
+      message: "If that email belongs to a VCE Forge account, a reset link is on its way."
+    });
+  })
+);
+
+authRouter.post(
+  "/password-reset/confirm",
+  asyncHandler(async (req, res) => {
+    const payload = passwordResetConfirmSchema.parse(req.body);
+    const decoded = verifyPasswordResetToken(payload.token);
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.sub }
+    });
+
+    if (!user || user.email !== decoded.email || passwordFingerprint(user.passwordHash) !== decoded.passwordFingerprint) {
+      throw new HttpError(400, "Reset link is invalid or expired.");
+    }
+
+    const passwordHash = await bcrypt.hash(payload.password, 12);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash }
+    });
+
+    await ensureGamification(updated.id);
+
+    res.json({
+      user: publicUser(updated),
+      accessToken: signAccessToken(updated),
+      refreshToken: signRefreshToken(updated)
     });
   })
 );
