@@ -313,6 +313,7 @@ export type CommunityChessTournament = {
     result?: string | null;
     resultCopy: string;
     canOpen: boolean;
+    canTiebreak: boolean;
     viewerColor?: "white" | "black" | null;
     white?: {
       displayName: string;
@@ -349,6 +350,7 @@ export type CommunityChessMatchState = {
   viewerColor: "white" | "black";
   turn: "white" | "black";
   canMove: boolean;
+  canTiebreak: boolean;
   signupOpen?: boolean;
   white: {
     displayName: string;

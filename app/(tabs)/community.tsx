@@ -1940,6 +1940,26 @@ export default function CommunityScreen() {
     router.push({ pathname: "/chess-match", params: { code: matchCode } });
   };
 
+  const startChessTiebreak = async (matchCode?: string | null) => {
+    if (!matchCode) {
+      setError("This match does not have a match code.");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.startChessTournamentTiebreak(matchCode);
+      const data = await studyApi.chessTournament();
+      setChessTournament(data.chessTournament);
+      setNotice("Tiebreak started. Open the match board to play for a winner.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not start the tiebreak.");
+    } finally {
+      setSending(false);
+    }
+  };
+
   const dismissRoomIntro = async () => {
     setRoomIntroOpen(false);
     await AsyncStorage.setItem(SUBJECT_ROOM_INTRO_KEY, "seen");
@@ -2431,6 +2451,11 @@ export default function CommunityScreen() {
                       {match.canOpen ? (
                         <Button mode="outlined" compact icon="chess-board" onPress={() => openChessMatch(match.matchCode)}>
                           Open
+                        </Button>
+                      ) : null}
+                      {match.canTiebreak ? (
+                        <Button mode="contained-tonal" compact icon="chess-clock" loading={sending} onPress={() => startChessTiebreak(match.matchCode)}>
+                          Tiebreak
                         </Button>
                       ) : null}
                     </View>

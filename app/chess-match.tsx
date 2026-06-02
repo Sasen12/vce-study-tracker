@@ -117,6 +117,21 @@ export default function ChessMatchScreen() {
     }
   };
 
+  const startTiebreak = async () => {
+    if (!match || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const data = await studyApi.startChessTournamentTiebreak(match.matchCode);
+      setMatch(data.match);
+      setSelected(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not start the tiebreak.");
+    } finally {
+      setSending(false);
+    }
+  };
+
   const tapSquare = (square: Square) => {
     if (!match?.canMove || sending) return;
     const piece = game.get(square);
@@ -234,6 +249,11 @@ export default function ChessMatchScreen() {
           <Button mode="outlined" icon="arrow-left" onPress={() => router.push("/(tabs)/community")}>
             Community
           </Button>
+          {match?.canTiebreak ? (
+            <Button mode="contained-tonal" icon="chess-clock" loading={sending} onPress={startTiebreak}>
+              Start tiebreak
+            </Button>
+          ) : null}
           <Button mode="contained" icon="refresh" loading={loading || sending} onPress={() => loadMatch()}>
             Refresh
           </Button>

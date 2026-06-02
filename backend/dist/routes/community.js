@@ -61,7 +61,7 @@ const chessMatchCodeSchema = z
     .trim()
     .min(8)
     .max(40)
-    .regex(/^FORGE-\d{4}-R[12]-M\d+$/i)
+    .regex(/^FORGE-\d{4}-R\d+-M\d+$/i)
     .transform((value) => value.toUpperCase());
 const chessMoveSchema = z.object({
     from: z.string().trim().regex(/^[a-h][1-8]$/),
@@ -1430,6 +1430,7 @@ const buildChessKnockoutBracket = ({ entries, matchRecords, rounds, signupOpen, 
                     result: null,
                     resultCopy: "Bye - advances",
                     canOpen: false,
+                    canTiebreak: false,
                     viewerColor: whiteEntry.userId === viewerUserId ? "white" : null,
                     white: { displayName: whiteEntry.user.displayName },
                     black: null
@@ -1462,6 +1463,7 @@ const buildChessKnockoutBracket = ({ entries, matchRecords, rounds, signupOpen, 
                 result: record?.result ?? null,
                 resultCopy: chessTournamentResultCopy(record?.status, record?.result, record?.winnerUser?.displayName ?? null),
                 canOpen: !signupOpen && (viewerIsWhite || viewerIsBlack),
+                canTiebreak: !signupOpen && record?.status === "draw" && (viewerIsWhite || viewerIsBlack),
                 viewerColor: viewerIsWhite ? "white" : viewerIsBlack ? "black" : null,
                 white: { displayName: whiteEntry.user.displayName },
                 black: { displayName: blackEntry.user.displayName }
@@ -1488,6 +1490,7 @@ const buildChessKnockoutBracket = ({ entries, matchRecords, rounds, signupOpen, 
                     result: null,
                     resultCopy: "Waiting for winners",
                     canOpen: false,
+                    canTiebreak: false,
                     viewerColor: null,
                     white: null,
                     black: null
@@ -1510,6 +1513,7 @@ const serialiseChessMatch = (match, viewerUserId, pairing) => {
     const turn = game.turn() === "w" ? "white" : "black";
     const opponent = viewerColor === "white" ? match.blackUser : match.whiteUser;
     const canMove = match.status === "active" && !pairing.signupOpen && turn === viewerColor;
+    const canTiebreak = match.status === "draw" && !pairing.signupOpen;
     return {
         id: match.id,
         matchCode: match.matchCode,
@@ -1525,6 +1529,7 @@ const serialiseChessMatch = (match, viewerUserId, pairing) => {
         viewerColor,
         turn,
         canMove,
+        canTiebreak,
         signupOpen: pairing.signupOpen,
         white: { displayName: match.whiteUser.displayName },
         black: { displayName: match.blackUser.displayName },
@@ -2102,6 +2107,34 @@ communityRouter.post("/chess-tournament/matches/:matchCode/move", asyncHandler(a
             lastMoveTo: move.to,
             lastMoveSan: move.san,
             lastMoveAt: now
+        },
+        include: chessMatchInclude
+    });
+    res.json({ match: serialiseChessMatch(updated, authReq.user.id, pairing) });
+}));
+communityRouter.post("/chess-tournament/matches/:matchCode/tiebreak", asyncHandler(async (req, res) => {
+    const authReq = req;
+    const matchCode = chessMatchCodeSchema.parse(req.params.matchCode);
+    const pairing = await resolveChessPairing(matchCode, authReq.user.id);
+    if (pairing.signupOpen) {
+        throw new HttpError(403, "Pairings lock Tuesday 8pm. Tiebreaks open after signups close.");
+    }
+    const match = await ensureChessMatch(pairing);
+    if (match.status !== "draw") {
+        throw new HttpError(400, "A tiebreak can only start after a drawn chess match.");
+    }
+    const updated = await prisma.communityChessMatch.update({
+        where: { id: match.id },
+        data: {
+            fen: new Chess().fen(),
+            pgn: "",
+            status: "active",
+            result: null,
+            winnerUserId: null,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            lastMoveSan: null,
+            lastMoveAt: null
         },
         include: chessMatchInclude
     });
