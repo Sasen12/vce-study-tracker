@@ -115,6 +115,48 @@ const routeSeo = [
         "Help deciding whether VCE Forge fits your study workflow"
       ]
     }
+  },
+  {
+    path: "register",
+    filePath: join("dist", "register", "index.html"),
+    title: "Create a VCE Forge Account | Start Tracking SACs and Study",
+    description:
+      "Create a free VCE Forge account to add VCE subjects, track SACs and exams, plan study sessions, generate practice questions and build study momentum.",
+    changefreq: "monthly",
+    priority: "0.8",
+    noscript: {
+      title: "Create a VCE Forge account",
+      lead: "Start tracking your VCE subjects, SACs, study sessions and revision plan.",
+      body:
+        "VCE Forge helps Year 11 and Year 12 students set up their subject stack, track deadlines, choose what to study next and practise weak topics.",
+      points: [
+        "Add Unit 1/2 and Unit 3/4 VCE subjects",
+        "Track SACs, exams and study sessions",
+        "Generate VCE-style practice questions",
+        "Use study coaching, notes, XP and streaks"
+      ]
+    }
+  },
+  {
+    path: "login",
+    filePath: join("dist", "login", "index.html"),
+    title: "Log In to VCE Forge | VCE Study Tracker",
+    description:
+      "Log in to VCE Forge to continue tracking SACs, exams, study sessions, VCE practice questions, notes, goals and progress.",
+    changefreq: "monthly",
+    priority: "0.4",
+    noscript: {
+      title: "Log in to VCE Forge",
+      lead: "Continue your VCE study plan from your account.",
+      body:
+        "Log in to access your VCE subjects, SAC dates, study sessions, practice questions, notes, goals and progress.",
+      points: [
+        "Return to your study dashboard",
+        "Review upcoming SACs and exams",
+        "Continue practice questions and study notes",
+        "Track XP, streaks and progress"
+      ]
+    }
   }
 ];
 
