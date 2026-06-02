@@ -2170,6 +2170,161 @@ export default function CommunityScreen() {
       loadAnalytics();
     }
   };
+  const chessKnockoutCard = (
+    <AppCard style={styles.chessArenaCard}>
+      <View style={styles.roomHubHeader}>
+        <View style={styles.chessIcon}>
+          <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
+        </View>
+        <View style={styles.flexText}>
+          <Text style={styles.cardTitle}>Chess knockout bracket</Text>
+          <Text style={styles.muted}>
+            Winners advance. Losers are knocked out. New rounds appear after the previous winners are decided.
+          </Text>
+        </View>
+        <View style={styles.chessPillRow}>
+          <View style={styles.minutePill}>
+            <Text style={styles.minuteText}>{chessTournament?.joinedCount ?? 0} signed</Text>
+          </View>
+          <View style={styles.minutePill}>
+            <Text style={styles.minuteText}>{chessPairingCount} paired</Text>
+          </View>
+        </View>
+      </View>
+      <Text style={styles.muted}>
+        {chessTournament?.statusCopy ??
+          "Sign up before Tuesday night. Rounds run Wednesday and Sunday at 7:30pm."}
+      </Text>
+      <View style={styles.chessFactGrid}>
+        <View style={styles.chessFactTile}>
+          <Text style={styles.mutedSmall}>Signups</Text>
+          <Text style={styles.userThemeText}>{chessSignupStatus}</Text>
+        </View>
+        <View style={styles.chessFactTile}>
+          <Text style={styles.mutedSmall}>Pairings</Text>
+          <Text style={styles.userThemeText}>{chessPairingCount} match{chessPairingCount === 1 ? "" : "es"}</Text>
+        </View>
+        <View style={styles.chessFactTile}>
+          <Text style={styles.mutedSmall}>Results</Text>
+          <Text style={styles.userThemeText}>Winners advance</Text>
+        </View>
+      </View>
+      <View style={styles.chessRoundGrid}>
+        {chessRounds.map((round) => (
+          <View key={round.id} style={styles.chessRoundTile}>
+            <Text style={styles.userThemeText}>{round.label}</Text>
+            <Text style={styles.mutedSmall}>
+              {formatHour(round.startsAt)} - {round.status}
+            </Text>
+          </View>
+        ))}
+      </View>
+      {chessTournament?.joined ? (
+        <View style={styles.chessMatchGrid}>
+          {chessMatches.map((match) => (
+            <View key={match.id} style={styles.chessMatchTile}>
+              <Text style={styles.userThemeText}>{match.label}</Text>
+              <Text style={styles.metricValueSmall}>
+                {match.status === "paired"
+                  ? `vs ${match.opponent?.displayName ?? "opponent"}`
+                  : match.status === "bye"
+                    ? "Bye round"
+                    : match.status === "champion"
+                      ? "Champion"
+                      : match.status === "eliminated"
+                        ? "Knocked out"
+                        : "Waiting for winner"}
+              </Text>
+              <Text style={styles.mutedSmall}>
+                {formatHour(match.startsAt)}
+                {match.color !== "either" ? ` - you play ${match.color}` : ""}
+                {match.matchCode ? ` - ${match.matchCode}` : ""}
+              </Text>
+              {match.status === "paired" && match.matchCode ? (
+                <Button
+                  mode="contained-tonal"
+                  compact
+                  icon="chess-board"
+                  disabled={chessSignupOpen}
+                  onPress={() => openChessMatch(match.matchCode)}
+                >
+                  Play match
+                </Button>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : primaryChessMatch ? null : (
+        <Text style={styles.mutedSmall}>
+          No minute gate. The only rule is signing up before matchups are set.
+        </Text>
+      )}
+      {chessStandings.length ? (
+        <View style={styles.chessTournamentSection}>
+          <Text style={styles.userThemeText}>Tournament standings</Text>
+          <View style={styles.chessStandingList}>
+            {chessStandings.map((standing, index) => (
+              <View key={`standing-${standing.displayName}-${index}`} style={[styles.chessStandingRow, standing.isCurrentUser && styles.chessStandingRowActive]}>
+                <Text style={styles.chessStandingRank}>#{index + 1}</Text>
+                <View style={styles.flexText}>
+                  <Text style={styles.userThemeText} numberOfLines={1}>
+                    {standing.displayName}
+                  </Text>
+                  <Text style={styles.mutedSmall}>
+                    {standing.status} - {standing.wins}W {standing.draws}D {standing.losses}L - {standing.matchesRemaining} to play
+                  </Text>
+                </View>
+                <Text style={styles.metricValueSmall}>{formatChessPoints(standing.points)} win pts</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+      {chessTournamentMatches.length ? (
+        <View style={styles.chessTournamentSection}>
+          <Text style={styles.userThemeText}>Match board</Text>
+          <View style={styles.chessMatchGrid}>
+            {chessTournamentMatches.map((match) => (
+              <View key={`board-${match.id}`} style={styles.chessMatchTile}>
+                <Text style={styles.userThemeText}>{match.label}</Text>
+                <Text style={styles.metricValueSmall} numberOfLines={1}>
+                  {match.status === "waiting"
+                    ? "Waiting for winners"
+                    : match.status === "bye"
+                      ? `${match.white?.displayName ?? "Player"} advances`
+                      : `${match.white?.displayName ?? "TBD"} vs ${match.black?.displayName ?? "TBD"}`}
+                </Text>
+                <Text style={styles.mutedSmall}>
+                  {formatHour(match.startsAt)} - {match.resultCopy}
+                  {match.matchCode ? ` - ${match.matchCode}` : ""}
+                </Text>
+                {match.canOpen ? (
+                  <Button mode="outlined" compact icon="chess-board" onPress={() => openChessMatch(match.matchCode)}>
+                    Open
+                  </Button>
+                ) : null}
+                {match.canTiebreak ? (
+                  <Button mode="contained-tonal" compact icon="chess-clock" loading={sending} onPress={() => startChessTiebreak(match.matchCode)}>
+                    Tiebreak
+                  </Button>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+      <Button
+        mode="outlined"
+        compact
+        icon="chess-king"
+        loading={sending}
+        disabled={!chessTournament?.joined && !chessSignupOpen}
+        onPress={joinChessArena}
+      >
+        {chessButtonLabel}
+      </Button>
+    </AppCard>
+  );
 
   if (loading) {
     return (
@@ -2243,6 +2398,7 @@ export default function CommunityScreen() {
       {mode === "squads" ? (
         <>
           <CommunityGuideCard hidden={communityGuideHidden} onDismiss={dismissCommunityGuide} />
+          {chessKnockoutCard}
           <CommunitySnapshotCard pulse={pulse} />
           <MissionCard mission={mission} onAction={runMissionAction} />
           <CommunityLoopCard />
@@ -2321,159 +2477,7 @@ export default function CommunityScreen() {
             </View>
           </AppCard>
 
-          <AppCard style={styles.chessArenaCard}>
-            <View style={styles.roomHubHeader}>
-              <View style={styles.chessIcon}>
-                <MaterialCommunityIcons name="chess-knight" color={palette.warning} size={22} />
-              </View>
-              <View style={styles.flexText}>
-                <Text style={styles.cardTitle}>Chess knockout bracket</Text>
-                <Text style={styles.muted}>
-                  Winners advance. Losers are knocked out. New rounds appear after the previous winners are decided.
-                </Text>
-              </View>
-              <View style={styles.chessPillRow}>
-                <View style={styles.minutePill}>
-                  <Text style={styles.minuteText}>{chessTournament?.joinedCount ?? 0} signed</Text>
-                </View>
-                <View style={styles.minutePill}>
-                  <Text style={styles.minuteText}>{chessPairingCount} paired</Text>
-                </View>
-              </View>
-            </View>
-            <Text style={styles.muted}>
-              {chessTournament?.statusCopy ??
-                "Sign up before Tuesday night. Rounds run Wednesday and Sunday at 7:30pm."}
-            </Text>
-            <View style={styles.chessFactGrid}>
-              <View style={styles.chessFactTile}>
-                <Text style={styles.mutedSmall}>Signups</Text>
-                <Text style={styles.userThemeText}>{chessSignupStatus}</Text>
-              </View>
-              <View style={styles.chessFactTile}>
-                <Text style={styles.mutedSmall}>Pairings</Text>
-                <Text style={styles.userThemeText}>{chessPairingCount} match{chessPairingCount === 1 ? "" : "es"}</Text>
-              </View>
-              <View style={styles.chessFactTile}>
-                <Text style={styles.mutedSmall}>Results</Text>
-                <Text style={styles.userThemeText}>Winners advance</Text>
-              </View>
-            </View>
-            <View style={styles.chessRoundGrid}>
-              {chessRounds.map((round) => (
-                <View key={round.id} style={styles.chessRoundTile}>
-                  <Text style={styles.userThemeText}>{round.label}</Text>
-                  <Text style={styles.mutedSmall}>
-                    {formatHour(round.startsAt)} - {round.status}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            {chessTournament?.joined ? (
-              <View style={styles.chessMatchGrid}>
-                {chessMatches.map((match) => (
-                  <View key={match.id} style={styles.chessMatchTile}>
-                    <Text style={styles.userThemeText}>{match.label}</Text>
-                    <Text style={styles.metricValueSmall}>
-                      {match.status === "paired"
-                        ? `vs ${match.opponent?.displayName ?? "opponent"}`
-                        : match.status === "bye"
-                          ? "Bye round"
-                          : match.status === "champion"
-                            ? "Champion"
-                            : match.status === "eliminated"
-                              ? "Knocked out"
-                              : "Waiting for winner"}
-                    </Text>
-                    <Text style={styles.mutedSmall}>
-                      {formatHour(match.startsAt)}
-                      {match.color !== "either" ? ` - you play ${match.color}` : ""}
-                      {match.matchCode ? ` - ${match.matchCode}` : ""}
-                    </Text>
-                    {match.status === "paired" && match.matchCode ? (
-                      <Button
-                        mode="contained-tonal"
-                        compact
-                        icon="chess-board"
-                        disabled={chessSignupOpen}
-                        onPress={() => openChessMatch(match.matchCode)}
-                      >
-                        Play match
-                      </Button>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            ) : primaryChessMatch ? null : (
-              <Text style={styles.mutedSmall}>
-                No minute gate. The only rule is signing up before matchups are set.
-              </Text>
-            )}
-            {chessStandings.length ? (
-              <View style={styles.chessTournamentSection}>
-                <Text style={styles.userThemeText}>Tournament standings</Text>
-                <View style={styles.chessStandingList}>
-                  {chessStandings.map((standing, index) => (
-                    <View key={`standing-${standing.displayName}-${index}`} style={[styles.chessStandingRow, standing.isCurrentUser && styles.chessStandingRowActive]}>
-                      <Text style={styles.chessStandingRank}>#{index + 1}</Text>
-                      <View style={styles.flexText}>
-                        <Text style={styles.userThemeText} numberOfLines={1}>
-                          {standing.displayName}
-                        </Text>
-                        <Text style={styles.mutedSmall}>
-                          {standing.status} - {standing.wins}W {standing.draws}D {standing.losses}L - {standing.matchesRemaining} to play
-                        </Text>
-                      </View>
-                      <Text style={styles.metricValueSmall}>{formatChessPoints(standing.points)} win pts</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            {chessTournamentMatches.length ? (
-              <View style={styles.chessTournamentSection}>
-                <Text style={styles.userThemeText}>Match board</Text>
-                <View style={styles.chessMatchGrid}>
-                  {chessTournamentMatches.map((match) => (
-                    <View key={`board-${match.id}`} style={styles.chessMatchTile}>
-                      <Text style={styles.userThemeText}>{match.label}</Text>
-                      <Text style={styles.metricValueSmall} numberOfLines={1}>
-                        {match.status === "waiting"
-                          ? "Waiting for winners"
-                          : match.status === "bye"
-                            ? `${match.white?.displayName ?? "Player"} advances`
-                            : `${match.white?.displayName ?? "TBD"} vs ${match.black?.displayName ?? "TBD"}`}
-                      </Text>
-                      <Text style={styles.mutedSmall}>
-                        {formatHour(match.startsAt)} - {match.resultCopy}
-                        {match.matchCode ? ` - ${match.matchCode}` : ""}
-                      </Text>
-                      {match.canOpen ? (
-                        <Button mode="outlined" compact icon="chess-board" onPress={() => openChessMatch(match.matchCode)}>
-                          Open
-                        </Button>
-                      ) : null}
-                      {match.canTiebreak ? (
-                        <Button mode="contained-tonal" compact icon="chess-clock" loading={sending} onPress={() => startChessTiebreak(match.matchCode)}>
-                          Tiebreak
-                        </Button>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            <Button
-              mode="outlined"
-              compact
-              icon="chess-king"
-              loading={sending}
-              disabled={!chessTournament?.joined && !chessSignupOpen}
-              onPress={joinChessArena}
-            >
-              {chessButtonLabel}
-            </Button>
-          </AppCard>
+          {chessKnockoutCard}
 
           <AppCard style={styles.roomHubCard}>
             <View style={styles.roomHubHeader}>
