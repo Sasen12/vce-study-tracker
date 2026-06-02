@@ -124,6 +124,13 @@ const WEEKLY_MISSION_BADGE_ID = "weekly_lock_in";
 const WEEKLY_MISSION_XP = 80;
 const CHESS_SIGNUP_CLOSE_DAY = 2;
 const CHESS_SIGNUP_CLOSE_HOUR = 20;
+const CHESS_CADENCE_WEEKS = 3;
+const configuredChessCommunityUnlockMinutes = Number.parseInt(process.env.CHESS_COMMUNITY_UNLOCK_MINUTES ?? "600", 10);
+const CHESS_COMMUNITY_UNLOCK_MINUTES = Number.isFinite(configuredChessCommunityUnlockMinutes)
+  ? configuredChessCommunityUnlockMinutes
+  : 600;
+const CHESS_CADENCE_ANCHOR_WEEK_START = new Date(2026, 5, 1);
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const USAGE_EVENT_THROTTLE_MS = 60_000;
 const SUBJECT_ROOM_PREFIX = "[[subject-room:";
 const SUBJECT_ROOM_MESSAGE_PATTERN = /^\[\[subject-room:([a-z0-9-]+)\]\]\s*([\s\S]*)$/;
@@ -438,6 +445,23 @@ const startOfWeek = (date: Date) => {
   const diff = day === 0 ? -6 : 1 - day;
   start.setDate(start.getDate() + diff);
   return start;
+};
+
+const addWeeks = (date: Date, weeks: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + weeks * 7);
+  return next;
+};
+
+const weeksSinceChessAnchor = (weekStart: Date) =>
+  Math.max(0, Math.floor((startOfWeek(weekStart).getTime() - startOfWeek(CHESS_CADENCE_ANCHOR_WEEK_START).getTime()) / WEEK_MS));
+
+const isChessCadenceWeek = (weekStart: Date) => weeksSinceChessAnchor(weekStart) % CHESS_CADENCE_WEEKS === 0;
+
+const nextChessCadenceWeekStart = (weekStart: Date) => {
+  const weeksSinceAnchor = weeksSinceChessAnchor(weekStart);
+  const weeksUntilNext = CHESS_CADENCE_WEEKS - (weeksSinceAnchor % CHESS_CADENCE_WEEKS);
+  return addWeeks(startOfWeek(weekStart), weeksUntilNext === CHESS_CADENCE_WEEKS ? CHESS_CADENCE_WEEKS : weeksUntilNext);
 };
 
 const withRank = <T extends { score: number; displayName?: string }>(entries: T[]) =>
@@ -1607,6 +1631,9 @@ const chessRoundStartsAt = (weekStart: Date, roundIndex: number) => {
   return startsAt;
 };
 
+const chessRoundEndsAt = (weekStart: Date, roundIndex: number) =>
+  new Date(chessRoundStartsAt(weekStart, roundIndex).getTime() + 90 * 60 * 1000);
+
 const chessRoundLabel = (roundIndex: number, totalRounds: number) => {
   const roundsFromFinal = totalRounds - roundIndex - 1;
   if (roundsFromFinal === 0) return "Final";
@@ -1619,7 +1646,7 @@ const chessRoundsForWeek = (weekStart: Date, now: Date, entryCount: number) => {
   const totalRounds = chessRoundCount(entryCount);
   return Array.from({ length: totalRounds }, (_, roundIndex) => {
     const startsAt = chessRoundStartsAt(weekStart, roundIndex);
-    const endsAt = new Date(startsAt.getTime() + 90 * 60 * 1000);
+    const endsAt = chessRoundEndsAt(weekStart, roundIndex);
     return {
       id: `round-${roundIndex + 1}`,
       label: chessRoundLabel(roundIndex, totalRounds),
@@ -1632,6 +1659,31 @@ const chessRoundsForWeek = (weekStart: Date, now: Date, entryCount: number) => {
 const chessMatchCode = (weekStart: Date, round: number, pairIndex: number) => {
   const weekKey = weekStart.toISOString().slice(5, 10).replace("-", "");
   return `FORGE-${weekKey}-R${round}-M${pairIndex + 1}`;
+};
+
+const chessTournamentAvailabilityForWeek = async (weekStart: Date) => {
+  const nextWeekStart = addWeeks(weekStart, 1);
+  const communityStudy = await prisma.studySession.aggregate({
+    where: {
+      createdAt: {
+        gte: weekStart,
+        lt: nextWeekStart
+      }
+    },
+    _sum: { durationSeconds: true }
+  });
+  const communityMinutes = Math.floor((communityStudy._sum.durationSeconds ?? 0) / 60);
+  const cadenceWeek = isChessCadenceWeek(weekStart);
+  const communityGoalMet = communityMinutes >= CHESS_COMMUNITY_UNLOCK_MINUTES;
+  return {
+    available: cadenceWeek || communityGoalMet,
+    cadenceWeek,
+    communityGoalMet,
+    communityMinutes,
+    communityGoalMinutes: CHESS_COMMUNITY_UNLOCK_MINUTES,
+    nextScheduledWeekStart: nextChessCadenceWeekStart(weekStart),
+    unlockReason: cadenceWeek ? ("cadence" as const) : communityGoalMet ? ("community_goal" as const) : ("locked" as const)
+  };
 };
 
 type ChessTournamentEntryForPairing = {
@@ -1678,7 +1730,8 @@ type CommunityChessMatchRecord = {
   winnerUser: { id: string; displayName: string } | null;
 };
 
-const chessStatusCopy = (status: string, winnerName?: string | null) => {
+const chessStatusCopy = (status: string, winnerName?: string | null, result?: string | null) => {
+  if (result === "no-show") return winnerName ? `${winnerName} won by no-show.` : "Won by no-show.";
   if (status === "white_win") return winnerName ? `${winnerName} won by checkmate.` : "White won by checkmate.";
   if (status === "black_win") return winnerName ? `${winnerName} won by checkmate.` : "Black won by checkmate.";
   if (status === "draw") return "Draw.";
@@ -1688,7 +1741,7 @@ const chessStatusCopy = (status: string, winnerName?: string | null) => {
 const chessTournamentResultCopy = (status?: string | null, result?: string | null, winnerName?: string | null) => {
   if (!status) return "Scheduled";
   if (status === "active") return result ? `In progress - ${result}` : "In progress";
-  return chessStatusCopy(status, winnerName);
+  return chessStatusCopy(status, winnerName, result);
 };
 
 type ChessTournamentMatchSummary = {
@@ -1702,6 +1755,7 @@ type ChessTournamentMatchSummary = {
   resultCopy: string;
   canOpen: boolean;
   canTiebreak: boolean;
+  canClaimNoShow: boolean;
   viewerColor?: "white" | "black" | null;
   white?: { displayName: string } | null;
   black?: { displayName: string } | null;
@@ -1763,6 +1817,7 @@ const buildChessKnockoutBracket = ({
           resultCopy: "Bye - advances",
           canOpen: false,
           canTiebreak: false,
+          canClaimNoShow: false,
           viewerColor: whiteEntry.userId === viewerUserId ? "white" : null,
           white: { displayName: whiteEntry.user.displayName },
           black: null
@@ -1787,6 +1842,12 @@ const buildChessKnockoutBracket = ({
       const status = record?.status ?? "scheduled";
       const viewerIsWhite = whiteEntry.userId === viewerUserId;
       const viewerIsBlack = blackEntry.userId === viewerUserId;
+      const noShowClaimColor =
+        !signupOpen && round.status === "done" && (!record || record.status === "active")
+          ? new Chess(record?.fen ?? new Chess().fen()).turn() === "w"
+            ? "black"
+            : "white"
+          : null;
       tournamentMatches.push({
         id: matchCode,
         round: roundIndex + 1,
@@ -1798,6 +1859,8 @@ const buildChessKnockoutBracket = ({
         resultCopy: chessTournamentResultCopy(record?.status, record?.result, record?.winnerUser?.displayName ?? null),
         canOpen: !signupOpen && (viewerIsWhite || viewerIsBlack),
         canTiebreak: !signupOpen && record?.status === "draw" && (viewerIsWhite || viewerIsBlack),
+        canClaimNoShow:
+          noShowClaimColor === "white" ? viewerIsWhite : noShowClaimColor === "black" ? viewerIsBlack : false,
         viewerColor: viewerIsWhite ? "white" : viewerIsBlack ? "black" : null,
         white: { displayName: whiteEntry.user.displayName },
         black: { displayName: blackEntry.user.displayName }
@@ -1825,6 +1888,7 @@ const buildChessKnockoutBracket = ({
           resultCopy: "Waiting for winners",
           canOpen: false,
           canTiebreak: false,
+          canClaimNoShow: false,
           viewerColor: null,
           white: null,
           black: null
@@ -1855,6 +1919,8 @@ const serialiseChessMatch = (
   const opponent = viewerColor === "white" ? match.blackUser : match.whiteUser;
   const canMove = match.status === "active" && !pairing.signupOpen && turn === viewerColor;
   const canTiebreak = match.status === "draw" && !pairing.signupOpen;
+  const noShowDeadlineAt = chessRoundEndsAt(match.weekStart, match.round - 1);
+  const canClaimNoShow = match.status === "active" && !pairing.signupOpen && new Date() > noShowDeadlineAt && turn !== viewerColor;
 
   return {
     id: match.id,
@@ -1867,11 +1933,13 @@ const serialiseChessMatch = (
     pgn: match.pgn,
     status: match.status as "active" | "white_win" | "black_win" | "draw",
     result: match.result,
-    resultCopy: chessStatusCopy(match.status, match.winnerUser?.displayName ?? null),
+    resultCopy: chessStatusCopy(match.status, match.winnerUser?.displayName ?? null, match.result),
     viewerColor,
     turn,
     canMove,
     canTiebreak,
+    canClaimNoShow,
+    noShowDeadlineAt: noShowDeadlineAt.toISOString(),
     signupOpen: pairing.signupOpen,
     white: { displayName: match.whiteUser.displayName },
     black: { displayName: match.blackUser.displayName },
@@ -1894,8 +1962,7 @@ const resolveChessPairing = async (matchCode: string, viewerUserId: string) => {
   const now = new Date();
   const weekStart = startOfWeek(now);
   const signupClosesAt = chessSignupClosesAt(weekStart);
-  const signupOpen = now <= signupClosesAt;
-  const [entries, matchRecords] = await Promise.all([
+  const [entries, matchRecords, availability] = await Promise.all([
     prisma.communityChessTournamentEntry.findMany({
       where: { weekStart },
       orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
@@ -1904,8 +1971,10 @@ const resolveChessPairing = async (matchCode: string, viewerUserId: string) => {
     prisma.communityChessMatch.findMany({
       where: { weekStart },
       include: chessMatchInclude
-    })
+    }),
+    chessTournamentAvailabilityForWeek(weekStart)
   ]);
+  const signupOpen = availability.available && now <= signupClosesAt;
   const rounds = chessRoundsForWeek(weekStart, now, entries.length);
   const bracket = buildChessKnockoutBracket({ entries, matchRecords, rounds, signupOpen, viewerUserId, weekStart });
 
@@ -1941,9 +2010,8 @@ const buildChessTournament = async (viewerUserId: string) => {
   const now = new Date();
   const weekStart = startOfWeek(now);
   const signupClosesAt = chessSignupClosesAt(weekStart);
-  const signupOpen = now <= signupClosesAt;
 
-  const [study, viewerEntry, entries, matchRecords] = await Promise.all([
+  const [study, viewerEntry, entries, matchRecords, availability] = await Promise.all([
     prisma.studySession.aggregate({
       where: { userId: viewerUserId, createdAt: { gte: weekStart } },
       _sum: { durationSeconds: true }
@@ -1959,8 +2027,10 @@ const buildChessTournament = async (viewerUserId: string) => {
     prisma.communityChessMatch.findMany({
       where: { weekStart },
       include: chessMatchInclude
-    })
+    }),
+    chessTournamentAvailabilityForWeek(weekStart)
   ]);
+  const signupOpen = availability.available && now <= signupClosesAt;
   const viewerMinutes = Math.floor((study._sum.durationSeconds ?? 0) / 60);
   const joined = Boolean(viewerEntry);
   const rounds = chessRoundsForWeek(weekStart, now, entries.length);
@@ -2130,19 +2200,28 @@ const buildChessTournament = async (viewerUserId: string) => {
   const viewerHasOpenMatch = bracket.tournamentMatches.some(
     (match) => match.canOpen && match.matchCode && (match.status === "scheduled" || match.status === "active")
   );
+  const missedGameRule = "Missed games: after the round window, the player waiting on the opponent can claim a no-show win.";
+  const lockedCopy = `Chess knockout is locked this week. It runs every ${CHESS_CADENCE_WEEKS} weeks, or sooner when the community reaches ${availability.communityGoalMinutes} study minutes. Current total: ${availability.communityMinutes}.`;
+  const openCopy =
+    availability.unlockReason === "community_goal"
+      ? `Community unlocked this week's chess knockout by hitting ${availability.communityMinutes}/${availability.communityGoalMinutes} study minutes. ${missedGameRule}`
+      : `Scheduled chess knockout week is live. ${missedGameRule}`;
+  const closedCopy = availability.available
+    ? `Signups are closed for this tournament. ${missedGameRule}`
+    : lockedCopy;
   const statusCopy = joined
     ? signupOpen
-      ? "You are signed up. The knockout bracket locks Tuesday 8pm."
+      ? `You are signed up. The knockout bracket locks Tuesday 8pm. ${missedGameRule}`
       : championUserId === viewerUserId
         ? "You won this week's chess knockout."
         : decisiveLosses.has(viewerUserId)
           ? "You were knocked out. You can still watch the bracket finish."
           : viewerHasOpenMatch
-            ? "Your knockout match is ready."
-            : "You are still alive. Waiting for the next knockout opponent."
+            ? `Your knockout match is ready. ${missedGameRule}`
+            : `You are still alive. Waiting for the next knockout opponent. ${missedGameRule}`
     : signupOpen
-      ? "Sign up before Tuesday 8pm to enter this week's knockout bracket."
-      : "Signups are closed for this week. Next signup opens Monday.";
+      ? `Sign up before Tuesday 8pm to enter this week's knockout bracket. ${openCopy}`
+      : closedCopy;
 
   return {
     weekStart: weekStart.toISOString(),
@@ -2150,7 +2229,14 @@ const buildChessTournament = async (viewerUserId: string) => {
     signupOpen,
     requiredMinutes: 0,
     viewerMinutes,
-    eligible: signupOpen || joined,
+    communityMinutes: availability.communityMinutes,
+    communityGoalMinutes: availability.communityGoalMinutes,
+    communityGoalMet: availability.communityGoalMet,
+    cadenceWeek: availability.cadenceWeek,
+    tournamentAvailable: availability.available,
+    unlockReason: availability.unlockReason,
+    nextScheduledWeekStart: availability.nextScheduledWeekStart.toISOString(),
+    eligible: availability.available || joined,
     joined,
     joinedCount: entries.length,
     pairingCount: bracket.pairings.length,
@@ -2580,6 +2666,47 @@ communityRouter.post(
 );
 
 communityRouter.post(
+  "/chess-tournament/matches/:matchCode/no-show",
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const matchCode = chessMatchCodeSchema.parse(req.params.matchCode);
+    const pairing = await resolveChessPairing(matchCode, authReq.user.id);
+    if (pairing.signupOpen) {
+      throw new HttpError(403, "Pairings lock Tuesday 8pm. No-show claims open after the match window.");
+    }
+
+    const noShowDeadlineAt = chessRoundEndsAt(pairing.weekStart, pairing.round - 1);
+    if (new Date() <= noShowDeadlineAt) {
+      throw new HttpError(400, "No-show claims open after this round's match window closes.");
+    }
+
+    const match = await ensureChessMatch(pairing);
+    if (match.status !== "active") {
+      throw new HttpError(400, "This chess match has already finished.");
+    }
+
+    const game = new Chess(match.fen);
+    const viewerColor = match.whiteUserId === authReq.user.id ? ("white" as const) : ("black" as const);
+    const turn = game.turn() === "w" ? ("white" as const) : ("black" as const);
+    if (turn === viewerColor) {
+      throw new HttpError(403, "It is your turn. Make a move before you can claim a no-show.");
+    }
+
+    const updated = await prisma.communityChessMatch.update({
+      where: { id: match.id },
+      data: {
+        status: viewerColor === "white" ? "white_win" : "black_win",
+        result: "no-show",
+        winnerUserId: authReq.user.id
+      },
+      include: chessMatchInclude
+    });
+
+    res.json({ match: serialiseChessMatch(updated, authReq.user.id, pairing) });
+  })
+);
+
+communityRouter.post(
   "/feedback",
   asyncHandler(async (req, res) => {
     const authReq = req as AuthenticatedRequest;
@@ -2939,6 +3066,13 @@ communityRouter.post(
     const now = new Date();
     const weekStart = startOfWeek(now);
     const signupClosesAt = chessSignupClosesAt(weekStart);
+    const availability = await chessTournamentAvailabilityForWeek(weekStart);
+    if (!availability.available) {
+      throw new HttpError(
+        403,
+        `Chess tournament is locked this week. It runs every ${CHESS_CADENCE_WEEKS} weeks, or when the community reaches ${availability.communityGoalMinutes} study minutes. Current total: ${availability.communityMinutes}.`
+      );
+    }
     if (now > signupClosesAt) {
       throw new HttpError(403, "Chess tournament signups are closed for this week. Next signup opens Monday.");
     }

@@ -98,6 +98,7 @@ export default function ChessMatchScreen() {
     if (!match) return "Loading match";
     if (match.signupOpen) return "Pairings lock Tuesday 8pm.";
     if (match.status !== "active") return match.resultCopy ?? "Match finished.";
+    if (match.canClaimNoShow) return "The match window has closed. You can claim a no-show win.";
     if (match.canMove) return `Your move as ${match.viewerColor}.`;
     return `Waiting for ${match.turn}.`;
   }, [match]);
@@ -127,6 +128,21 @@ export default function ChessMatchScreen() {
       setSelected(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not start the tiebreak.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const claimNoShow = async () => {
+    if (!match || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const data = await studyApi.claimChessTournamentNoShow(match.matchCode);
+      setMatch(data.match);
+      setSelected(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not claim the no-show win.");
     } finally {
       setSending(false);
     }
@@ -252,6 +268,11 @@ export default function ChessMatchScreen() {
           {match?.canTiebreak ? (
             <Button mode="contained-tonal" icon="chess-clock" loading={sending} onPress={startTiebreak}>
               Start tiebreak
+            </Button>
+          ) : null}
+          {match?.canClaimNoShow ? (
+            <Button mode="contained-tonal" icon="flag-checkered" loading={sending} onPress={claimNoShow}>
+              Claim no-show win
             </Button>
           ) : null}
           <Button mode="contained" icon="refresh" loading={loading || sending} onPress={() => loadMatch()}>

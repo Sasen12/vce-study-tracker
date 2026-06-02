@@ -22,7 +22,7 @@ const navItems: { label: string; href: "/" | "/mission" | "/contact"; active: Ac
 export function MarketingHeader({ active, isCompact }: MarketingHeaderProps) {
   const displayName = useAuthStore((state) => state.user?.displayName);
   const loginLabel = displayName ? `Ready to study, ${firstName(displayName)}` : "Log in";
-  const signupLabel = isCompact ? "Sign up" : "Create account";
+  const signupLabel = isCompact ? "Join" : "Join free";
 
   return (
     <View style={styles.wrap}>
@@ -180,14 +180,22 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   startButton: {
-    minHeight: 42,
+    minHeight: 46,
+    minWidth: 122,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
     backgroundColor: "#38BDF8",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 15
+    paddingHorizontal: 17,
+    shadowColor: "#38BDF8",
+    shadowOpacity: 0.34,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4
   },
   startText: {
     color: "#06111F",

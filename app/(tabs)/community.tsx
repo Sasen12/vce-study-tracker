@@ -1920,7 +1920,7 @@ export default function CommunityScreen() {
     try {
       const data = await studyApi.joinChessTournament();
       setChessTournament(data.chessTournament);
-      setNotice("You are signed up. Pairings and match codes will stay on the Rooms tab.");
+      setNotice("You are signed up. Pairings and match codes will stay in the chess bracket.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not join the chess arena");
     } finally {
@@ -1955,6 +1955,26 @@ export default function CommunityScreen() {
       setNotice("Tiebreak started. Open the match board to play for a winner.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not start the tiebreak.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const claimChessNoShow = async (matchCode?: string | null) => {
+    if (!matchCode) {
+      setError("This match does not have a match code.");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await studyApi.claimChessTournamentNoShow(matchCode);
+      const data = await studyApi.chessTournament();
+      setChessTournament(data.chessTournament);
+      setNotice("No-show win claimed. The knockout bracket can advance.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not claim the no-show win.");
     } finally {
       setSending(false);
     }
@@ -2148,11 +2168,16 @@ export default function CommunityScreen() {
     chessMatches.find((match) => match.status === "paired") ??
     chessMatches.find((match) => match.status === "waiting" || match.status === "bye") ??
     null;
-  const chessSignupOpen = chessTournament?.signupOpen !== false;
+  const chessSignupOpen = chessTournament?.signupOpen === true;
+  const chessTournamentAvailable = chessTournament?.tournamentAvailable !== false;
+  const chessCommunityMinutes = chessTournament?.communityMinutes ?? 0;
+  const chessCommunityGoalMinutes = chessTournament?.communityGoalMinutes ?? 600;
   const chessPairingCount = chessTournament?.pairingCount ?? Math.floor((chessTournament?.joinedCount ?? 0) / 2);
   const chessSignupStatus = chessSignupOpen
     ? `Open until ${formatHour(chessTournament?.signupClosesAt)}`
-    : "Closed this week";
+    : chessTournamentAvailable
+      ? "Closed this week"
+      : "Locked this week";
   const chessButtonLabel = chessTournament?.joined
     ? chessSignupOpen
       ? "Pairings lock Tuesday"
@@ -2160,8 +2185,10 @@ export default function CommunityScreen() {
         ? "Open your match"
         : "Bracket visible"
     : chessSignupOpen
-      ? "Sign up this week"
-      : "Signups closed";
+      ? "Join tournament"
+      : chessTournamentAvailable
+        ? "Signups closed"
+        : "Locked until goal";
   const formatChessPoints = (points: number) => (Number.isInteger(points) ? `${points}` : points.toFixed(1));
   const chooseMode = (value: string) => {
     const nextMode = value as Mode;
@@ -2179,7 +2206,7 @@ export default function CommunityScreen() {
         <View style={styles.flexText}>
           <Text style={styles.cardTitle}>Chess knockout bracket</Text>
           <Text style={styles.muted}>
-            Winners advance. Losers are knocked out. New rounds appear after the previous winners are decided.
+            Runs every 3 weeks, or any week the community hits the study-minute goal. Winners advance through the bracket.
           </Text>
         </View>
         <View style={styles.chessPillRow}>
@@ -2193,7 +2220,7 @@ export default function CommunityScreen() {
       </View>
       <Text style={styles.muted}>
         {chessTournament?.statusCopy ??
-          "Sign up before Tuesday night. Rounds run Wednesday and Sunday at 7:30pm."}
+          "Sign up before Tuesday night. Missed games can be claimed after the match window closes."}
       </Text>
       <View style={styles.chessFactGrid}>
         <View style={styles.chessFactTile}>
@@ -2201,12 +2228,12 @@ export default function CommunityScreen() {
           <Text style={styles.userThemeText}>{chessSignupStatus}</Text>
         </View>
         <View style={styles.chessFactTile}>
-          <Text style={styles.mutedSmall}>Pairings</Text>
-          <Text style={styles.userThemeText}>{chessPairingCount} match{chessPairingCount === 1 ? "" : "es"}</Text>
+          <Text style={styles.mutedSmall}>Community unlock</Text>
+          <Text style={styles.userThemeText}>{chessCommunityMinutes}/{chessCommunityGoalMinutes} min</Text>
         </View>
         <View style={styles.chessFactTile}>
-          <Text style={styles.mutedSmall}>Results</Text>
-          <Text style={styles.userThemeText}>Winners advance</Text>
+          <Text style={styles.mutedSmall}>No-show rule</Text>
+          <Text style={styles.userThemeText}>Claim after window</Text>
         </View>
       </View>
       <View style={styles.chessRoundGrid}>
@@ -2256,7 +2283,7 @@ export default function CommunityScreen() {
         </View>
       ) : primaryChessMatch ? null : (
         <Text style={styles.mutedSmall}>
-          No minute gate. The only rule is signing up before matchups are set.
+          Tournaments open on the 3-week cadence, or earlier when the community reaches the weekly study-minute goal.
         </Text>
       )}
       {chessStandings.length ? (
@@ -2306,6 +2333,11 @@ export default function CommunityScreen() {
                 {match.canTiebreak ? (
                   <Button mode="contained-tonal" compact icon="chess-clock" loading={sending} onPress={() => startChessTiebreak(match.matchCode)}>
                     Tiebreak
+                  </Button>
+                ) : null}
+                {match.canClaimNoShow ? (
+                  <Button mode="contained-tonal" compact icon="flag-checkered" loading={sending} onPress={() => claimChessNoShow(match.matchCode)}>
+                    Claim no-show
                   </Button>
                 ) : null}
               </View>

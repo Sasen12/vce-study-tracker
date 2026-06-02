@@ -306,6 +306,10 @@ export const studyApi = {
     apiFetch<{ match: CommunityChessMatchState }>(`/community/chess-tournament/matches/${encodeURIComponent(matchCode)}/tiebreak`, {
       method: "POST"
     }),
+  claimChessTournamentNoShow: (matchCode: string) =>
+    apiFetch<{ match: CommunityChessMatchState }>(`/community/chess-tournament/matches/${encodeURIComponent(matchCode)}/no-show`, {
+      method: "POST"
+    }),
   deleteCommunityChat: (id: string) => apiFetch<void>(`/community/chat/${id}`, { method: "DELETE" }),
   giftTheme: (userId: string, body: { themeId: string; equip?: boolean }) =>
     apiFetch<{ user: CommunityUserSummary }>(`/community/users/${userId}/gifts/theme`, {

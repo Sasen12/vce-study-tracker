@@ -819,9 +819,19 @@ export default function DashboardScreen() {
     chessTournament?.viewerMatches?.find((match) => match.status === "paired") ??
     chessTournament?.viewerMatches?.find((match) => match.status === "waiting" || match.status === "bye" || match.status === "champion" || match.status === "eliminated") ??
     null;
+  const chessSignupOpen = chessTournament?.signupOpen === true;
+  const chessTournamentAvailable = chessTournament?.tournamentAvailable !== false;
+  const chessCommunityMinutes = chessTournament?.communityMinutes ?? 0;
+  const chessCommunityGoalMinutes = chessTournament?.communityGoalMinutes ?? 600;
   const showChessSignupCard = Boolean(chessTournament && !examWeekMode && (chessTournament.signupOpen !== false || chessTournament.joined));
-  const showChessHomeStrip = !examWeekMode && nowView;
-  const chessHomeTitle = chessTournament?.joined ? "Chess knockout: you're in" : "Chess knockout signup";
+  const showChessHomeStrip = Boolean(!examWeekMode && nowView && chessTournament);
+  const chessHomeTitle = chessTournament?.joined
+    ? "Chess knockout: you're in"
+    : chessSignupOpen
+      ? "Join this chess knockout"
+      : chessTournamentAvailable
+        ? "Chess signups closed"
+        : "Chess unlock goal";
   const chessHomeMeta = chessTournament
     ? chessTournament.joined
       ? nextChessMatch?.status === "paired"
@@ -833,8 +843,12 @@ export default function DashboardScreen() {
             : nextChessMatch?.status === "eliminated"
               ? "Knocked out"
               : "Bracket updates after winners"
-      : `${chessTournament.joinedCount} signed - closes ${formatChessHour(chessTournament.signupClosesAt)}`
-    : "Weekly knockout opens after signup closes.";
+      : chessSignupOpen
+        ? `${chessTournament.joinedCount} signed - join before ${formatChessHour(chessTournament.signupClosesAt)}`
+        : chessTournamentAvailable
+          ? `Next bracket ${formatChessHour(chessTournament.nextRoundAt)}`
+          : `${chessCommunityMinutes}/${chessCommunityGoalMinutes} community study minutes`
+    : "Knockout opens on schedule or after the community study goal.";
   const todayStudyMinutes = Math.round((stats?.todaySeconds ?? 0) / 60);
   const weekStudyMinutes = Math.round((stats?.weekSeconds ?? 0) / 60);
   const homeSignalTiles: {
@@ -883,7 +897,7 @@ export default function DashboardScreen() {
       id: "chess",
       label: "community",
       value: chessTournament ? `${chessTournament.joinedCount}` : "live",
-      meta: chessTournament ? "chess signups" : "rooms open",
+      meta: chessTournament ? (chessSignupOpen ? "chess signups" : chessTournamentAvailable ? "chess bracket" : "chess goal") : "rooms open",
       icon: chessTournament?.joined ? "chess-king" : "forum-outline",
       accent: chessTournament ? palette.warning : palette.primary,
       onPress: () => router.push("/(tabs)/community")
@@ -1110,6 +1124,7 @@ export default function DashboardScreen() {
     }
     if (chessTournament && chessTournament.signupOpen === false) {
       setChessNotice(chessTournament.statusCopy ?? "Chess tournament signups are closed for this week.");
+      router.push("/(tabs)/community");
       return;
     }
     setJoiningChessTournament(true);
@@ -1463,13 +1478,12 @@ export default function DashboardScreen() {
                     </Text>
                   </View>
                   <Button
-                    compact
-                    mode="contained-tonal"
-                    icon={chessTournament?.joined ? "chess-king" : "plus"}
+                    mode="contained"
+                    icon={chessTournament?.joined ? "chess-king" : chessSignupOpen ? "account-plus" : "target"}
                     loading={joiningChessTournament}
                     onPress={joinChessTournament}
                   >
-                    {chessTournament?.joined ? "Board" : "Sign up"}
+                    {chessTournament?.joined ? "Open bracket" : chessSignupOpen ? "Join tournament" : "Community goal"}
                   </Button>
                 </View>
               ) : null}
@@ -1956,7 +1970,7 @@ export default function DashboardScreen() {
 
             <View style={styles.actionRow}>
               <Button mode="contained" compact icon="chess-king" loading={joiningChessTournament} onPress={joinChessTournament}>
-                {chessTournament.joined ? (currentChessMatch ? "Open match" : "Bracket") : "Sign up"}
+                {chessTournament.joined ? (currentChessMatch ? "Open match" : "Bracket") : "Join tournament"}
               </Button>
               <Button mode="outlined" compact icon="forum-outline" onPress={() => router.push("/(tabs)/community")}>
                 Community
@@ -3019,17 +3033,17 @@ const styles = StyleSheet.create({
     fontSize: 16
   },
   homeChessStrip: {
-    minHeight: 74,
+    minHeight: 88,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.3)",
-    backgroundColor: "rgba(245,158,11,0.09)",
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    borderColor: "rgba(245,158,11,0.5)",
+    backgroundColor: "rgba(245,158,11,0.14)",
+    paddingHorizontal: 14,
+    paddingVertical: 12
   },
   homeChessCopy: {
     flex: 1,

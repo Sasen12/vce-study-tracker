@@ -186,15 +186,28 @@ export function ProductLandingPage() {
                 VCE Forge is a study command centre for Year 11 and Year 12 students who need tonight's plan, not
                 another blank planner.
               </Text>
-              <View style={styles.ctaRow}>
-                {displayName ? (
-                  <CtaButton label={loginLabel} icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/login")} />
-                ) : (
-                  <>
-                    <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
-                    <CtaButton label="Log in" icon="login" variant="secondary" onPress={() => router.push("/(auth)/login")} />
-                  </>
-                )}
+              <View style={styles.joinPanel}>
+                <View style={styles.joinPanelHeader}>
+                  <MaterialCommunityIcons name={displayName ? "rocket-launch" : "account-plus"} color="#38BDF8" size={19} />
+                  <Text style={styles.joinPanelTitle}>
+                    {displayName ? "Your account is ready" : "Join VCE Forge free"}
+                  </Text>
+                </View>
+                <Text style={styles.joinPanelBody}>
+                  {displayName
+                    ? "Click through to open your study dashboard."
+                    : "Create an account to use the SAC tracker, AI drills, study tools and community events."}
+                </Text>
+                <View style={styles.ctaRow}>
+                  {displayName ? (
+                    <CtaButton label={loginLabel} icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/login")} />
+                  ) : (
+                    <>
+                      <CtaButton label="Join free" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+                      <CtaButton label="I already have an account" icon="login" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+                    </>
+                  )}
+                </View>
               </View>
               <View style={styles.signalRow}>
                 <Signal label="Next SAC" value="5 days" accent={palette.warning} />
@@ -597,8 +610,8 @@ function FinalCta({ isCompact, displayName }: { isCompact: boolean; displayName?
             <CtaButton label={loginLabel} icon="rocket-launch" variant="primary" onPress={() => router.push("/(auth)/login")} />
           ) : (
             <>
-              <CtaButton label="Create account" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
-              <CtaButton label="Log in" icon="login-variant" variant="secondary" onPress={() => router.push("/(auth)/login")} />
+              <CtaButton label="Join free" icon="account-plus" variant="primary" onPress={() => router.push("/(auth)/register")} />
+              <CtaButton label="I already have an account" icon="login-variant" variant="secondary" onPress={() => router.push("/(auth)/login")} />
             </>
           )}
         </View>
@@ -688,9 +701,32 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "center"
   },
+  joinPanel: {
+    alignSelf: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.34)",
+    backgroundColor: "rgba(56,189,248,0.08)",
+    padding: 14,
+    gap: 11
+  },
+  joinPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  joinPanelTitle: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16
+  },
+  joinPanelBody: {
+    color: palette.muted,
+    lineHeight: 20
+  },
   ctaButton: {
-    minHeight: 50,
-    minWidth: 148,
+    minHeight: 56,
+    minWidth: 178,
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden",
@@ -702,7 +738,12 @@ const styles = StyleSheet.create({
   },
   ctaPrimary: {
     borderColor: "rgba(56,189,248,0.6)",
-    backgroundColor: "#38BDF8"
+    backgroundColor: "#38BDF8",
+    shadowColor: "#38BDF8",
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4
   },
   ctaSecondary: {
     borderColor: "rgba(255,255,255,0.12)",
@@ -711,7 +752,7 @@ const styles = StyleSheet.create({
   ctaText: {
     color: palette.text,
     fontFamily: "Outfit_700Bold",
-    fontSize: 15
+    fontSize: 16
   },
   ctaTextPrimary: {
     color: "#06111F"

@@ -277,6 +277,13 @@ export type CommunityChessTournament = {
   weekStart: string;
   requiredMinutes: number;
   viewerMinutes: number;
+  communityMinutes?: number;
+  communityGoalMinutes?: number;
+  communityGoalMet?: boolean;
+  cadenceWeek?: boolean;
+  tournamentAvailable?: boolean;
+  unlockReason?: "cadence" | "community_goal" | "locked";
+  nextScheduledWeekStart?: string;
   eligible: boolean;
   joined: boolean;
   joinedCount: number;
@@ -314,6 +321,7 @@ export type CommunityChessTournament = {
     resultCopy: string;
     canOpen: boolean;
     canTiebreak: boolean;
+    canClaimNoShow: boolean;
     viewerColor?: "white" | "black" | null;
     white?: {
       displayName: string;
@@ -351,6 +359,8 @@ export type CommunityChessMatchState = {
   turn: "white" | "black";
   canMove: boolean;
   canTiebreak: boolean;
+  canClaimNoShow: boolean;
+  noShowDeadlineAt?: string;
   signupOpen?: boolean;
   white: {
     displayName: string;

@@ -65,7 +65,7 @@ const tourSteps: TourStep[] = [
   {
     eyebrow: "Community",
     title: "Your subjects, rooms and tournament.",
-    body: "Community shows squads for subjects you actually take, subject rooms, Q&A and the weekly chess knockout bracket. Winners advance; eliminated players can still follow the board.",
+    body: "Community shows squads for subjects you actually take, subject rooms, Q&A and the chess knockout bracket. It runs every 3 weeks, or earlier when the community hits the study-minute goal.",
     icon: "forum-outline",
     accent: palette.primary,
     target: { kind: "tab", index: 3, routeKey: "community", route: "/(tabs)/community" },
