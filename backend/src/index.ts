@@ -106,7 +106,7 @@ app.post(
       const pullOut = await run("git pull origin main", repoRoot);
       steps.push(`git pull: ${pullOut}`);
 
-      const buildOut = await run("npm run build --prefix backend", repoRoot);
+      const buildOut = await run("npm run build", repoRoot);
       steps.push(`build: ${buildOut}`);
 
       res.json({ ok: true, message: "Update complete, restarting...", steps });
@@ -135,17 +135,16 @@ app.post(
       return;
     }
 
-    const fullCommand = `${command} --prefix backend`;
-    console.log(`[ADMIN] Exec triggered by ${email}: ${fullCommand}`);
+    console.log(`[ADMIN] Exec triggered by ${email}: ${command}`);
 
     try {
-      const output = await run(fullCommand, repoRoot);
+      const output = await run(command, repoRoot);
       console.log(`[ADMIN] ${email} — exec OK: ${output.slice(0, 200)}`);
-      res.json({ ok: true, command: fullCommand, output });
+      res.json({ ok: true, command, output });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[ADMIN] Exec failed for ${email}:`, msg);
-      res.status(500).json({ ok: false, command: fullCommand, message: msg });
+      res.status(500).json({ ok: false, command, message: msg });
     }
   })
 );
