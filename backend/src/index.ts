@@ -106,7 +106,7 @@ app.post(
       const pullOut = await run("git pull origin main", repoRoot);
       steps.push(`git pull: ${pullOut}`);
 
-      const buildOut = await run("npm run build", path.join(repoRoot, "backend"));
+      const buildOut = await run("npm run build --prefix backend", repoRoot);
       steps.push(`build: ${buildOut}`);
 
       res.json({ ok: true, message: "Update complete, restarting...", steps });
@@ -118,6 +118,34 @@ app.post(
       if (!res.headersSent) {
         res.status(500).json({ ok: false, message: msg, steps });
       }
+    }
+  })
+);
+
+app.post(
+  "/api/admin/exec",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    requireAdmin((req as AuthenticatedRequest).user);
+    const email = (req as AuthenticatedRequest).user.email;
+    const { command } = req.body as { command?: string };
+
+    if (!command || typeof command !== "string") {
+      res.status(400).json({ ok: false, message: "Missing 'command' in request body" });
+      return;
+    }
+
+    const fullCommand = `${command} --prefix backend`;
+    console.log(`[ADMIN] Exec triggered by ${email}: ${fullCommand}`);
+
+    try {
+      const output = await run(fullCommand, repoRoot);
+      console.log(`[ADMIN] ${email} — exec OK: ${output.slice(0, 200)}`);
+      res.json({ ok: true, command: fullCommand, output });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ADMIN] Exec failed for ${email}:`, msg);
+      res.status(500).json({ ok: false, command: fullCommand, message: msg });
     }
   })
 );
