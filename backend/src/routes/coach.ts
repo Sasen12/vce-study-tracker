@@ -130,6 +130,10 @@ const askSchema = z.object({
 
 const supportedScreenshotTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const supportedTutorPdfTypes = new Set(["application/pdf", "application/x-pdf"]);
+const supportedTutorDocTypes = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword"
+]);
 const supportedAudioTypes = new Set([
   "audio/aac",
   "audio/flac",
@@ -158,6 +162,10 @@ const uploadedFilesFrom = (files: unknown): Express.Multer.File[] => {
 const normalizedMimeType = (file: Express.Multer.File) => file.mimetype.toLowerCase().split(";")[0];
 const isTutorPdfFile = (file: Express.Multer.File) =>
   supportedTutorPdfTypes.has(normalizedMimeType(file)) || file.originalname.toLowerCase().endsWith(".pdf");
+const isTutorDocFile = (file: Express.Multer.File) =>
+  supportedTutorDocTypes.has(normalizedMimeType(file)) ||
+  file.originalname.toLowerCase().endsWith(".docx") ||
+  file.originalname.toLowerCase().endsWith(".doc");
 
 const notetakerSchema = z.object({
   subjectId: z.string().uuid(),
@@ -1000,7 +1008,7 @@ coachRouter.post(
   limitAiUsage({
     cost: (req) => {
       const files = uploadedFilesFrom(req.files);
-      if (files.some(isTutorPdfFile)) return 4;
+      if (files.some((f) => isTutorPdfFile(f) || isTutorDocFile(f))) return 4;
       return files.length ? 3 : 1;
     }
   }),
@@ -1026,15 +1034,15 @@ coachRouter.post(
         continue;
       }
 
-      if (isTutorPdfFile(file)) {
+      if (isTutorPdfFile(file) || isTutorDocFile(file)) {
         if (file.size > 25 * 1024 * 1024) {
-          throw new HttpError(400, "Each PDF must be smaller than 25MB.");
+          throw new HttpError(400, "Each document file must be smaller than 25MB.");
         }
         documentFiles.push(file);
         continue;
       }
 
-      throw new HttpError(400, "Tutor attachments must be PNG, JPEG, WEBP, GIF or PDF files.");
+      throw new HttpError(400, "Tutor attachments must be PNG, JPEG, WEBP, GIF, PDF, DOCX or DOC files.");
     }
 
     const subjectScope = subject ? { OR: [{ subjectId: subject.id }, { subjectId: null }] } : {};
@@ -1044,10 +1052,10 @@ coachRouter.post(
         documentFiles.map(async (file) => {
           const extracted = await extractResourceText(file);
           if (!extracted.text.trim()) {
-            throw new HttpError(422, `I could not read text from ${file.originalname || "that PDF"}. Try a text-based PDF.`);
+            throw new HttpError(422, `I could not read text from ${file.originalname || "that document"}. Try a text-based file.`);
           }
           return {
-            fileName: file.originalname || `attached-pdf-${Date.now()}.pdf`,
+            fileName: file.originalname || `attached-document-${Date.now()}.pdf`,
             fileType: extracted.fileType,
             text: extracted.text
           };
@@ -1081,7 +1089,7 @@ coachRouter.post(
       })
     ]);
 
-    const attachedDocumentLabels = attachedDocuments.map((document) => `Attached PDF: ${document.fileName}`);
+    const attachedDocumentLabels = attachedDocuments.map((document) => `Attached document: ${document.fileName}`);
     const sourceLabels = [
       ...attachedDocumentLabels,
       ...notes.map((note: NoteForPlan) => `${note.subject?.subjectName ?? "General"} note: ${note.title}`),
@@ -1093,7 +1101,7 @@ coachRouter.post(
 
     const context = [
       ...attachedDocuments.map((document) =>
-        contextSnippetForQuery(`Attached PDF: ${document.fileName}`, document.text, payload.question, 4500)
+        contextSnippetForQuery(`Attached document: ${document.fileName}`, document.text, payload.question, 4500)
       ),
       ...reflections.map((reflection: ReflectionForPlan) =>
         contextSnippetForQuery(

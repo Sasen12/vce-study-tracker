@@ -189,11 +189,16 @@ const formatSavedDate = (value: string) => {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
-const isPdfAttachment = (asset: TutorAttachment) =>
-  asset.name.toLowerCase().endsWith(".pdf") || asset.mimeType?.toLowerCase().includes("pdf");
+const isDocumentAttachment = (asset: TutorAttachment) =>
+  asset.name.toLowerCase().endsWith(".pdf") ||
+  asset.name.toLowerCase().endsWith(".docx") ||
+  asset.name.toLowerCase().endsWith(".doc") ||
+  asset.mimeType?.toLowerCase().includes("pdf") ||
+  asset.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+  asset.mimeType === "application/msword";
 
 const appendTutorAttachment = (formData: FormData, asset: TutorAttachment) => {
-  const fieldName = isPdfAttachment(asset) ? "attachments" : "screenshots";
+  const fieldName = isDocumentAttachment(asset) ? "attachments" : "screenshots";
   const webFile = Platform.OS === "web" ? asset.file : null;
   if (webFile) {
     formData.append(fieldName, webFile, asset.name);
@@ -368,7 +373,16 @@ export function StudyAskCard({
   const addAttachments = async () => {
     setMessage(null);
     const result = await DocumentPicker.getDocumentAsync({
-      type: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/*", "application/pdf"],
+      type: [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+        "image/*",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword"
+      ],
       multiple: true,
       copyToCacheDirectory: true
     });
@@ -665,7 +679,7 @@ export function StudyAskCard({
             {coachMode === "coach" ? "Ask coach" : "Tutor session"}
           </Text>
           <Text style={styles.muted}>{selectedSubject?.subjectName ?? "Choose a subject"}</Text>
-          <Text style={styles.pasteHint}>Upload images/PDFs or paste screenshots with Ctrl+V</Text>
+          <Text style={styles.pasteHint}>Upload images, PDFs or DOCX files, or paste screenshots with Ctrl+V</Text>
         </View>
         <View style={[styles.confidence, answer?.confidence === "high" && styles.confidenceHigh]}>
           <Text style={styles.confidenceText}>{answer?.confidence ?? "ready"}</Text>
