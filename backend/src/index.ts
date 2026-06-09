@@ -109,6 +109,15 @@ app.post(
       const buildOut = await run("npm run build", repoRoot);
       steps.push(`build: ${buildOut}`);
 
+      const installOut = await run("npm install", repoRoot);
+      steps.push(`install: ${installOut}`);
+
+      const prismaGenOut = await run("npm run prisma:generate", repoRoot);
+      steps.push(`prisma:generate: ${prismaGenOut}`);
+
+      const prismaPushOut = await run("npm run prisma:push", repoRoot);
+      steps.push(`prisma:push: ${prismaPushOut}`);
+
       res.json({ ok: true, message: "Update complete, restarting...", steps });
       console.log(`[ADMIN] ${email} — update OK. Restarting.`);
       setTimeout(() => process.exit(1), 800);
