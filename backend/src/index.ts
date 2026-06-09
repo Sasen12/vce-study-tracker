@@ -123,27 +123,36 @@ app.post(
 );
 
 app.post(
-  "/api/admin/exec",
+  "/api/admin/run/:script",
   requireAuth,
   asyncHandler(async (req, res) => {
     requireAdmin((req as AuthenticatedRequest).user);
     const email = (req as AuthenticatedRequest).user.email;
-    const { command } = req.body as { command?: string };
+    const script = req.params.script;
 
-    if (!command || typeof command !== "string") {
-      res.status(400).json({ ok: false, message: "Missing 'command' in request body" });
+    const scriptMap: Record<string, string> = {
+      "prisma-generate": "npm run prisma:generate",
+      "prisma-push": "npm run prisma:push",
+      "install": "npm install",
+      "build": "npm run build",
+      "start": "npm run start",
+    };
+
+    const command = scriptMap[script];
+    if (!command) {
+      res.status(400).json({ ok: false, message: `Unknown script '${script}'. Available: ${Object.keys(scriptMap).join(", ")}` });
       return;
     }
 
-    console.log(`[ADMIN] Exec triggered by ${email}: ${command}`);
+    console.log(`[ADMIN] Run triggered by ${email}: ${command}`);
 
     try {
       const output = await run(command, repoRoot);
-      console.log(`[ADMIN] ${email} — exec OK: ${output.slice(0, 200)}`);
+      console.log(`[ADMIN] ${email} — run OK: ${output.slice(0, 200)}`);
       res.json({ ok: true, command, output });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[ADMIN] Exec failed for ${email}:`, msg);
+      console.error(`[ADMIN] Run failed for ${email}:`, msg);
       res.status(500).json({ ok: false, command, message: msg });
     }
   })
