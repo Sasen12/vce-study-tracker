@@ -15,7 +15,9 @@ import { contactRouter } from "./routes/contact.js";
 import { digestRouter } from "./routes/digest.js";
 import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
-import { errorHandler } from "./utils/http.js";
+import { errorHandler, HttpError, asyncHandler } from "./utils/http.js";
+import { requireAuth, type AuthenticatedRequest } from "./middleware/authMiddleware.js";
+import { requireAdmin } from "./services/adminService.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
 import { sendWeeklyDigestToAllUsers, weeklyDigestCronExpression } from "./services/weeklyDigestService.js";
 import { APP_TIME_ZONE } from "./utils/date.js";
@@ -66,6 +68,17 @@ app.use("/api/community", communityRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/digest", digestRouter);
 app.use("/api/memory", memoryRouter);
+
+app.post(
+  "/api/admin/restart",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    requireAdmin((req as AuthenticatedRequest).user);
+    console.log(`[ADMIN] Restart triggered by ${(req as AuthenticatedRequest).user.email}`);
+    res.json({ ok: true, message: "Restarting server..." });
+    setTimeout(() => process.exit(1), 500);
+  })
+);
 
 app.use("/api", (_req, res) => {
   res.status(404).json({ message: "API route not found. The backend may need to be updated or restarted." });
