@@ -1,4 +1,7 @@
 import "dotenv/config";
+import { exec } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors, { type CorsOptions } from "cors";
 import cron from "node-cron";
 import express from "express";
@@ -15,7 +18,7 @@ import { contactRouter } from "./routes/contact.js";
 import { digestRouter } from "./routes/digest.js";
 import { memoryRouter } from "./routes/memory.js";
 import { ensureDatabaseSchema } from "./db/ensureSchema.js";
-import { errorHandler, HttpError, asyncHandler } from "./utils/http.js";
+import { errorHandler, asyncHandler } from "./utils/http.js";
 import { requireAuth, type AuthenticatedRequest } from "./middleware/authMiddleware.js";
 import { requireAdmin } from "./services/adminService.js";
 import { resetExpiredStreaks } from "./services/gamificationService.js";
@@ -69,6 +72,16 @@ app.use("/api/contact", contactRouter);
 app.use("/api/digest", digestRouter);
 app.use("/api/memory", memoryRouter);
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const run = (cmd: string, cwd: string) =>
+  new Promise<string>((resolve, reject) => {
+    exec(cmd, { cwd, timeout: 60_000 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout.trim());
+    });
+  });
+
 app.post(
   "/api/admin/restart",
   requireAuth,
@@ -77,6 +90,35 @@ app.post(
     console.log(`[ADMIN] Restart triggered by ${(req as AuthenticatedRequest).user.email}`);
     res.json({ ok: true, message: "Restarting server..." });
     setTimeout(() => process.exit(1), 500);
+  })
+);
+
+app.post(
+  "/api/admin/update",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    requireAdmin((req as AuthenticatedRequest).user);
+    const email = (req as AuthenticatedRequest).user.email;
+    console.log(`[ADMIN] Update triggered by ${email}`);
+
+    const steps: string[] = [];
+    try {
+      const pullOut = await run("git pull origin main", repoRoot);
+      steps.push(`git pull: ${pullOut}`);
+
+      const buildOut = await run("npm run build", path.join(repoRoot, "backend"));
+      steps.push(`build: ${buildOut}`);
+
+      res.json({ ok: true, message: "Update complete, restarting...", steps });
+      console.log(`[ADMIN] ${email} — update OK. Restarting.`);
+      setTimeout(() => process.exit(1), 800);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ADMIN] Update failed for ${email}:`, msg);
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, message: msg, steps });
+      }
+    }
   })
 );
 
