@@ -1,4 +1,4 @@
-import { type ComponentProps, useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Button, Text, TextInput } from "react-native-paper";
@@ -26,6 +26,15 @@ const POCKET_BIRD_ASK_ID = "vce-forge-pocket-bird-ask";
 const POCKET_BIRD_ASK_SEPARATOR_ID = "vce-forge-pocket-bird-ask-separator";
 const POCKET_BIRD_FLIGHT_TARGET_CLASS = "vce-pocket-bird-flight-target";
 const POCKET_BIRD_SOURCE_URL = "pocket-bird-vce-forge.js";
+const MASCOT_BUBBLE_ID = "vce-forge-mascot-bubble";
+const MASCOT_BUBBLE_TEXT_ID = "vce-forge-mascot-bubble-text";
+const MASCOT_BUBBLE_TAIL_ID = "vce-forge-mascot-bubble-tail";
+const MASCOT_FIRST_CHECK_IN_DELAY_MS = 8000;
+const MASCOT_CHECK_IN_INTERVAL_MS = 10 * 60 * 1000;
+const MASCOT_CHECK_IN_JITTER_MS = 90 * 1000;
+const MASCOT_CHECK_IN_VISIBLE_MS = 18000;
+const MASCOT_BIRD_RETRY_MS = 12000;
+const MASCOT_HIDDEN_TAB_RETRY_MS = 60000;
 const TRANSPARENT_PIXEL =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const FLIGHT_TARGETS = [
@@ -37,6 +46,15 @@ const FLIGHT_TARGETS = [
   { x: 0.54, y: 0.2, width: 128 },
   { x: 0.1, y: 0.46, width: 120 },
   { x: 0.86, y: 0.58, width: 112 }
+];
+const MASCOT_CHECK_INS = [
+  "How are you going? If you are stuck, tap me and ask for the next tiny step.",
+  "Hope you are well. One clear answer beats ten half-started tasks.",
+  "Remember, if you ever have questions, you can always ask me.",
+  "Quick check-in: water, stretch, then one VCE-style question?",
+  "If a topic gets messy, ask me before it turns into a whole thing.",
+  "Tiny repair time: what mistake keeps showing up?",
+  "No need for perfect motivation. Give me the next stuck point."
 ];
 
 const routeKeyForPath = (pathname: string): QuickAskRouteKey => {
@@ -108,6 +126,16 @@ type PocketBirdWindow = Window &
     __vceForgePocketBirdLoading?: boolean;
   };
 
+type MascotBubbleTheme = {
+  accent: string;
+  background: string;
+  border: string;
+  text: string;
+  muted: string;
+};
+
+let mascotBubbleFrame = 0;
+
 const isWebDomAvailable = () => Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined";
 
 const compactAnswer = (answer: StudyAnswer) =>
@@ -141,6 +169,18 @@ const memoryRiskScore = (memory: StudentSubjectMemory) =>
 
 const getPocketBirdHost = () => document.getElementById(POCKET_BIRD_HOST_ID) as HTMLElement | null;
 
+const clamp = (value: number, min: number, max: number) => {
+  const boundedMax = Math.max(min, max);
+  return Math.min(Math.max(value, min), boundedMax);
+};
+
+const getPocketBirdRect = () => {
+  if (!isWebDomAvailable()) return null;
+  const bird = getPocketBirdHost()?.shadowRoot?.querySelector("#birb");
+  const rect = bird?.getBoundingClientRect();
+  return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+};
+
 const setPocketBirdVisible = (visible: boolean) => {
   if (!isWebDomAvailable()) return;
   const host = getPocketBirdHost();
@@ -148,6 +188,182 @@ const setPocketBirdVisible = (visible: boolean) => {
   host.style.display = visible ? "" : "none";
   host.style.pointerEvents = visible ? "" : "none";
   host.setAttribute("aria-hidden", visible ? "false" : "true");
+};
+
+const ensureMascotBubble = (theme: MascotBubbleTheme, openQuickAsk: () => void) => {
+  if (!isWebDomAvailable()) return null;
+
+  let bubble = document.getElementById(MASCOT_BUBBLE_ID) as HTMLDivElement | null;
+  if (!bubble) {
+    bubble = document.createElement("div");
+    bubble.id = MASCOT_BUBBLE_ID;
+    bubble.setAttribute("role", "button");
+    bubble.setAttribute("aria-live", "polite");
+    bubble.tabIndex = 0;
+
+    const text = document.createElement("div");
+    text.id = MASCOT_BUBBLE_TEXT_ID;
+    bubble.appendChild(text);
+
+    const hint = document.createElement("div");
+    hint.textContent = "Tap to ask Forge";
+    Object.assign(hint.style, {
+      marginTop: "7px",
+      color: theme.muted,
+      fontSize: "11px",
+      fontFamily: "Outfit_700Bold, system-ui, sans-serif",
+      textTransform: "uppercase",
+      letterSpacing: "0"
+    });
+    bubble.appendChild(hint);
+
+    const tail = document.createElement("div");
+    tail.id = MASCOT_BUBBLE_TAIL_ID;
+    bubble.appendChild(tail);
+
+    document.body.appendChild(bubble);
+  }
+
+  Object.assign(bubble.style, {
+    position: "fixed",
+    display: "none",
+    zIndex: "2147483000",
+    boxSizing: "border-box",
+    padding: "12px 13px",
+    borderRadius: "8px",
+    border: `1px solid ${theme.border}`,
+    borderTop: `3px solid ${theme.accent}`,
+    background: theme.background,
+    color: theme.text,
+    boxShadow: "0 18px 48px rgba(2, 6, 23, 0.28)",
+    fontFamily: "Outfit_400Regular, system-ui, sans-serif",
+    fontSize: "14px",
+    lineHeight: "19px",
+    cursor: "pointer",
+    pointerEvents: "none",
+    userSelect: "none",
+    opacity: "0",
+    transform: "translateY(6px) scale(0.98)",
+    transition: "opacity 160ms ease, transform 160ms ease"
+  });
+
+  const tail = document.getElementById(MASCOT_BUBBLE_TAIL_ID) as HTMLDivElement | null;
+  if (tail) {
+    Object.assign(tail.style, {
+      position: "absolute",
+      width: "14px",
+      height: "14px",
+      background: theme.background,
+      transform: "rotate(45deg)",
+      borderColor: theme.border,
+      borderStyle: "solid"
+    });
+  }
+
+  const openFromBubble = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    hideMascotBubble();
+    openQuickAsk();
+  };
+
+  bubble.onclick = openFromBubble;
+  bubble.onkeydown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      openFromBubble(event);
+    }
+  };
+
+  return bubble;
+};
+
+const positionMascotBubble = () => {
+  if (!isWebDomAvailable()) return false;
+  const bubble = document.getElementById(MASCOT_BUBBLE_ID) as HTMLDivElement | null;
+  const tail = document.getElementById(MASCOT_BUBBLE_TAIL_ID) as HTMLDivElement | null;
+  const rect = getPocketBirdRect();
+  if (!bubble || !rect) return false;
+
+  const gutter = 12;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const width = Math.min(278, Math.max(196, viewportWidth - gutter * 2));
+  bubble.style.width = `${width}px`;
+
+  const measuredHeight = Math.max(72, bubble.offsetHeight || 86);
+  const showAbove = rect.top > measuredHeight + 26;
+  const left = clamp(rect.left + rect.width / 2 - width / 2, gutter, viewportWidth - width - gutter);
+  const topTarget = showAbove ? rect.top - measuredHeight - 14 : rect.bottom + 14;
+  const top = clamp(topTarget, gutter, viewportHeight - measuredHeight - gutter);
+
+  bubble.style.left = `${left}px`;
+  bubble.style.top = `${top}px`;
+
+  if (tail) {
+    const tailLeft = clamp(rect.left + rect.width / 2 - left - 7, 20, width - 34);
+    tail.style.left = `${tailLeft}px`;
+    tail.style.top = showAbove ? "" : "-7px";
+    tail.style.bottom = showAbove ? "-7px" : "";
+    tail.style.borderWidth = showAbove ? "0 1px 1px 0" : "1px 0 0 1px";
+  }
+
+  return true;
+};
+
+const startMascotBubbleTracking = () => {
+  if (!isWebDomAvailable()) return;
+  if (mascotBubbleFrame) window.cancelAnimationFrame(mascotBubbleFrame);
+
+  const track = () => {
+    const bubble = document.getElementById(MASCOT_BUBBLE_ID) as HTMLDivElement | null;
+    if (!bubble || bubble.style.display === "none") {
+      mascotBubbleFrame = 0;
+      return;
+    }
+    positionMascotBubble();
+    mascotBubbleFrame = window.requestAnimationFrame(track);
+  };
+
+  mascotBubbleFrame = window.requestAnimationFrame(track);
+};
+
+const hideMascotBubble = () => {
+  if (!isWebDomAvailable()) return;
+  if (mascotBubbleFrame) {
+    window.cancelAnimationFrame(mascotBubbleFrame);
+    mascotBubbleFrame = 0;
+  }
+  const bubble = document.getElementById(MASCOT_BUBBLE_ID) as HTMLDivElement | null;
+  if (!bubble) return;
+  bubble.style.display = "none";
+  bubble.style.opacity = "0";
+  bubble.style.pointerEvents = "none";
+  bubble.style.transform = "translateY(6px) scale(0.98)";
+};
+
+const removeMascotBubble = () => {
+  if (!isWebDomAvailable()) return;
+  hideMascotBubble();
+  document.getElementById(MASCOT_BUBBLE_ID)?.remove();
+};
+
+const showMascotBubble = (text: string, theme: MascotBubbleTheme, openQuickAsk: () => void) => {
+  if (!isWebDomAvailable() || !getPocketBirdRect()) return false;
+  const bubble = ensureMascotBubble(theme, openQuickAsk);
+  const textElement = document.getElementById(MASCOT_BUBBLE_TEXT_ID);
+  if (!bubble || !textElement) return false;
+
+  textElement.textContent = text;
+  bubble.setAttribute("aria-label", `${text} Tap to ask Forge.`);
+  bubble.style.display = "block";
+  bubble.style.pointerEvents = "auto";
+  positionMascotBubble();
+  startMascotBubbleTracking();
+  window.requestAnimationFrame(() => {
+    bubble.style.opacity = "1";
+    bubble.style.transform = "translateY(0) scale(1)";
+  });
+  return true;
 };
 
 const seedPocketBirdDefaults = () => {
@@ -281,6 +497,8 @@ export function ForgeMascot() {
   const [answer, setAnswer] = useState<StudyAnswer | null>(null);
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const mascotMessageIndexRef = useRef(0);
+  const lastMascotCheckInAtRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -311,12 +529,14 @@ export function ForgeMascot() {
     }
 
     setPocketBirdVisible(false);
+    removeMascotBubble();
     removePocketBirdFlightTargets();
   }, [open, preferences.mascotEnabled]);
 
   useEffect(() => {
     return () => {
       setPocketBirdVisible(false);
+      removeMascotBubble();
       removePocketBirdFlightTargets();
     };
   }, []);
@@ -391,6 +611,16 @@ export function ForgeMascot() {
   const routeKey = routeKeyForPath(pathname);
   const pageCopy = routeCopy[routeKey];
   const pageAction = routeActionFor(routeKey);
+  const mascotBubbleTheme = useMemo<MascotBubbleTheme>(
+    () => ({
+      accent: pageCopy.accent,
+      background: activePalette.surfaceRaised,
+      border: activePalette.border,
+      text: activePalette.text,
+      muted: activePalette.muted
+    }),
+    [activePalette.border, activePalette.muted, activePalette.surfaceRaised, activePalette.text, pageCopy.accent]
+  );
   const nearestDeadline = useMemo(
     () =>
       [...events]
@@ -460,6 +690,65 @@ export function ForgeMascot() {
       ].filter(Boolean) as string[],
     [nearestDeadline, nextPlanTask, pageCopy.eyebrow, selectedSubject, weakestMemory]
   );
+
+  useEffect(() => {
+    if (!isWebDomAvailable()) return;
+
+    if (!preferences.mascotEnabled || open) {
+      hideMascotBubble();
+      return;
+    }
+
+    let disposed = false;
+    let showTimer = 0;
+    let hideTimer = 0;
+
+    const clearHideTimer = () => {
+      if (hideTimer) {
+        window.clearTimeout(hideTimer);
+        hideTimer = 0;
+      }
+    };
+
+    const showCheckIn = () => {
+      if (disposed || document.hidden) return false;
+
+      const checkIn = MASCOT_CHECK_INS[mascotMessageIndexRef.current % MASCOT_CHECK_INS.length];
+      const shown = showMascotBubble(checkIn, mascotBubbleTheme, openQuickAsk);
+      if (!shown) return false;
+
+      mascotMessageIndexRef.current = (mascotMessageIndexRef.current + 1) % MASCOT_CHECK_INS.length;
+      lastMascotCheckInAtRef.current = Date.now();
+      clearHideTimer();
+      hideTimer = window.setTimeout(() => hideMascotBubble(), MASCOT_CHECK_IN_VISIBLE_MS);
+      return true;
+    };
+
+    const scheduleNext = (delay: number) => {
+      showTimer = window.setTimeout(() => {
+        const shown = showCheckIn();
+        const nextDelay = shown
+          ? MASCOT_CHECK_IN_INTERVAL_MS + Math.floor(Math.random() * MASCOT_CHECK_IN_JITTER_MS)
+          : document.hidden
+            ? MASCOT_HIDDEN_TAB_RETRY_MS
+            : MASCOT_BIRD_RETRY_MS;
+        scheduleNext(nextDelay);
+      }, delay);
+    };
+
+    const elapsedSinceLast = lastMascotCheckInAtRef.current ? Date.now() - lastMascotCheckInAtRef.current : 0;
+    const firstDelay = lastMascotCheckInAtRef.current
+      ? Math.max(MASCOT_BIRD_RETRY_MS, MASCOT_CHECK_IN_INTERVAL_MS - elapsedSinceLast)
+      : MASCOT_FIRST_CHECK_IN_DELAY_MS;
+    scheduleNext(firstDelay);
+
+    return () => {
+      disposed = true;
+      if (showTimer) window.clearTimeout(showTimer);
+      clearHideTimer();
+      hideMascotBubble();
+    };
+  }, [mascotBubbleTheme, open, openQuickAsk, preferences.mascotEnabled]);
 
   const ask = async () => {
     const prompt = question.trim();
