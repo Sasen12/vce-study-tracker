@@ -56,7 +56,8 @@ const aliasOverrides: Record<string, string[]> = {
 
 const subjectSignals: Record<string, WeightedPattern[]> = {
   English: [
-    { pattern: /\bargument analysis|language analysis|text response|comparative|contention|framework of ideas\b/i, weight: 7 },
+    { pattern: /\bargument analysis|analysing argument|analyzing argument|language analysis|text response|comparative|contention|framework of ideas\b/i, weight: 7 },
+    { pattern: /\boral presentation|persuasive language|country for analysing argument|country for analyzing argument\b/i, weight: 6 },
     { pattern: /\bessay|thesis|topic sentence|authorial choice|written explanation\b/i, weight: 4 }
   ],
   "English Language": [
@@ -130,7 +131,10 @@ const subjectSignals: Record<string, WeightedPattern[]> = {
     { pattern: /\bcivil|criminal|rights|remedy|sanction|jury|high court|principles of justice\b/i, weight: 5 }
   ],
   "History: Revolutions": [{ pattern: /\brevolution|revolutions|french revolution|russian revolution|china revolution|crisis\b/i, weight: 7 }],
-  Philosophy: [{ pattern: /\bphilosophy|argument|logic|objection|premise|conclusion|ethics|metaphysics\b/i, weight: 6 }],
+  Philosophy: [
+    { pattern: /\bphilosophy|logic|objection|premise|conclusion|metaphysics|epistemology\b/i, weight: 6 },
+    { pattern: /\bphilosophical argument|ethical theory|moral philosophy\b/i, weight: 6 }
+  ],
   Sociology: [{ pattern: /\bsociology|culture|identity|deviance|social theory|community|social research\b/i, weight: 6 }],
   "Health and Human Development": [{ pattern: /\bhealth status|wellbeing|human development|health promotion|sustainable development\b/i, weight: 6 }],
   "Physical Education": [{ pattern: /\benergy systems?|training principles?|acute adaptation|chronic adaptation|skill acquisition\b/i, weight: 6 }],

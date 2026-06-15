@@ -565,7 +565,17 @@ export const rebuildStudentMemoryMaps = async (userId: string) => {
     });
   }
 
-  return Promise.all([...targets.values()].map((target) => refreshSubjectMemoryMap(userId, target)));
+  const targetKeys = [...targets.keys()];
+  const refreshedMaps = await Promise.all([...targets.values()].map((target) => refreshSubjectMemoryMap(userId, target)));
+  await prisma.studentSubjectMemory.deleteMany({
+    where: {
+      userId,
+      subjectId: null,
+      subjectKey: { notIn: targetKeys }
+    }
+  });
+
+  return refreshedMaps;
 };
 
 const targetForSignal = (

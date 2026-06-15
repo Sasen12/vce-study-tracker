@@ -77,7 +77,8 @@ const aliasOverrides: Record<string, string[]> = {
 const subjectProfiles: Record<string, SubjectProfile> = {
   English: {
     signals: [
-      { pattern: /\bargument analysis|language analysis|text response|comparative|contention|framework of ideas\b/i, weight: 7 },
+      { pattern: /\bargument analysis|analysing argument|analyzing argument|language analysis|text response|comparative|contention|framework of ideas\b/i, weight: 7 },
+      { pattern: /\boral presentation|persuasive language|country for analysing argument|country for analyzing argument\b/i, weight: 6 },
       { pattern: /\bessay|thesis|topic sentence|body paragraph|quote analysis|authorial choice\b/i, weight: 4 }
     ]
   },
@@ -234,7 +235,10 @@ const subjectProfiles: Record<string, SubjectProfile> = {
     ]
   },
   Philosophy: {
-    signals: [{ pattern: /\bphilosophy|argument|logic|objection|premise|conclusion|ethics|metaphysics\b/i, weight: 6 }]
+    signals: [
+      { pattern: /\bphilosophy|logic|objection|premise|conclusion|metaphysics|epistemology\b/i, weight: 6 },
+      { pattern: /\bphilosophical argument|ethical theory|moral philosophy\b/i, weight: 6 }
+    ]
   },
   "Religion and Society": {
     signals: [{ pattern: /\breligion|religious tradition|belief|ritual|ethics|sacred text|community\b/i, weight: 5 }]
