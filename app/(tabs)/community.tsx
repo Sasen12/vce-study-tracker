@@ -10,7 +10,7 @@ import { Screen } from "@/components/ui/Screen";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { titleLabelById } from "@/constants/gamification";
 import { palette, themeShopItems } from "@/constants/theme";
-import { studyApi } from "@/services/studyApi";
+import { studyApi, type BackendAdminResult, type BackendAdminScript } from "@/services/studyApi";
 import { useAppStore } from "@/store/appStore";
 import { useTrackScreen } from "@/hooks/useTrackScreen";
 import type {
@@ -40,11 +40,32 @@ type Mode = "squads" | "rooms" | "questions" | "chat" | "leaderboard" | "feedbac
 type BoardScope = "week" | "today" | "improved" | "streaks" | "helpful" | "challenge";
 type FeedbackCategory = UserFeedback["category"];
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+type BackendCommandId = "update" | "restart" | BackendAdminScript;
 
 const SUBJECT_ROOM_INTRO_KEY = "vce_subject_rooms_intro_seen_v1";
 const JOINED_SUBJECT_ROOMS_KEY = "vce_joined_subject_rooms_v1";
 const COMMUNITY_GUIDE_KEY = "vce_community_guide_seen_v1";
 const QUESTION_TYPES = ["Homework help", "SAC prep", "Exam revision", "Concept help", "Motivation"] as const;
+
+const backendCommandLabels: Record<BackendCommandId, string> = {
+  update: "Update + restart",
+  restart: "Restart backend",
+  install: "Install deps",
+  build: "Build backend",
+  "prisma-generate": "Prisma generate",
+  "prisma-push": "Prisma push",
+  start: "Start backend"
+};
+
+const backendCommandIcons: Record<BackendCommandId, IconName> = {
+  update: "cloud-sync-outline",
+  restart: "restart",
+  install: "package-variant-closed",
+  build: "hammer-wrench",
+  "prisma-generate": "database-cog-outline",
+  "prisma-push": "database-arrow-up-outline",
+  start: "play-circle-outline"
+};
 
 const genericRoomPrompts = [
   "Ask a question",
@@ -1330,6 +1351,8 @@ export default function CommunityScreen() {
   const [adminEmailMessage, setAdminEmailMessage] = useState("");
   const [adminEmailTemplateId, setAdminEmailTemplateId] = useState<AdminEmailTemplateId>("service_update");
   const [adminEmailSending, setAdminEmailSending] = useState(false);
+  const [backendCommandRunning, setBackendCommandRunning] = useState<BackendCommandId | null>(null);
+  const [backendCommandResult, setBackendCommandResult] = useState<string | null>(null);
 
   const loadCommunity = useCallback(async () => {
     setError(null);
@@ -2135,6 +2158,39 @@ export default function CommunityScreen() {
     }
   };
 
+  const backendResultSummary = (result: BackendAdminResult) => {
+    const lines = [
+      result.message,
+      result.command ? `Command: ${result.command}` : null,
+      result.steps?.length ? result.steps.join("\n") : null,
+      result.output
+    ].filter((line): line is string => Boolean(line && line.trim()));
+    return lines.join("\n").trim() || "Command completed.";
+  };
+
+  const runBackendCommand = async (command: BackendCommandId) => {
+    setBackendCommandRunning(command);
+    setBackendCommandResult(null);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result =
+        command === "update"
+          ? await studyApi.updateBackend()
+          : command === "restart"
+            ? await studyApi.restartBackend()
+            : await studyApi.runBackendScript(command);
+      const summary = backendResultSummary(result);
+      setBackendCommandResult(summary);
+      setNotice(`${backendCommandLabels[command]} sent.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : `Could not run ${backendCommandLabels[command].toLowerCase()}.`);
+    } finally {
+      setBackendCommandRunning(null);
+    }
+  };
+
   const boardEntries = boards?.[boardScope] ?? [];
   const boardCopy: Record<BoardScope, { title: string; empty: string }> = {
     week: { title: "This week", empty: "No weekly study yet." },
@@ -2407,7 +2463,7 @@ export default function CommunityScreen() {
             </View>
             <View style={styles.flexText}>
               <Text style={styles.cardTitle}>Admin command</Text>
-              <Text style={styles.muted}>Email users, check reports and keep the community clean without leaving the app.</Text>
+              <Text style={styles.muted}>Email users, pull backend updates, restart the API and run repair commands without leaving the app.</Text>
             </View>
           </View>
           <View style={styles.adminCommandActions}>
@@ -2424,6 +2480,27 @@ export default function CommunityScreen() {
               Analytics
             </Button>
           </View>
+          <View style={styles.adminCommandDivider} />
+          <View style={styles.adminCommandActions}>
+            {(["update", "restart", "build", "prisma-generate", "prisma-push"] as BackendCommandId[]).map((command) => (
+              <Button
+                key={command}
+                mode={command === "update" ? "contained" : "outlined"}
+                compact
+                icon={backendCommandIcons[command]}
+                loading={backendCommandRunning === command}
+                disabled={Boolean(backendCommandRunning)}
+                onPress={() => void runBackendCommand(command)}
+              >
+                {backendCommandLabels[command]}
+              </Button>
+            ))}
+          </View>
+          {backendCommandResult ? (
+            <Text style={styles.adminCommandResult} numberOfLines={6}>
+              {backendCommandResult}
+            </Text>
+          ) : null}
         </AppCard>
       ) : null}
 
@@ -3412,6 +3489,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
+  },
+  adminCommandDivider: {
+    height: 1,
+    backgroundColor: "rgba(56,189,248,0.18)"
+  },
+  adminCommandResult: {
+    maxHeight: 112,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.22)",
+    backgroundColor: "rgba(2,6,23,0.24)",
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    padding: 10
   },
   adminTemplateGrid: {
     flexDirection: "row",

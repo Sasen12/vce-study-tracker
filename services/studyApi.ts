@@ -49,6 +49,16 @@ import type {
   UserSubject
 } from "@/types";
 
+export type BackendAdminScript = "install" | "build" | "prisma-generate" | "prisma-push" | "start";
+
+export type BackendAdminResult = {
+  ok: boolean;
+  message?: string;
+  steps?: string[];
+  command?: string;
+  output?: string;
+};
+
 export const studyApi = {
   subjects: () => apiFetch<{ subjects: UserSubject[] }>("/subjects"),
   createSubject: (body: Partial<UserSubject>) =>
@@ -331,6 +341,10 @@ export const studyApi = {
       method: "POST",
       body
     }),
+  updateBackend: () => apiFetch<BackendAdminResult>("/admin/update", { method: "POST" }),
+  restartBackend: () => apiFetch<BackendAdminResult>("/admin/restart", { method: "POST" }),
+  runBackendScript: (script: BackendAdminScript) =>
+    apiFetch<BackendAdminResult>(`/admin/run/${script}`, { method: "POST" }),
   checkGamification: () => apiFetch<{ gamification: Gamification }>("/gamification/check", { method: "POST" }),
   leaderboard: () => apiFetch<{ leaderboard: Leaderboard }>("/gamification/leaderboard"),
   setLeaderboardPreference: (optIn: boolean) =>
