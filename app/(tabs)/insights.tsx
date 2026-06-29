@@ -264,7 +264,7 @@ export default function StudentMapScreen() {
             icon: "alert-circle-check-outline" as const,
             title: "Review latest mistake",
             body: latestMistake.title.replace(/^Mistake:\s*/, ""),
-            route: "/(tabs)/questions" as const
+            route: { pathname: "/(tabs)/questions" as const, params: { mode: "tools", toolMode: "mistakes" } }
           }
         : null,
       latestFlashcard
@@ -272,14 +272,14 @@ export default function StudentMapScreen() {
             icon: "cards-outline" as const,
             title: "Flip flashcards",
             body: latestFlashcard.title.replace(/^Flashcard:\s*/, ""),
-            route: "/(tabs)/questions" as const
+            route: { pathname: "/(tabs)/questions" as const, params: { mode: "tools", toolMode: "flashcards" } }
           }
         : null
     ].filter(Boolean) as {
       icon: keyof typeof MaterialCommunityIcons.glyphMap;
       title: string;
       body: string;
-      route: "/(tabs)/study" | "/(tabs)/questions";
+      route: string | { pathname: string; params: Record<string, string> };
     }[];
   }, [notes]);
 
@@ -431,9 +431,31 @@ export default function StudentMapScreen() {
         <>
           <Animated.View entering={motion.card(58)}>
             <AppCard style={styles.section}>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Weak area tracker
-              </Text>
+              <View style={styles.rowBetween}>
+                <Text variant="titleMedium" style={styles.cardTitle}>
+                  Weak area tracker
+                </Text>
+                {selectedWeakAreas.length > 0 && selectedMemory?.subjectId ? (
+                  <Button
+                    mode="contained-tonal"
+                    compact
+                    icon="target"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(tabs)/questions",
+                        params: {
+                          mode: "generate",
+                          subjectId: selectedMemory.subjectId!,
+                          topic: selectedWeakAreas[0].topic ?? selectedWeakAreas[0].title ?? "",
+                          difficulty: "hard"
+                        }
+                      })
+                    }
+                  >
+                    Drill
+                  </Button>
+                ) : null}
+              </View>
               <SignalList
                 items={selectedWeakAreas}
                 emptyTitle="No weak areas mapped"
@@ -445,9 +467,21 @@ export default function StudentMapScreen() {
 
           <Animated.View entering={motion.card(72)}>
             <AppCard style={styles.section}>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Common mistakes
-              </Text>
+              <View style={styles.rowBetween}>
+                <Text variant="titleMedium" style={styles.cardTitle}>
+                  Common mistakes
+                </Text>
+                {selectedMistakes.length > 0 ? (
+                  <Button
+                    mode="outlined"
+                    compact
+                    icon="alert-circle-check-outline"
+                    onPress={() => router.push({ pathname: "/(tabs)/questions", params: { mode: "tools", toolMode: "mistakes" } })}
+                  >
+                    Review
+                  </Button>
+                ) : null}
+              </View>
               <SignalList
                 items={selectedMistakes}
                 emptyTitle="No repeat mistakes yet"

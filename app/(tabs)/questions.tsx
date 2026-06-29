@@ -313,6 +313,7 @@ export default function QuestionsScreen() {
     topic?: string;
     difficulty?: string;
     count?: string;
+    toolMode?: string;
   }>();
   const screenRef = useRef<ScrollView | null>(null);
   const { subjects, generatedQuestions, savedQuestions, notes, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer, createNote, deleteNote } =
@@ -402,6 +403,12 @@ export default function QuestionsScreen() {
       setCount(Number(params.count) as 1 | 3 | 5);
     }
   }, [params.count]);
+
+  useEffect(() => {
+    if (params.toolMode === "exam" || params.toolMode === "command" || params.toolMode === "mistakes" || params.toolMode === "flashcards") {
+      setToolMode(params.toolMode);
+    }
+  }, [params.toolMode]);
 
   useEffect(() => {
     let active = true;
