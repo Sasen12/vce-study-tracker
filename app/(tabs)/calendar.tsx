@@ -146,7 +146,7 @@ function EventRow({
 export default function CalendarScreen() {
   useTrackScreen("calendar");
   const router = useRouter();
-  const { subjects, events, loading, fetchAll, createEvent, updateEvent, deleteEvent } = useAppStore();
+  const { subjects, events, sessions, loading, fetchAll, createEvent, updateEvent, deleteEvent } = useAppStore();
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -182,8 +182,20 @@ export default function CalendarScreen() {
     [events, occurrenceEnd, occurrenceStart]
   );
 
+  const sessionDateSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const session of sessions) {
+      set.add(session.createdAt.slice(0, 10));
+    }
+    return set;
+  }, [sessions]);
+
   const markedDates = useMemo(() => {
     const marks: Record<string, { dots?: { key: string; color: string }[]; selected?: boolean; selectedColor?: string }> = {};
+    for (const dateKey of sessionDateSet) {
+      marks[dateKey] ??= { dots: [] };
+      marks[dateKey].dots = [...(marks[dateKey].dots ?? []), { key: "session", color: palette.success }];
+    }
     for (const occurrence of occurrences) {
       const key = occurrence.dateKey;
       marks[key] ??= { dots: [] };
@@ -198,7 +210,7 @@ export default function CalendarScreen() {
       selectedColor: palette.primary
     };
     return marks;
-  }, [occurrences, selectedDate]);
+  }, [occurrences, selectedDate, sessionDateSet]);
 
   const eventsForDate = useMemo(
     () => occurrences.filter((occurrence) => occurrence.dateKey === selectedDate),
@@ -478,6 +490,16 @@ export default function CalendarScreen() {
             selectedDayTextColor: palette.text
           }}
         />
+        <View style={styles.calendarLegend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: palette.success }]} />
+            <Text style={styles.legendLabel}>Study session</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: palette.warning }]} />
+            <Text style={styles.legendLabel}>Assessment</Text>
+          </View>
+        </View>
       </AppCard>
 
       <AppCard style={styles.section}>
@@ -716,6 +738,26 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
+  calendarLegend: {
+    flexDirection: "row",
+    gap: 16,
+    paddingTop: 8,
+    paddingHorizontal: 4
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
+  legendLabel: {
+    color: palette.muted,
+    fontSize: 12
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

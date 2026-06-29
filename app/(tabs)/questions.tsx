@@ -316,7 +316,7 @@ export default function QuestionsScreen() {
     toolMode?: string;
   }>();
   const screenRef = useRef<ScrollView | null>(null);
-  const { subjects, generatedQuestions, savedQuestions, notes, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer, createNote, deleteNote } =
+  const { subjects, generatedQuestions, savedQuestions, notes, subjectMemories, loading, fetchAll, generateQuestions, saveQuestion, checkAnswer, createNote, deleteNote } =
     useAppStore();
   const [mode, setMode] = useState("generate");
   const [toolMode, setToolMode] = useState<PracticeTool>("exam");
@@ -440,6 +440,22 @@ export default function QuestionsScreen() {
     [selectedSubject?.subjectName]
   );
   const presetTopics = TOPICS[selectedSubject?.subjectName ?? ""] ?? ["Key knowledge", "Exam revision", "Common mistakes"];
+  const weakAreaTopics = useMemo(() => {
+    if (!selectedSubject) return [];
+    const memory = subjectMemories.find(
+      (m) => m.subjectId === selectedSubject.id || m.subjectName === selectedSubject.subjectName
+    );
+    if (!memory) return [];
+    const areas = Array.isArray(memory.weakAreas) ? memory.weakAreas : [];
+    return areas
+      .map((area: unknown) => {
+        if (!area || typeof area !== "object") return null;
+        const a = area as { topic?: string; title?: string };
+        return a.topic ?? a.title ?? null;
+      })
+      .filter((t): t is string => Boolean(t))
+      .slice(0, 4);
+  }, [selectedSubject, subjectMemories]);
   useEffect(() => {
     if (!commandTermPrompts.some((prompt) => prompt.term === commandTerm)) {
       setCommandTerm(commandTermPrompts[0]?.term ?? "Explain");
@@ -1078,6 +1094,22 @@ export default function QuestionsScreen() {
                 </Pressable>
               ))}
             </View>
+            {weakAreaTopics.length > 0 ? (
+              <>
+                <Text style={styles.weakAreaLabel}>Your weak areas</Text>
+                <View style={styles.topicRow}>
+                  {weakAreaTopics.map((item) => (
+                    <Pressable
+                      key={item}
+                      style={[styles.topicChip, styles.weakAreaChip]}
+                      onPress={() => { setTopic(item); setDifficulty("hard"); }}
+                    >
+                      <Text style={[styles.topicText, styles.weakAreaText]}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
             <SegmentedButtons
               value={difficulty}
               onValueChange={(value) => setDifficulty(value as "easy" | "medium" | "hard")}
@@ -1830,6 +1862,18 @@ const styles = StyleSheet.create({
   topicText: {
     color: palette.text,
     fontSize: 12
+  },
+  weakAreaLabel: {
+    color: palette.muted,
+    fontSize: 11,
+    marginTop: 2
+  },
+  weakAreaChip: {
+    borderColor: `${palette.secondary}66`,
+    backgroundColor: `${palette.secondary}15`
+  },
+  weakAreaText: {
+    color: palette.secondary
   },
   error: {
     color: palette.secondary

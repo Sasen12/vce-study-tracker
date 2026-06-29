@@ -697,22 +697,28 @@ export default function StudentMapScreen() {
             Weekly pace
           </Text>
           {subjectPace.length ? (
-            subjectPace.map((item) => (
-              <View key={item.subject.id} style={styles.paceRow}>
-                <View style={[styles.subjectDot, { backgroundColor: item.subject.color }]} />
-                <View style={styles.paceText}>
-                  <Text style={styles.paceTitle} numberOfLines={1}>
-                    {item.subject.subjectName}
-                  </Text>
-                  <Text style={styles.muted} numberOfLines={1}>
-                    {Math.round(item.weekHours * 10) / 10}/{item.targetHours || 0}h target
-                  </Text>
+            subjectPace.map((item) => {
+              const pct = Math.min(item.progress, 1);
+              const color = item.progress >= 1 ? palette.success : item.progress >= 0.5 ? item.subject.color : palette.secondary;
+              return (
+                <View key={item.subject.id} style={styles.paceRow}>
+                  <View style={[styles.subjectDot, { backgroundColor: item.subject.color }]} />
+                  <View style={styles.paceText}>
+                    <View style={styles.paceTitleRow}>
+                      <Text style={styles.paceTitle} numberOfLines={1}>
+                        {item.subject.subjectName}
+                      </Text>
+                      <Text style={[styles.paceValue, item.progress >= 1 ? styles.paceDone : styles.paceBehind]}>
+                        {Math.round(item.weekHours * 10) / 10}/{item.targetHours || 0}h
+                      </Text>
+                    </View>
+                    <View style={styles.paceBarTrack}>
+                      <View style={[styles.paceBarFill, { width: `${Math.round(pct * 100)}%` as `${number}%`, backgroundColor: color }]} />
+                    </View>
+                  </View>
                 </View>
-                <Text style={[styles.paceValue, item.progress >= 1 ? styles.paceDone : styles.paceBehind]}>
-                  {Math.round(item.progress * 100)}%
-                </Text>
-              </View>
-            ))
+              );
+            })
           ) : (
             <EmptyState title="No subject goals yet" body="Add subjects and weekly targets from Profile." />
           )}
@@ -1123,16 +1129,33 @@ const styles = StyleSheet.create({
   },
   paceText: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    gap: 4
+  },
+  paceTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  paceBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  paceBarFill: {
+    height: 6,
+    borderRadius: 3
   },
   paceTitle: {
     color: palette.text,
-    fontFamily: "Outfit_700Bold"
+    fontFamily: "Outfit_700Bold",
+    flex: 1,
+    minWidth: 0
   },
   paceValue: {
-    width: 54,
-    textAlign: "right",
-    fontFamily: "Outfit_700Bold"
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12
   },
   paceDone: {
     color: palette.success
