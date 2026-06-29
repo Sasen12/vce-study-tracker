@@ -10,6 +10,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { SkeletonStack } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SubjectSelector } from "@/components/ui/SubjectSelector";
+import { StudyPulseHero } from "@/components/home/StudyPulseHero";
 import { StreakWidget } from "@/components/gamification/StreakWidget";
 import { motion } from "@/constants/motion";
 import { palette } from "@/constants/theme";
@@ -1314,38 +1315,43 @@ export default function DashboardScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.date}>{todayLabel}</Text>
-          <Text variant="headlineLarge" style={styles.greeting}>
-            Hey {user?.displayName ?? "there"}
-          </Text>
-        </View>
-        {showHomeTools ? (
-          <View style={styles.headerActions}>
-            {focusHome ? (
+      <StudyPulseHero
+        displayName={user?.displayName}
+        dateLabel={todayLabel}
+        todaySeconds={stats?.todaySeconds ?? 0}
+        weekSeconds={stats?.weekSeconds ?? 0}
+        sessions={sessions}
+        nextDeadlineTitle={nextDeadline?.title ?? null}
+        nextDeadlineLabel={nextDeadline ? countdownLabel(nextDeadline) : null}
+        nextDeadlineDays={nextDeadline ? daysUntil(nextDeadline.eventDate) : null}
+        onPressPulse={() => router.push("/(tabs)/insights")}
+        actions={
+          showHomeTools ? (
+            <View style={styles.headerActions}>
+              {focusHome ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: searchOpen }}
+                  style={[styles.guideButton, searchOpen && styles.guideButtonActive]}
+                  onPress={() => setSearchOpen((value) => !value)}
+                >
+                  <MaterialCommunityIcons name="magnify" color={searchOpen ? palette.text : palette.info} size={18} />
+                  <Text style={[styles.guideButtonText, searchOpen && styles.guideButtonTextActive]}>Search</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ expanded: searchOpen }}
-                style={[styles.guideButton, searchOpen && styles.guideButtonActive]}
-                onPress={() => setSearchOpen((value) => !value)}
+                style={styles.guideButton}
+                onPress={() => router.push({ pathname: "/(tabs)", params: { guide: "1" } })}
               >
-                <MaterialCommunityIcons name="magnify" color={searchOpen ? palette.text : palette.info} size={18} />
-                <Text style={[styles.guideButtonText, searchOpen && styles.guideButtonTextActive]}>Search</Text>
+                <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
+                <Text style={styles.guideButtonText}>Guide</Text>
               </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              style={styles.guideButton}
-              onPress={() => router.push({ pathname: "/(tabs)", params: { guide: "1" } })}
-            >
-              <MaterialCommunityIcons name="compass-outline" color={palette.info} size={18} />
-              <Text style={styles.guideButtonText}>Guide</Text>
-            </Pressable>
-            <StreakWidget streak={activeStreak} />
-          </View>
-        ) : null}
-      </View>
+              <StreakWidget streak={activeStreak} />
+            </View>
+          ) : null
+        }
+      />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
