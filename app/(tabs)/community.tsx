@@ -4116,12 +4116,12 @@ const styles = StyleSheet.create({
     backgroundColor: palette.warning
   },
   liveRoomCard: {
-    gap: 12,
-    padding: 12,
-    borderRadius: 8,
+    gap: 14,
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: "rgba(255,255,255,0.035)"
+    backgroundColor: "rgba(255,255,255,0.04)"
   },
   liveRoomFooter: {
     gap: 4,
@@ -4136,9 +4136,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 150,
     gap: 3,
-    padding: 9,
-    borderRadius: 8,
-    backgroundColor: "rgba(0,0,0,0.14)"
+    padding: 11,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.18)"
   },
   roomPrompt: {
     color: palette.text,

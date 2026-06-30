@@ -1712,17 +1712,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   timerPrimaryPaneSolo: {
-    minHeight: 340
+    minHeight: 400
   },
   timerSetupPane: {
     flex: 1,
     minWidth: 280,
     gap: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.028)",
-    padding: 12
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 16
   },
   setupHeader: {
     gap: 4
@@ -1865,8 +1865,8 @@ const styles = StyleSheet.create({
   },
   timer: {
     color: palette.text,
-    fontSize: 88,
-    lineHeight: 96,
+    fontSize: 96,
+    lineHeight: 104,
     fontFamily: "Outfit_700Bold"
   },
   targetTrack: {

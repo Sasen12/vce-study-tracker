@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Dialog, Portal, Text, TextInput } from "react-native-paper";
@@ -1535,13 +1536,19 @@ export default function DashboardScreen() {
                 style={[
                   styles.focusCommand,
                   {
-                    borderColor: `${primaryPlan.accent}44`,
-                    backgroundColor: `${primaryPlan.accent}0f`
+                    borderColor: `${primaryPlan.accent}44`
                   }
                 ]}
               >
-                <View style={[styles.focusCommandIcon, { backgroundColor: `${primaryPlan.accent}18` }]}>
-                  <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={24} />
+                <LinearGradient
+                  colors={[`${primaryPlan.accent}28`, `${primaryPlan.accent}0a`, "rgba(0,0,0,0)"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1.2, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+                <View style={[styles.focusCommandIcon, { backgroundColor: `${primaryPlan.accent}22` }]}>
+                  <MaterialCommunityIcons name={primaryPlan.icon} color={primaryPlan.accent} size={32} />
                 </View>
                 <View style={styles.focusCommandText}>
                   <Text style={[styles.briefLabel, { color: primaryPlan.accent }]}>{primaryPlan.label}</Text>
@@ -2947,11 +2954,11 @@ const styles = StyleSheet.create({
   homePulseTile: {
     flexGrow: 1,
     flexBasis: 145,
-    minHeight: 82,
+    minHeight: 100,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 12,
+    gap: 12,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1,
     backgroundColor: "rgba(255,255,255,0.05)"
@@ -2971,7 +2978,8 @@ const styles = StyleSheet.create({
   homePulseValue: {
     color: palette.text,
     fontFamily: "Outfit_700Bold",
-    fontSize: 18
+    fontSize: 26,
+    lineHeight: 30
   },
   homePulseMeta: {
     color: palette.muted,
@@ -3175,30 +3183,32 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   focusCommand: {
-    minHeight: 250,
+    minHeight: 270,
     alignItems: "stretch",
     justifyContent: "center",
-    gap: 16,
-    borderRadius: 14,
+    gap: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(124,110,255,0.30)",
-    backgroundColor: "rgba(3,7,18,0.30)",
-    padding: 20
+    backgroundColor: "rgba(3,7,18,0.44)",
+    padding: 22,
+    overflow: "hidden"
   },
   focusCommandIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
+    width: 72,
+    height: 72,
+    borderRadius: 14,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    alignSelf: "center"
   },
   focusCommandText: {
     gap: 5
   },
   focusCommandTitle: {
     color: palette.text,
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 36,
+    lineHeight: 42,
     fontFamily: "Outfit_700Bold"
   },
   focusCommandBody: {

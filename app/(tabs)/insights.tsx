@@ -819,8 +819,8 @@ const styles = StyleSheet.create({
   },
   heroSubject: {
     color: palette.text,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 32,
     fontFamily: "Outfit_700Bold"
   },
   riskPill: {
@@ -839,11 +839,11 @@ const styles = StyleSheet.create({
   },
   nextMoveBox: {
     gap: 4,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12
   },
   nextMoveLabel: {
     color: palette.info,

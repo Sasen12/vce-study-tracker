@@ -802,15 +802,16 @@ const styles = StyleSheet.create({
   },
   radarTile: {
     flex: 1,
-    minHeight: 64,
+    minHeight: 88,
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 10
+    padding: 14
   },
   radarValue: {
     color: palette.text,
-    fontSize: 22,
+    fontSize: 36,
+    lineHeight: 40,
     fontFamily: "Outfit_700Bold"
   },
   radarLabel: {
@@ -822,10 +823,10 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   eventRow: {
-    minHeight: 70,
+    minHeight: 74,
     flexDirection: "row",
     backgroundColor: palette.surfaceRaised,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: "hidden",
     marginVertical: 5
   },
