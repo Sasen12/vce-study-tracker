@@ -9,7 +9,7 @@ export const palette = {
   info: "#60A5FA",
   text: "#F0F0FF",
   muted: "#8888AA",
-  border: "rgba(255,255,255,0.04)"
+  border: "rgba(255,255,255,0.10)"
 };
 
 export type ThemeId =

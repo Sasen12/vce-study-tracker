@@ -37,6 +37,13 @@ const BAR_MAX = 34;
 const BAR_MIN = 6;
 const NUB = 3;
 
+const getTimeGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
 const startOfDay = (date: Date) => {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -133,7 +140,7 @@ export function StudyPulseHero({
               {dateLabel.toUpperCase()}
             </Text>
             <Text style={[styles.greeting, { color: palette.text }]} numberOfLines={1}>
-              Hey {firstName}
+              {getTimeGreeting()}, {firstName}
             </Text>
             <View style={styles.thesisRow}>
               {nextDeadlineTitle ? (

@@ -1865,8 +1865,8 @@ const styles = StyleSheet.create({
   },
   timer: {
     color: palette.text,
-    fontSize: 68,
-    lineHeight: 76,
+    fontSize: 88,
+    lineHeight: 96,
     fontFamily: "Outfit_700Bold"
   },
   targetTrack: {

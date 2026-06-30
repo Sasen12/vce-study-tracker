@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   },
   coinPill: {
     minWidth: 92,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: `${palette.primary}55`,
     backgroundColor: `${palette.primary}18`,

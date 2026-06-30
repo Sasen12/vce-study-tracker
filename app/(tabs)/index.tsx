@@ -1428,7 +1428,7 @@ export default function DashboardScreen() {
           <View style={styles.rowBetween}>
             <View style={styles.flexText}>
               <Text variant="titleMedium" style={nowView ? styles.nowTitle : styles.cardTitle}>
-                {nowView ? "Now" : "Today Command"}
+                {nowView ? "Tonight  ·  Your Next Move" : "Today Command"}
               </Text>
               <Text style={nowView ? styles.nowPressure : styles.muted}>
                 {nextDeadline
@@ -2828,8 +2828,8 @@ const styles = StyleSheet.create({
   },
   launchpadCard: {
     gap: 14,
-    borderColor: "rgba(56,189,248,0.3)",
-    backgroundColor: "rgba(8,20,38,0.58)"
+    borderColor: "rgba(124,110,255,0.28)",
+    backgroundColor: "rgba(8,10,24,0.60)"
   },
   starterPathCard: {
     gap: 12,
@@ -2947,14 +2947,14 @@ const styles = StyleSheet.create({
   homePulseTile: {
     flexGrow: 1,
     flexBasis: 145,
-    minHeight: 76,
+    minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.04)"
+    backgroundColor: "rgba(255,255,255,0.05)"
   },
   homePulseIcon: {
     width: 34,
@@ -3077,9 +3077,11 @@ const styles = StyleSheet.create({
     fontSize: 12
   },
   nowTitle: {
-    color: palette.text,
+    color: palette.muted,
     fontFamily: "Outfit_700Bold",
-    fontSize: 16,
+    fontSize: 11,
+    letterSpacing: 2,
+    textTransform: "uppercase",
     marginBottom: 2
   },
   nowPressure: {
@@ -3173,15 +3175,15 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_700Bold"
   },
   focusCommand: {
-    minHeight: 230,
+    minHeight: 250,
     alignItems: "stretch",
     justifyContent: "center",
     gap: 16,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(56,189,248,0.24)",
-    backgroundColor: "rgba(3,7,18,0.24)",
-    padding: 18
+    borderColor: "rgba(124,110,255,0.30)",
+    backgroundColor: "rgba(3,7,18,0.30)",
+    padding: 20
   },
   focusCommandIcon: {
     width: 50,
@@ -3195,8 +3197,8 @@ const styles = StyleSheet.create({
   },
   focusCommandTitle: {
     color: palette.text,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 38,
     fontFamily: "Outfit_700Bold"
   },
   focusCommandBody: {
@@ -3410,10 +3412,17 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   briefLabel: {
+    alignSelf: "flex-start",
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     fontFamily: "Outfit_700Bold",
-    fontSize: 11,
+    fontSize: 10,
     textTransform: "uppercase",
-    marginBottom: 2
+    letterSpacing: 1,
+    marginBottom: 2,
+    backgroundColor: "rgba(255,255,255,0.07)"
   },
   briefTitle: {
     color: palette.text,
