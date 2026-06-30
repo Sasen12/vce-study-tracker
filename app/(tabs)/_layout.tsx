@@ -1,31 +1,40 @@
 import { Redirect, Tabs } from "expo-router";
-import { View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ForgeMascot } from "@/components/navigation/ForgeMascot";
 import { GuidedAppTour } from "@/components/navigation/GuidedAppTour";
+import { SideNav } from "@/components/navigation/SideNav";
 import { useActivePalette } from "@/hooks/useActiveTheme";
 import { useStudyReminders } from "@/hooks/useStudyReminders";
 import { useAuthStore } from "@/store/authStore";
 
+const SIDEBAR_BREAKPOINT = 900;
+
 export default function TabsLayout() {
   const user = useAuthStore((state) => state.user);
   const activePalette = useActivePalette();
+  const { width } = useWindowDimensions();
+  const wideLayout = width >= SIDEBAR_BREAKPOINT;
   useStudyReminders();
   if (!user) return <Redirect href="/(auth)/login" />;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, flexDirection: wideLayout ? "row" : "column", backgroundColor: activePalette.background }}>
+      {wideLayout ? <SideNav /> : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: {
-            position: "absolute",
-            backgroundColor: activePalette.surface,
-            borderTopColor: activePalette.border,
-            height: 74,
-            paddingTop: 8,
-            paddingBottom: 12
-          },
+          tabBarStyle: wideLayout
+            ? { display: "none" }
+            : {
+                position: "absolute",
+                backgroundColor: activePalette.surface,
+                borderTopColor: activePalette.border,
+                height: 74,
+                paddingTop: 8,
+                paddingBottom: 12
+              },
           tabBarActiveTintColor: activePalette.primary,
           tabBarInactiveTintColor: activePalette.muted,
           tabBarLabelStyle: {
@@ -117,6 +126,7 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+      </View>
       <ForgeMascot />
       <GuidedAppTour />
     </View>

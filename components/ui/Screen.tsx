@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
@@ -17,6 +17,9 @@ type ScreenProps = {
 
 export function Screen({ children, scroll = true, scrollRef }: ScreenProps) {
   const activePalette = useActivePalette();
+  const { width } = useWindowDimensions();
+  const wideLayout = width >= 900;
+  const contentStyle = wideLayout ? styles.contentWide : styles.content;
   const focusProgress = useSharedValue(1);
   const focusStyle = useAnimatedStyle(() => ({
     opacity: focusProgress.value,
@@ -42,13 +45,13 @@ export function Screen({ children, scroll = true, scrollRef }: ScreenProps) {
     <ScrollView
       ref={scrollRef}
       style={styles.viewport}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={contentStyle}
       showsVerticalScrollIndicator
     >
       {stack}
     </ScrollView>
   ) : (
-    <View style={[styles.viewport, styles.content]}>{stack}</View>
+    <View style={[styles.viewport, contentStyle]}>{stack}</View>
   );
 
   return (
@@ -72,6 +75,14 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 110
+  },
+  contentWide: {
+    width: "100%",
+    maxWidth: 1240,
+    alignSelf: "center",
+    paddingHorizontal: 32,
+    paddingTop: 28,
+    paddingBottom: 48
   },
   stack: {
     gap: 16
