@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -426,6 +426,8 @@ const buildEvidenceItems = ({
 
 export default function DashboardScreen() {
   useTrackScreen("home");
+  const { width } = useWindowDimensions();
+  const wideLayout = width >= 900;
   const user = useAuthStore((state) => state.user);
   const {
     subjects,
@@ -1354,6 +1356,9 @@ export default function DashboardScreen() {
         }
       />
 
+      <View style={[styles.homeBody, wideLayout && styles.homeBodyWide]}>
+        <View style={styles.homeMain}>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {!examWeekMode && (!focusHome || searchOpen || searchQuery.trim().length > 0) ? (
@@ -1442,29 +1447,31 @@ export default function DashboardScreen() {
 
           {nowView ? (
             <>
-              <View style={styles.homePulseRail}>
-                {homeSignalTiles.map((tile) => (
-                  <Pressable
-                    key={tile.id}
-                    accessibilityRole="button"
-                    style={[styles.homePulseTile, { borderColor: `${tile.accent}33` }]}
-                    onPress={tile.onPress}
-                  >
-                    <View style={[styles.homePulseIcon, { backgroundColor: `${tile.accent}18` }]}>
-                      <MaterialCommunityIcons name={tile.icon} color={tile.accent} size={18} />
-                    </View>
-                    <View style={styles.flexText}>
-                      <Text style={[styles.homePulseLabel, { color: tile.accent }]}>{tile.label}</Text>
-                      <Text style={styles.homePulseValue} numberOfLines={1}>
-                        {tile.value}
-                      </Text>
-                      <Text style={styles.homePulseMeta} numberOfLines={1}>
-                        {tile.meta}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
+              {!wideLayout ? (
+                <View style={styles.homePulseRail}>
+                  {homeSignalTiles.map((tile) => (
+                    <Pressable
+                      key={tile.id}
+                      accessibilityRole="button"
+                      style={[styles.homePulseTile, { borderColor: `${tile.accent}33` }]}
+                      onPress={tile.onPress}
+                    >
+                      <View style={[styles.homePulseIcon, { backgroundColor: `${tile.accent}18` }]}>
+                        <MaterialCommunityIcons name={tile.icon} color={tile.accent} size={18} />
+                      </View>
+                      <View style={styles.flexText}>
+                        <Text style={[styles.homePulseLabel, { color: tile.accent }]}>{tile.label}</Text>
+                        <Text style={styles.homePulseValue} numberOfLines={1}>
+                          {tile.value}
+                        </Text>
+                        <Text style={styles.homePulseMeta} numberOfLines={1}>
+                          {tile.meta}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
               <Pressable accessibilityRole="button" style={styles.commandSpark} onPress={() => setDetailsOpen(true)}>
                 <MaterialCommunityIcons name="lightbulb-on-outline" color={palette.warning} size={18} />
                 <Text style={styles.commandSparkText} numberOfLines={1}>
@@ -2421,6 +2428,36 @@ export default function DashboardScreen() {
         </Animated.View>
       ) : null}
 
+        </View>
+
+        {wideLayout ? (
+          <View style={styles.homeRail}>
+            <Text style={styles.railHeading}>THIS WEEK</Text>
+            {homeSignalTiles.map((tile) => (
+              <Pressable
+                key={tile.id}
+                accessibilityRole="button"
+                style={[styles.railCard, { borderColor: `${tile.accent}33` }]}
+                onPress={tile.onPress}
+              >
+                <View style={[styles.railIcon, { backgroundColor: `${tile.accent}18` }]}>
+                  <MaterialCommunityIcons name={tile.icon} color={tile.accent} size={20} />
+                </View>
+                <View style={styles.flexText}>
+                  <Text style={[styles.railLabel, { color: tile.accent }]}>{tile.label}</Text>
+                  <Text style={styles.railValue} numberOfLines={1}>
+                    {tile.value}
+                  </Text>
+                  <Text style={styles.railMeta} numberOfLines={1}>
+                    {tile.meta}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
       <Portal>
         <Dialog visible={panicOpen} onDismiss={() => setPanicOpen(false)} style={styles.dialog}>
           <Dialog.Title style={styles.dialogTitle}>SAC Panic Mode</Dialog.Title>
@@ -2943,6 +2980,64 @@ const styles = StyleSheet.create({
   starterFooterText: {
     flex: 1,
     minWidth: 0,
+    color: palette.muted,
+    fontSize: 12
+  },
+  homeBody: {
+    gap: 16
+  },
+  homeBodyWide: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 20
+  },
+  homeMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 16
+  },
+  homeRail: {
+    width: 330,
+    gap: 12
+  },
+  railHeading: {
+    color: palette.muted,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 2
+  },
+  railCard: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  railIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  railLabel: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase"
+  },
+  railValue: {
+    color: palette.text,
+    fontFamily: "Outfit_700Bold",
+    fontSize: 20,
+    lineHeight: 24
+  },
+  railMeta: {
     color: palette.muted,
     fontSize: 12
   },
